@@ -10,6 +10,18 @@ const optionsSchema = z.object({
   maxTurns: z.number().int().positive().optional(),
   /** Headless default: auto-approve edits and commands (bypass permission prompts). */
   alwaysApprove: z.boolean().default(true),
+  /**
+   * Extra environment variables for the grok process. Use this to point grok at
+   * a clean/isolated config so the user's global MCP servers don't leak into the
+   * coding loop (the source of the `mcp-search____IMPORTANT` collision noise).
+   * e.g. { XDG_CONFIG_HOME: "/path/to/empty" } or a vendor-specific override.
+   */
+  env: z.record(z.string(), z.string()).optional(),
+  /**
+   * Resume the previous iteration's session (continues context) when one is
+   * available. Off by default; only enable if your grok CLI supports `--resume`.
+   */
+  resume: z.boolean().default(false),
   /** Additional raw CLI args appended after the standard ones (advanced). */
   extraArgs: z.array(z.string()).optional(),
 });
@@ -96,6 +108,9 @@ export const grokDriver: AgentDriver = {
     if (opts.maxTurns != null) {
       args.push("--max-turns", String(opts.maxTurns));
     }
+    if (opts.resume && invocation.resumeSessionId) {
+      args.push("--resume", invocation.resumeSessionId);
+    }
     if (opts.extraArgs?.length) {
       args.push(...opts.extraArgs);
     }
@@ -104,6 +119,7 @@ export const grokDriver: AgentDriver = {
       ...process.env,
       // Ensure non-interactive behavior where possible.
       GROK_HEADLESS: "1",
+      ...opts.env,
     };
 
     const start = Date.now();
@@ -161,78 +177,193 @@ export const grokDriver: AgentDriver = {
     if (killed || invocation.signal?.aborted) {
       return {
         ok: false,
+        stopReason: "aborted",
         error: "aborted",
       };
     }
 
-    // Try to extract a structured result from --output-format json.
-    // The CLI emits JSON (object or last line). Be tolerant.
-    let parsed: any = null;
-    const trimmed = stdout.trim();
-    if (trimmed) {
-      // Try whole stdout as JSON
-      try {
-        parsed = JSON.parse(trimmed);
-      } catch {
-        // Try last non-empty line as JSON
-        const lines = trimmed.split(/\r?\n/).filter(Boolean);
-        for (let i = lines.length - 1; i >= 0; i--) {
-          try {
-            parsed = JSON.parse(lines[i]!);
-            break;
-          } catch {
-            // continue
-          }
-        }
-      }
-    }
+    // Parse --output-format json. grok may emit a single object or JSONL (one
+    // event per line); collect every object so we can pull the FINAL answer
+    // rather than the reasoning stream.
+    const objs = parseJsonObjects(stdout);
+    const finalText = extractFinalText(objs);
+    const usage = extractUsage(objs);
+    const sessionId = extractSessionId(objs);
 
-    const resultText: string | undefined =
-      (parsed && (parsed.result || parsed.output || parsed.final || parsed.summary || parsed.message)) ||
-      (trimmed ? trimmed.slice(-2000) : undefined);
+    // "max turns reached" is the agent running out of budget, NOT a crash. The
+    // CLI may still exit non-zero, so detect it before classifying as fatal.
+    const lower = `${stderr}\n${stdout}`.toLowerCase();
+    const hitMaxTurns = /max turns? reached|maximum (number of )?turns/.test(lower);
 
-    const usage: AgentUsage | undefined = parsed
-      ? {
-          inputTokens: parsed.usage?.input_tokens ?? parsed.inputTokens,
-          outputTokens: parsed.usage?.output_tokens ?? parsed.outputTokens,
-          costUsd: parsed.usage?.cost_usd ?? parsed.costUsd,
-        }
-      : undefined;
-
-    const sessionId: string | undefined = parsed?.session_id || parsed?.sessionId || undefined;
-
-    // Detect driver-level failures (auth, not found, crashes, explicit errors).
-    const combinedOutput = (stderr + "\n" + stdout).toLowerCase();
+    // Auth problems are genuine failures. Match precise phrases, not bare words
+    // like "login", so unrelated tool logs aren't misread as auth errors.
     const isAuthError =
-      combinedOutput.includes("login") ||
-      combinedOutput.includes("authenticate") ||
-      combinedOutput.includes("api key") ||
-      combinedOutput.includes("xai_api_key") ||
-      combinedOutput.includes("not authorized");
-    const isFatalError = exitCode != null && exitCode !== 0;
+      /not authori[sz]ed|authentication (failed|required)|please (log ?in|sign ?in)|invalid api key|missing api key|xai_api_key (is )?(not set|missing|required)/.test(
+        lower,
+      );
 
-    if (isFatalError || isAuthError) {
+    // A genuine fatal error: non-zero exit that isn't just "out of turns".
+    const isFatalError = !hitMaxTurns && exitCode != null && exitCode !== 0;
+
+    if (isAuthError || isFatalError) {
+      // Prefer a structured error; else the LAST meaningful stderr line. Never
+      // slice raw stdout (which is mostly the agent's reasoning stream).
       const errMsg =
-        (parsed && (parsed.error || parsed.message)) ||
-        stderr.trim() ||
-        (resultText && resultText.length < 300 ? resultText : "") ||
+        extractError(objs) ||
+        lastMeaningfulLine(stderr) ||
         `grok CLI failed (exit ${exitCode ?? "unknown"})`;
       return {
         ok: false,
+        stopReason: "error",
         error: errMsg,
-        raw: { stdout: tail(stdout), stderr: tail(stderr), parsed },
+        usage,
+        sessionId,
+        raw: { stdout: tail(stdout), stderr: tail(stderr), objects: objs.length, exitCode },
+      };
+    }
+
+    // max_turns: the agent did real work but didn't self-terminate. Report it as
+    // a successful-but-incomplete run so the engine can warn / resume rather than
+    // treating partial progress as a crash.
+    if (hitMaxTurns) {
+      return {
+        ok: true,
+        stopReason: "max_turns",
+        summary: finalText ? cleanSummary(finalText) : "agent reached its turn limit before finishing",
+        usage,
+        sessionId,
+        raw: { stdout: tail(stdout, 4000), stderr: tail(stderr, 2000), objects: objs.length, exitCode },
       };
     }
 
     return {
       ok: true,
-      summary: resultText || "(grok completed with no final summary)",
+      stopReason: "completed",
+      summary: finalText ? cleanSummary(finalText) : "(grok produced no parseable final summary; see report raw)",
       usage,
       sessionId,
-      raw: { stdout: tail(stdout, 4000), stderr: tail(stderr, 2000), parsed, exitCode },
+      raw: { stdout: tail(stdout, 4000), stderr: tail(stderr, 2000), objects: objs.length, exitCode },
     };
   },
 };
+
+type JsonObject = Record<string, unknown>;
+
+/** Parse stdout as a single JSON object or as JSONL (one object per line). */
+export function parseJsonObjects(stdout: string): JsonObject[] {
+  const trimmed = stdout.trim();
+  if (!trimmed) return [];
+  try {
+    const whole = JSON.parse(trimmed);
+    return Array.isArray(whole) ? whole.filter(isObject) : isObject(whole) ? [whole] : [];
+  } catch {
+    // fall through to line-by-line
+  }
+  const objs: JsonObject[] = [];
+  for (const line of trimmed.split(/\r?\n/)) {
+    const l = line.trim();
+    if (!l || (l[0] !== "{" && l[0] !== "[")) continue;
+    try {
+      const parsed = JSON.parse(l);
+      if (Array.isArray(parsed)) objs.push(...parsed.filter(isObject));
+      else if (isObject(parsed)) objs.push(parsed);
+    } catch {
+      // skip non-JSON lines (logs)
+    }
+  }
+  return objs;
+}
+
+function isObject(v: unknown): v is JsonObject {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+function asString(v: unknown): string | undefined {
+  return typeof v === "string" && v.trim() ? v : undefined;
+}
+
+/** Pull the agent's final answer, preferring an explicit result event. */
+export function extractFinalText(objs: JsonObject[]): string | undefined {
+  // 1) An explicit result/completion event.
+  for (let i = objs.length - 1; i >= 0; i--) {
+    const o = objs[i]!;
+    if ((o.type === "result" || o.subtype === "result") && asString(o.result)) return o.result as string;
+  }
+  // 2) The last object exposing a final-answer field.
+  for (let i = objs.length - 1; i >= 0; i--) {
+    const o = objs[i]!;
+    const direct = asString(o.result) ?? asString(o.response) ?? asString(o.final) ?? asString(o.summary) ?? asString(o.text);
+    if (direct) return direct;
+    // assistant message with a content array of text parts
+    if (o.role === "assistant" && Array.isArray(o.content)) {
+      const text = o.content
+        .map((c) => (typeof c === "string" ? c : isObject(c) ? asString(c.text) : undefined))
+        .filter(Boolean)
+        .join("\n");
+      if (text.trim()) return text;
+    }
+  }
+  return undefined;
+}
+
+function extractUsage(objs: JsonObject[]): AgentUsage | undefined {
+  for (let i = objs.length - 1; i >= 0; i--) {
+    const o = objs[i]!;
+    const u = isObject(o.usage) ? o.usage : undefined;
+    const hasCost = o.total_cost_usd != null || o.cost_usd != null;
+    if (u || hasCost || o.num_turns != null) {
+      return {
+        inputTokens: numberOr(u?.input_tokens, o.inputTokens),
+        outputTokens: numberOr(u?.output_tokens, o.outputTokens),
+        costUsd: numberOr(o.total_cost_usd, u?.cost_usd, o.cost_usd),
+        turns: numberOr(u?.turns, o.turns, o.num_turns),
+      };
+    }
+  }
+  return undefined;
+}
+
+function extractSessionId(objs: JsonObject[]): string | undefined {
+  for (let i = objs.length - 1; i >= 0; i--) {
+    const o = objs[i]!;
+    const id = asString(o.session_id) ?? asString(o.sessionId);
+    if (id) return id;
+  }
+  return undefined;
+}
+
+function extractError(objs: JsonObject[]): string | undefined {
+  for (let i = objs.length - 1; i >= 0; i--) {
+    const o = objs[i]!;
+    if (o.type === "error" || o.error || o.is_error) {
+      return asString(o.error) ?? asString(o.message) ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+function numberOr(...vals: unknown[]): number | undefined {
+  for (const v of vals) if (typeof v === "number" && !Number.isNaN(v)) return v;
+  return undefined;
+}
+
+/** Collapse whitespace and cap length so a summary can't blow up the output. */
+export function cleanSummary(text: string, max = 280): string {
+  const collapsed = text.replace(/\s+/g, " ").trim();
+  return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
+}
+
+/** Last non-empty, non-pure-log line of stderr — usually the real error. */
+function lastMeaningfulLine(stderr: string): string {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    // Drop structured log lines (timestamped ERROR/WARN/INFO traces and MCP noise).
+    .filter((l) => !/^\d{4}-\d{2}-\d{2}T.*\b(ERROR|WARN|INFO|DEBUG|TRACE)\b/.test(l))
+    .filter((l) => !/skipping mcp tool|tool_output_error|tool_error/i.test(l));
+  return lines.length ? lines[lines.length - 1]! : "";
+}
 
 interface ResolvedBin {
   command: string;

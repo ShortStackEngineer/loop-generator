@@ -14,6 +14,7 @@ export type {
   LoopReport,
   LoopOutcome,
   IterationReport,
+  BaselineReport,
 } from "./core/engine";
 
 // Spec
@@ -40,6 +41,7 @@ export type {
   AgentInvocation,
   AgentRunResult,
   AgentUsage,
+  AgentStopReason,
   FeedbackSummary,
 } from "./drivers/types";
 export type {
@@ -81,6 +83,8 @@ export type { Logger, LogLevel } from "./core/logger";
 export { preflightOk, preflightFail, mergePreflight } from "./core/preflight";
 export type { PreflightResult } from "./core/preflight";
 export { runCommand } from "./core/exec";
+export { isGitRepo, isIgnored, changeDetectionAvailable, snapshotTree, diffTrees } from "./core/workspace";
+export type { TreeDiff } from "./core/workspace";
 
 // Generation
 export { generateSpec, specToYaml } from "./generate";

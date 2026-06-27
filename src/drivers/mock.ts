@@ -48,6 +48,7 @@ export const mockDriver: AgentDriver = {
     if (steps.length === 0) {
       return {
         ok: true,
+        stopReason: "completed",
         summary: "mock driver: no steps configured, made no changes",
         changedFiles: [],
       };
@@ -71,11 +72,12 @@ export const mockDriver: AgentDriver = {
         await runCommand(step.run, { cwd: invocation.workdir, signal: invocation.signal });
       }
     } catch (err) {
-      return { ok: false, error: (err as Error).message };
+      return { ok: false, stopReason: "error", error: (err as Error).message };
     }
 
     return {
       ok: true,
+      stopReason: "completed",
       summary: step.summary ?? opts.defaultSummary ?? `mock driver applied step ${invocation.iteration}`,
       changedFiles,
     };

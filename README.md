@@ -95,9 +95,41 @@ success:
   type: all-pass         # all evaluators must pass
 limits:
   maxIterations: 6
+  baseline: false        # run checks once before the agent (see "Trustworthy results")
 ```
 
 See [`examples/`](./examples) for function, experiment/A-B, and offline specs.
+
+## Trustworthy results
+
+"All checks passed" is only meaningful if the checks actually exercise the new
+requirement and the agent actually did something. The runner guards against
+false positives:
+
+- **Change detection (git):** every iteration is diffed (non-destructively, via
+  a throwaway index). The report shows a `git diff --stat`, and a green run that
+  changed **no files** is flagged as likely vacuous. Build/runtime artifacts
+  (logs, databases, compile caches, generated assets) are excluded so that
+  merely running the test suite can't masquerade as "the agent did work" — add
+  your own globs with `workspace.ignore`. Falls back to driver-reported files
+  when the workspace isn't a git repo (or is git-ignored).
+- **Baseline evaluation** (`limits.baseline: true`, or `--baseline`): runs the
+  checks once *before* any agent work. If they already pass, your checks probably
+  don't test the requirement — surfaced as a warning. Off by default because
+  side-effecting checks (db migrate/seed) would run twice.
+- **Spec-integrity guard:** if the loop spec lives inside the workspace, the
+  agent can edit its own success criteria. The runner watches the spec file,
+  excludes it from the work diff (so a spec-only edit can't fake "work"), and
+  raises a warning if the agent modified it. (Best practice: keep specs outside
+  the target repo.)
+- **Honest agent outcomes:** drivers report a `stopReason`
+  (`completed | max_turns | aborted | error`). When the agent runs out of turns
+  or errors but the checks pass anyway, the run still succeeds (checks are the
+  source of truth) **but the report says so** instead of showing a clean green.
+
+All caveats are collected in `report.warnings` and printed under `⚠ warnings:`.
+Drivers that report a session id can also **resume** after a `max_turns` stop
+(opt-in: `driver.options.resume: true`).
 
 ## Extending it
 

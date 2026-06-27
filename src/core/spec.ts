@@ -47,8 +47,14 @@ export const loopSpecSchema = z
         dir: z.string().default("."),
         /** `git`: snapshot before the run so failed runs can be inspected/reset. */
         snapshot: z.enum(["none", "git"]).default("none"),
+        /**
+         * Extra glob patterns to exclude from change detection and diffs, on top
+         * of the built-in artifact defaults (logs, tmp, sqlite, build output, …).
+         * Keeps runtime churn from masking a no-op or inflating the diff.
+         */
+        ignore: z.array(z.string()).default([]),
       })
-      .default({ dir: ".", snapshot: "none" }),
+      .default({ dir: ".", snapshot: "none", ignore: [] }),
 
     requirements: z.string().min(1),
 
@@ -65,8 +71,14 @@ export const loopSpecSchema = z
       .object({
         maxIterations: z.number().int().positive().default(5),
         iterationTimeoutMs: z.number().int().positive().optional(),
+        /**
+         * Run the evaluators once before any agent work. If they already pass,
+         * the checks probably don't verify the requirement. Off by default
+         * because checks with side effects (db migrate/seed) would run twice.
+         */
+        baseline: z.boolean().default(false),
       })
-      .default({ maxIterations: 5 }),
+      .default({ maxIterations: 5, baseline: false }),
 
     /** Optional overrides for the task type's generated prompts. */
     prompts: z

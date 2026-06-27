@@ -16,6 +16,8 @@ const optionsSchema = z.object({
     .default("bypassPermissions"),
   allowedTools: z.array(z.string()).default(DEFAULT_ALLOWED_TOOLS),
   disallowedTools: z.array(z.string()).optional(),
+  /** Resume the previous iteration's session (continues context) when available. */
+  resume: z.boolean().default(false),
   /** Escape hatch: any extra options forwarded verbatim to `query({ options })`. */
   queryOptions: z.record(z.string(), z.unknown()).optional(),
 });
@@ -31,6 +33,7 @@ type SdkMessage = Record<string, unknown> & {
   result?: string;
   session_id?: string;
   total_cost_usd?: number;
+  num_turns?: number;
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 
@@ -103,6 +106,7 @@ export const claudeAgentSdkDriver: AgentDriver = {
       allowedTools: opts.allowedTools,
       ...(opts.disallowedTools ? { disallowedTools: opts.disallowedTools } : {}),
       ...(invocation.systemPrompt ? { systemPrompt: invocation.systemPrompt } : {}),
+      ...(opts.resume && invocation.resumeSessionId ? { resume: invocation.resumeSessionId } : {}),
       ...(invocation.signal ? { abortController: signalToController(invocation.signal) } : {}),
       ...(opts.queryOptions ?? {}),
     };
@@ -110,6 +114,7 @@ export const claudeAgentSdkDriver: AgentDriver = {
     let finalResult: string | undefined;
     let sessionId: string | undefined;
     let usage: AgentUsage | undefined;
+    let stopReason: AgentRunResult["stopReason"] = "completed";
     const transcript: SdkMessage[] = [];
 
     try {
@@ -124,12 +129,19 @@ export const claudeAgentSdkDriver: AgentDriver = {
             inputTokens: message.usage?.input_tokens,
             outputTokens: message.usage?.output_tokens,
             costUsd: message.total_cost_usd,
+            turns: message.num_turns,
           };
+          // Result-message subtype encodes how the run ended.
+          const sub = (message.subtype ?? "").toLowerCase();
+          if (sub.includes("max_turns")) stopReason = "max_turns";
+          else if (sub && sub !== "success") stopReason = "error";
         }
       }
     } catch (err) {
+      const aborted = invocation.signal?.aborted || /abort/i.test((err as Error).message);
       return {
         ok: false,
+        stopReason: aborted ? "aborted" : "error",
         error: (err as Error).message,
         sessionId,
         raw: transcript,
@@ -137,7 +149,8 @@ export const claudeAgentSdkDriver: AgentDriver = {
     }
 
     return {
-      ok: true,
+      ok: stopReason !== "error",
+      stopReason,
       summary: finalResult ?? "(agent produced no final summary)",
       usage,
       sessionId,

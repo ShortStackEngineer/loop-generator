@@ -16,7 +16,6 @@
     "declaration": true,
     "sourceMap": true,
     "outDir": "dist",
-    "rootDir": "src",
     "noEmit": true
   },
   "include": ["src", "test"],
