@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.env
+.env.*
+# Loop run artifacts
+.loopgen/
+*.loop.report.json
+
+# Example run workspaces
+examples/.workspace/
+examples/target/

@@ -1,0 +1,47 @@
+# Experiment task: optimize toward a target metric (e.g. an A/B variant's
+# conversion rate or a perf number). The agent must emit metrics.json, and the
+# loop continues until the metric clears the threshold AND tests stay green.
+version: 1
+name: checkout-ab-test
+description: Implement variant B of the checkout flow and beat the control's conversion rate.
+task:
+  type: experiment
+stack:
+  language: typescript
+  framework: next
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Implement variant B of the checkout CTA experiment behind a feature flag.
+  Run the offline simulation (`npm run sim`) which writes metrics.json with the
+  shape: { "control": { "conversion": number }, "variantB": { "conversion": number } }.
+  Variant B must improve conversion by at least 2 percentage points over control
+  without breaking existing tests.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 40
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: experiment
+    as: conversion
+    options:
+      command: npm run sim --silent
+      metric: variantB.conversion
+      baseline: 0.18
+      direction: increase
+      minDelta: 0.02
+success:
+  type: all
+  of:
+    - type: pass
+      evaluators: [tests]
+    - type: pass
+      evaluators: [conversion]
+limits:
+  maxIterations: 8

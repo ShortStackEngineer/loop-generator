@@ -1,0 +1,35 @@
+# Offline demo — runs with no API key using the scripted `mock` driver.
+# Try it:  loopgen run examples/mock-demo.loop.yaml
+#
+# The mock driver writes "wrong" on the first iteration (check fails), then "42"
+# on the second (check passes) — demonstrating the fail → feedback → fix loop.
+version: 1
+name: mock-demo
+description: Demonstrates the feedback loop end-to-end without any external agent.
+task:
+  type: function
+stack:
+  language: text
+workspace:
+  dir: ./.workspace
+requirements: |
+  Write the string "42" into answer.txt at the workspace root.
+driver:
+  uses: mock
+  options:
+    steps:
+      - files:
+          answer.txt: wrong
+        summary: first attempt (intentionally wrong)
+      - files:
+          answer.txt: "42"
+        summary: corrected after feedback
+evaluators:
+  - uses: command
+    as: answer-check
+    options:
+      command: test "$(cat answer.txt)" = "42"
+success:
+  type: all-pass
+limits:
+  maxIterations: 5

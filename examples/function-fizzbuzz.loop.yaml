@@ -1,0 +1,40 @@
+# Function feature: implement a function and make its tests + typecheck pass.
+# Requires: the Claude Agent SDK installed and ANTHROPIC_API_KEY (or Claude login).
+# Point `workspace.dir` at a real TypeScript project that has `npm test` set up.
+version: 1
+name: fizzbuzz
+description: Implement a classic fizzbuzz with tests.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Implement and export `fizzbuzz(n: number): string[]` in src/fizzbuzz.ts that
+  returns an array of length n where each element i (1-based) is:
+    - "FizzBuzz" if divisible by 15
+    - "Fizz" if divisible by 3
+    - "Buzz" if divisible by 5
+    - otherwise the number as a string
+  Add tests in src/fizzbuzz.test.ts covering the four cases and n=0.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 30
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+success:
+  type: all-pass
+limits:
+  maxIterations: 6
+  iterationTimeoutMs: 1200000
