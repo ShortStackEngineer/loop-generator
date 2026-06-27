@@ -21,7 +21,7 @@ fold the results into feedback → repeat.**
 
 | Piece | What it is | Built-ins |
 |-------|-----------|-----------|
-| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `mock` |
+| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `mock` |
 | **Evaluator** | A "feedback tool" that measures the workspace and returns pass/fail + actionable feedback | `command`, `experiment` |
 | **Task type** | Category knowledge: how to frame/instruct the agent and which evaluators to scaffold | `function`, `api`, `webapp`, `experiment`, `generic` |
 | **Success criteria** | Declarative rule over evaluator results | `all-pass`, `pass`, `score`, `all`/`any`/`not` |
@@ -35,9 +35,10 @@ compares it to thresholds/baselines, for A/B tests and perf work.
 
 ```bash
 npm install
-# The Claude Agent SDK is an optional dependency, installed automatically.
-# For real agent runs, set credentials:
-export ANTHROPIC_API_KEY=...   # or use a Claude login / Bedrock / Vertex
+# The Claude Agent SDK and Grok Build CLI are optional backends.
+# For real agent runs, set credentials for the driver you use:
+export ANTHROPIC_API_KEY=...   # for claude-agent-sdk (or Claude login / Bedrock / Vertex)
+export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive login)
 ```
 
 ## Quick start
