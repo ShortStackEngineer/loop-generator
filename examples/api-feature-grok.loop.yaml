@@ -1,0 +1,59 @@
+# API feature driven by the Grok Build CLI (xAI).
+#
+# Requires: the `grok` CLI installed and XAI_API_KEY (or an interactive grok login).
+# Point `workspace.dir` at a real Express/TypeScript project with `npm test` set up.
+#
+# Best practice on display: this spec lives ABOVE `workspace.dir` (the agent edits
+# ./target, this file sits outside it), so the agent can't edit its own success
+# criteria. The runner also watches the spec and warns if it's modified anyway.
+#
+# What the run reports: a per-iteration git diff, a flag if a "green" run changed
+# no source files, and the agent's stopReason (e.g. max_turns) — so SUCCESS means
+# the agent actually did the work, not just that the checks happen to pass.
+version: 1
+name: list-orders-endpoint
+description: Add a paginated GET /orders endpoint with tests.
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Add `GET /orders` to the Express app:
+    - Query params: `page` (default 1) and `pageSize` (default 20, max 100).
+    - Responds with { data: Order[], page, pageSize, total } as JSON.
+    - Responds 400 with a JSON error body on invalid params (non-numeric, < 1,
+      or pageSize > 100).
+  Add integration tests (supertest) covering the happy path, pagination, and the
+  400 cases. Keep the existing routes working.
+driver:
+  uses: grok
+  options:
+    maxTurns: 40
+    alwaysApprove: true # headless: auto-approve edits/commands (no prompts)
+    # --- The options below are CLI-version dependent; uncomment if your grok
+    #     build supports them. ---
+    # model: grok-build          # omit to use the grok CLI's configured default
+    # resume: true               # continue the same session after a max_turns stop
+    # env:                       # point grok at a clean config so your global MCP
+    #   XDG_CONFIG_HOME: ./.grok-clean   # servers don't leak into the loop as noise
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+success:
+  type: all-pass
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1200000
+  # Run the checks once before the agent: if GET /orders already "passes", the
+  # tests aren't actually exercising the new endpoint.
+  baseline: true

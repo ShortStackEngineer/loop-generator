@@ -98,7 +98,8 @@ limits:
   baseline: false        # run checks once before the agent (see "Trustworthy results")
 ```
 
-See [`examples/`](./examples) for function, experiment/A-B, and offline specs.
+See [`examples/`](./examples) for function (Claude SDK), API (grok), experiment/A-B,
+and offline (mock) specs.
 
 ## Trustworthy results
 

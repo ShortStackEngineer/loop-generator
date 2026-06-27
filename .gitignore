@@ -11,3 +11,7 @@ dist/
 # Example run workspaces
 examples/.workspace/
 examples/target/
+
+# IDE / AI assistant
+.idea/
+.junie/

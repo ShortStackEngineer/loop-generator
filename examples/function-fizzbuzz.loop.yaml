@@ -1,6 +1,11 @@
 # Function feature: implement a function and make its tests + typecheck pass.
 # Requires: the Claude Agent SDK installed and ANTHROPIC_API_KEY (or Claude login).
 # Point `workspace.dir` at a real TypeScript project that has `npm test` set up.
+#
+# Note: this spec sits outside `workspace.dir` (the agent edits ./target), so the
+# agent can't tamper with its own success criteria. Each run reports a git diff
+# and flags a "green" run that changed no source — see "Trustworthy results" in
+# the README.
 version: 1
 name: fizzbuzz
 description: Implement a classic fizzbuzz with tests.
@@ -38,3 +43,6 @@ success:
 limits:
   maxIterations: 6
   iterationTimeoutMs: 1200000
+  # Run the checks once before the agent. If they already pass, the tests aren't
+  # exercising fizzbuzz yet (safe to enable here — `npm test` has no side effects).
+  baseline: true

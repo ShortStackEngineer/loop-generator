@@ -1,6 +1,10 @@
 # Experiment task: optimize toward a target metric (e.g. an A/B variant's
 # conversion rate or a perf number). The agent must emit metrics.json, and the
 # loop continues until the metric clears the threshold AND tests stay green.
+#
+# `workspace.ignore` keeps framework build output (.next, dist) out of change
+# detection, so a run that merely rebuilds isn't mistaken for real work. Logs,
+# caches, and *.sqlite3 are already excluded by default.
 version: 1
 name: checkout-ab-test
 description: Implement variant B of the checkout flow and beat the control's conversion rate.
@@ -12,6 +16,7 @@ stack:
   packageManager: npm
 workspace:
   dir: ./target
+  ignore: [".next", "dist", "coverage"] # exclude build output from change detection
 requirements: |
   Implement variant B of the checkout CTA experiment behind a feature flag.
   Run the offline simulation (`npm run sim`) which writes metrics.json with the

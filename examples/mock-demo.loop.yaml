@@ -3,6 +3,11 @@
 #
 # The mock driver writes "wrong" on the first iteration (check fails), then "42"
 # on the second (check passes) — demonstrating the fail → feedback → fix loop.
+#
+# Note: `./.workspace` is git-ignored, so git change detection can't see it and
+# the runner falls back to driver-reported file changes (you'll see "N file(s)"
+# but no diff-stat). Point a loop at a normal, tracked directory to get the full
+# git diff + no-op detection.
 version: 1
 name: mock-demo
 description: Demonstrates the feedback loop end-to-end without any external agent.
