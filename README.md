@@ -195,6 +195,21 @@ npm test
 npm run build
 ```
 
+### Test quality
+
+```bash
+npm run coverage   # vitest + v8 coverage (gate: 85% lines/functions/statements, 80% branches)
+npm run mutation   # Stryker mutation testing (gate: 60% mutation score)
+```
+
+Coverage runs ~93% lines. Mutation testing (Stryker) checks that the tests
+actually *assert* behavior, not just execute it — the suite kills ~63% of
+mutants. Excluded from both as non-logic: CLI wiring, type-only modules, prompt/
+message **prose** (LLM instructions, log lines — marked with `// Stryker disable`
+and documented inline), and externally-dependent code (the `grok`/SDK process
+resolution, which needs the real CLI). The real agent drivers are tested via a
+fake `grok` binary (`GROK_BIN`) and an injectable SDK loader seam.
+
 ## Status
 
 v1 is the full framework skeleton: a working engine, the three extension points,

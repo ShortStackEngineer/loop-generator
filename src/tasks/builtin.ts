@@ -1,6 +1,10 @@
 import { createTaskType, standardEvaluators } from "./base";
 import type { TaskType } from "./types";
 
+// Stryker disable StringLiteral: task definitions are declarative prose (role,
+// guidance, descriptions) and config defaults — not logic. The structural logic
+// (which evaluators each type recommends) is still mutated and asserted.
+
 export const functionTask: TaskType = createTaskType({
   type: "function",
   description: "Implement or modify a self-contained function/module with test coverage.",

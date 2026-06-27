@@ -37,6 +37,9 @@ type SdkMessage = Record<string, unknown> & {
   usage?: { input_tokens?: number; output_tokens?: number };
 };
 
+// Stryker disable all: dynamic import of an optional, externally-authenticated
+// package; the failure path can't be exercised in unit tests (the package is
+// installed). The driver is tested via the injectable loader seam below.
 async function importSdk(): Promise<SdkModule | null> {
   try {
     // Indirect specifier keeps bundlers from trying to resolve the optional dep.
@@ -44,6 +47,16 @@ async function importSdk(): Promise<SdkModule | null> {
   } catch {
     return null;
   }
+}
+// Stryker restore all
+
+// Test seam: the SDK is an optional, externally-authenticated dependency, so
+// tests swap in a fake loader rather than invoking the real agent.
+let sdkLoader: () => Promise<SdkModule | null> = importSdk;
+
+/** @internal — for tests only. Pass null to restore the real loader. */
+export function __setSdkLoaderForTests(loader: (() => Promise<SdkModule | null>) | null): void {
+  sdkLoader = loader ?? importSdk;
 }
 
 function hasAuth(): boolean {
@@ -73,7 +86,7 @@ export const claudeAgentSdkDriver: AgentDriver = {
         `claude-agent-sdk options: ${parsed.error.issues.map((i) => i.message).join("; ")}`,
       ]);
     }
-    const sdk = await importSdk();
+    const sdk = await sdkLoader();
     if (!sdk) {
       return preflightFail([
         `The optional dependency "${SDK_PACKAGE}" is not installed. Run: npm install ${SDK_PACKAGE}`,
@@ -90,7 +103,7 @@ export const claudeAgentSdkDriver: AgentDriver = {
 
   async run(invocation: AgentInvocation): Promise<AgentRunResult> {
     const opts = optionsSchema.parse(invocation.options);
-    const sdk = await importSdk();
+    const sdk = await sdkLoader();
     if (!sdk) {
       return {
         ok: false,

@@ -306,7 +306,7 @@ export function extractFinalText(objs: JsonObject[]): string | undefined {
   return undefined;
 }
 
-function extractUsage(objs: JsonObject[]): AgentUsage | undefined {
+export function extractUsage(objs: JsonObject[]): AgentUsage | undefined {
   for (let i = objs.length - 1; i >= 0; i--) {
     const o = objs[i]!;
     const u = isObject(o.usage) ? o.usage : undefined;
@@ -323,7 +323,7 @@ function extractUsage(objs: JsonObject[]): AgentUsage | undefined {
   return undefined;
 }
 
-function extractSessionId(objs: JsonObject[]): string | undefined {
+export function extractSessionId(objs: JsonObject[]): string | undefined {
   for (let i = objs.length - 1; i >= 0; i--) {
     const o = objs[i]!;
     const id = asString(o.session_id) ?? asString(o.sessionId);
@@ -332,7 +332,7 @@ function extractSessionId(objs: JsonObject[]): string | undefined {
   return undefined;
 }
 
-function extractError(objs: JsonObject[]): string | undefined {
+export function extractError(objs: JsonObject[]): string | undefined {
   for (let i = objs.length - 1; i >= 0; i--) {
     const o = objs[i]!;
     if (o.type === "error" || o.error || o.is_error) {
@@ -354,7 +354,7 @@ export function cleanSummary(text: string, max = 280): string {
 }
 
 /** Last non-empty, non-pure-log line of stderr — usually the real error. */
-function lastMeaningfulLine(stderr: string): string {
+export function lastMeaningfulLine(stderr: string): string {
   const lines = stderr
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -371,6 +371,9 @@ interface ResolvedBin {
   resolved: string; // for notes/logging
 }
 
+// Stryker disable all: binary resolution shells out to a real `grok`/`npx` CLI
+// and cannot be exercised in unit tests (it would require the external tool /
+// network). Covered indirectly via the GROK_BIN override in the driver tests.
 async function resolveGrokBinary(): Promise<ResolvedBin | null> {
   // 1) Explicit override
   const explicit = process.env.GROK_BIN;
@@ -458,6 +461,7 @@ async function runGrokOnce(
   });
 }
 
+// Stryker restore all
 function tail(text: string, max = 2000): string {
   if (text.length <= max) return text;
   return "…" + text.slice(-max);

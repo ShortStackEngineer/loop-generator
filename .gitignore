@@ -15,3 +15,8 @@ examples/target/
 # IDE / AI assistant
 .idea/
 .junie/
+
+# Coverage / mutation testing output
+coverage/
+reports/
+.stryker-tmp/

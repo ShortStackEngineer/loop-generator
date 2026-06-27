@@ -36,6 +36,9 @@ export function standardEvaluators(spec: LoopSpec): SpecEvaluator[] {
   return evaluators;
 }
 
+// Stryker disable StringLiteral: the strings below are prompt/message prose
+// (LLM instructions and human-facing formatting), not logic. Mutating wording
+// is not a real defect, so exact-text assertions would be brittle and low-value.
 function describeChecks(spec: LoopSpec): string {
   if (spec.evaluators.length === 0) {
     return "(no automated checks configured yet — satisfy the requirements directly)";
