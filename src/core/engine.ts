@@ -13,6 +13,7 @@ import type { PreflightResult } from "./preflight";
 import { createLogger, type Logger } from "./logger";
 import { resolveWorkspaceDir, type LoopSpec } from "./spec";
 import { isGitRepo, changeDetectionAvailable, snapshotTree, diffTrees, DEFAULT_IGNORE_GLOBS } from "./workspace";
+import { addUsage } from "./usage";
 
 export interface EngineRegistries {
   drivers: Registry<AgentDriver>;
@@ -76,6 +77,8 @@ export interface RunOptions {
   skipPreflight?: boolean;
   /** Force the pre-run baseline evaluation on/off, overriding the spec. */
   baseline?: boolean;
+  /** Override the spec's iteration budget without mutating the spec object. */
+  maxIterations?: number;
   /**
    * Absolute path to the loop spec file. When it lives inside the workspace, the
    * engine watches it for tampering (the agent editing its own success criteria)
@@ -91,16 +94,6 @@ function hashFileSafe(file: string): string | null {
   } catch {
     return null;
   }
-}
-
-function addUsage(a: AgentUsage, b?: AgentUsage): AgentUsage {
-  if (!b) return a;
-  return {
-    inputTokens: (a.inputTokens ?? 0) + (b.inputTokens ?? 0),
-    outputTokens: (a.outputTokens ?? 0) + (b.outputTokens ?? 0),
-    costUsd: (a.costUsd ?? 0) + (b.costUsd ?? 0),
-    turns: (a.turns ?? 0) + (b.turns ?? 0),
-  };
 }
 
 /** First non-empty line of a (possibly multi-line) message, for terse logs. */
@@ -273,7 +266,8 @@ export class LoopEngine {
       }
     }
 
-    for (let i = 0; i < spec.limits.maxIterations; i++) {
+    const maxIterations = opts.maxIterations ?? spec.limits.maxIterations;
+    for (let i = 0; i < maxIterations; i++) {
       if (opts.signal?.aborted) {
         checkSpecTamper();
         return {
@@ -290,7 +284,7 @@ export class LoopEngine {
 
       const iterStart = Date.now();
       const iterLog = log.child(`iter${i}`);
-      iterLog.info(`starting iteration ${i + 1}/${spec.limits.maxIterations}`);
+      iterLog.info(`starting iteration ${i + 1}/${maxIterations}`);
 
       const prompt =
         i === 0
@@ -398,7 +392,7 @@ export class LoopEngine {
       ...base,
       outcome: "max-iterations",
       success: false,
-      reason: `exhausted ${spec.limits.maxIterations} iteration(s) without satisfying: ${feedback?.reason ?? "criteria"}`,
+      reason: `exhausted ${maxIterations} iteration(s) without satisfying: ${feedback?.reason ?? "criteria"}`,
       iterations,
       totalUsage,
       baseline,

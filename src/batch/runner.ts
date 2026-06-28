@@ -2,6 +2,7 @@ import path from "node:path";
 import { loadSpecFile, resolveWorkspaceDir, type LoopSpec } from "../core/spec";
 import { LoopEngine, type LoopReport } from "../core/engine";
 import type { AgentUsage } from "../drivers/types";
+import { addUsage } from "../core/usage";
 import { createLogger, type Logger } from "../core/logger";
 import type { BatchItem, BatchManifest } from "./manifest";
 import { validateBatchManifest, BatchValidationError } from "./manifest";
@@ -38,6 +39,8 @@ export interface RunBatchOptions {
   /** Override manifest concurrency / continueOnError. */
   concurrency?: number;
   continueOnError?: boolean;
+  /** Override every item's iteration budget (wins over item/defaults). */
+  maxIterations?: number;
 }
 
 interface ResolvedItem {
@@ -45,17 +48,41 @@ interface ResolvedItem {
   specFile?: string;
   baseDir: string;
   workspace: string;
+  maxIterations?: number;
   baseline?: boolean;
   skipPreflight?: boolean;
 }
 
-function addUsage(a: AgentUsage, b?: AgentUsage): AgentUsage {
-  if (!b) return a;
+/**
+ * Resolve an item's spec (from a file or inline) and its effective run options.
+ * Does not mutate the loaded/parsed spec — the iteration budget is passed to the
+ * engine as an override, so re-running a manifest is side-effect free.
+ */
+function resolveItem(item: BatchItem, manifest: BatchManifest, manifestDir: string): ResolvedItem {
+  let spec: LoopSpec;
+  let specFile: string | undefined;
+  let specBaseDir: string;
+  if (item.spec) {
+    const loaded = loadSpecFile(path.resolve(manifestDir, item.spec));
+    spec = loaded.spec;
+    specFile = loaded.file;
+    specBaseDir = loaded.baseDir;
+  } else {
+    spec = item.inline!;
+    specBaseDir = manifestDir;
+  }
+
+  const base = item.base ?? manifest.defaults?.base;
+  const baseDir = base ? path.resolve(manifestDir, base) : specBaseDir;
+
   return {
-    inputTokens: (a.inputTokens ?? 0) + (b.inputTokens ?? 0),
-    outputTokens: (a.outputTokens ?? 0) + (b.outputTokens ?? 0),
-    costUsd: (a.costUsd ?? 0) + (b.costUsd ?? 0),
-    turns: (a.turns ?? 0) + (b.turns ?? 0),
+    spec,
+    specFile,
+    baseDir,
+    workspace: resolveWorkspaceDir(spec, baseDir),
+    maxIterations: item.maxIterations ?? manifest.defaults?.maxIterations,
+    baseline: item.baseline ?? manifest.defaults?.baseline,
+    skipPreflight: item.skipPreflight ?? manifest.defaults?.skipPreflight,
   };
 }
 
@@ -79,17 +106,6 @@ export async function runBatch(
   const concurrency = opts.concurrency ?? manifest.concurrency;
   const continueOnError = opts.continueOnError ?? manifest.continueOnError;
 
-  // Resolve every item up front so workspaces are known before scheduling.
-  const resolved = new Map<string, ResolvedItem>();
-  const resolveError = new Map<string, string>();
-  for (const item of manifest.items) {
-    try {
-      resolved.set(item.name, resolveItem(item, manifest, opts.baseDir));
-    } catch (err) {
-      resolveError.set(item.name, (err as Error).message);
-    }
-  }
-
   const results = new Map<string, BatchItemResult>();
   const pending = new Set(manifest.items.map((i) => i.name));
   const inflight = new Map<string, Promise<BatchItemResult>>();
@@ -101,6 +117,19 @@ export async function runBatch(
     pending.delete(r.name);
     opts.onItem?.(r);
   };
+
+  // Resolve every item up front so workspaces are known before scheduling.
+  // Resolution failures (e.g. a missing `spec:` file) are recorded as terminal
+  // "error" results immediately — before scheduling — so dependents correctly
+  // see a dead dependency regardless of manifest order.
+  const resolved = new Map<string, ResolvedItem>();
+  for (const item of manifest.items) {
+    try {
+      resolved.set(item.name, resolveItem(item, manifest, opts.baseDir));
+    } catch (err) {
+      finish({ name: item.name, status: "error", reason: (err as Error).message, durationMs: 0 });
+    }
+  }
 
   // status of an item's dependencies: every dep must have a result, all success.
   const depsState = (item: BatchItem): "ready" | "blocked" | "deadDep" => {
@@ -119,6 +148,7 @@ export async function runBatch(
       const report = await engine.run(r.spec, {
         baseDir: r.baseDir,
         specFile: r.specFile,
+        maxIterations: opts.maxIterations ?? r.maxIterations,
         baseline: r.baseline,
         skipPreflight: r.skipPreflight,
         signal: opts.signal,
@@ -143,12 +173,6 @@ export async function runBatch(
     for (const item of manifest.items) {
       if (!pending.has(item.name) || inflight.has(item.name)) continue;
 
-      const err = resolveError.get(item.name);
-      if (err) {
-        finish({ name: item.name, status: "error", reason: err, durationMs: 0 });
-        continue;
-      }
-
       const state = depsState(item);
       if (state === "deadDep") {
         const failedDep = item.needs.find((d) => results.get(d)?.status !== "success");
@@ -169,14 +193,11 @@ export async function runBatch(
     }
 
     if (inflight.size === 0) {
-      // Nothing running and nothing newly schedulable → skip the remainder.
+      // Nothing running and nothing newly schedulable. With resolve-errors and
+      // dead deps already handled above, the remainder are ready items held back
+      // by a stop (failure / abort) — skip them.
       for (const name of pending) {
-        finish({
-          name,
-          status: "skipped",
-          reason: stopNew ? "batch stopped after a failure" : "not scheduled",
-          durationMs: 0,
-        });
+        finish({ name, status: "skipped", reason: "batch stopped before this item ran", durationMs: 0 });
       }
       break;
     }
@@ -204,33 +225,4 @@ export async function runBatch(
     totalUsage,
     durationMs: Date.now() - start,
   };
-
-  function resolveItem(item: BatchItem, m: BatchManifest, manifestDir: string): ResolvedItem {
-    let spec: LoopSpec;
-    let specFile: string | undefined;
-    let specBaseDir: string;
-    if (item.spec) {
-      const loaded = loadSpecFile(path.resolve(manifestDir, item.spec));
-      spec = loaded.spec;
-      specFile = loaded.file;
-      specBaseDir = loaded.baseDir;
-    } else {
-      spec = item.inline!;
-      specBaseDir = manifestDir;
-    }
-
-    const base = item.base ?? m.defaults?.base;
-    const baseDir = base ? path.resolve(manifestDir, base) : specBaseDir;
-    const maxIterations = item.maxIterations ?? m.defaults?.maxIterations;
-    if (maxIterations) spec.limits.maxIterations = maxIterations;
-
-    return {
-      spec,
-      specFile,
-      baseDir,
-      workspace: resolveWorkspaceDir(spec, baseDir),
-      baseline: item.baseline ?? m.defaults?.baseline,
-      skipPreflight: item.skipPreflight ?? m.defaults?.skipPreflight,
-    };
-  }
 }

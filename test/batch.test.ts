@@ -77,7 +77,7 @@ describe("batch scheduling", () => {
     });
     const b = report.items.find((r) => r.name === "b")!;
     expect(b.status).toBe("skipped");
-    expect(b.reason).toMatch(/stopped after a failure/);
+    expect(b.reason).toMatch(/batch stopped/);
   });
 
   it("respects needs ordering and skips dependents of a failed item", async () => {
@@ -106,6 +106,38 @@ describe("batch scheduling", () => {
     const report = await runBatch(m, engine(), { baseDir: dir, log: silentLogger });
     expect(report.items[0]!.status).toBe("error");
     expect(report.counts.error).toBe(1);
+  });
+
+  it("cascades a resolve error to dependents even when the dependent is listed first", async () => {
+    // Dependent before its (missing-spec) dependency: exercises the order-sensitive
+    // bug where the dependent would otherwise be labeled "not scheduled".
+    const m = manifest({
+      items: [item("b", { needs: ["broken"] }), { name: "broken", spec: "nope.loop.yaml" }],
+    });
+    const report = await runBatch(m, engine(), { baseDir: dir, log: silentLogger });
+    expect(report.items.find((r) => r.name === "broken")!.status).toBe("error");
+    const b = report.items.find((r) => r.name === "b")!;
+    expect(b.status).toBe("skipped");
+    expect(b.reason).toMatch(/dependency "broken"/);
+  });
+
+  it("applies a maxIterations override to all items without mutating the spec", async () => {
+    const failing = {
+      name: "never",
+      inline: {
+        name: "never",
+        requirements: "x",
+        workspace: { dir: "." },
+        driver: { uses: "mock", options: { steps: [{ files: { "a.txt": "1" } }] } },
+        evaluators: [{ uses: "command", as: "c", options: { command: "exit 1" } }],
+        limits: { maxIterations: 9 },
+      },
+    };
+    const m = manifest({ items: [failing] });
+    const report = await runBatch(m, engine(), { baseDir: dir, log: silentLogger, maxIterations: 2 });
+    expect(report.items[0]!.report!.iterations).toHaveLength(2); // override (2) wins over spec (9)
+    // Spec object was not mutated by the override.
+    expect(m.items[0]!.inline!.limits.maxIterations).toBe(9);
   });
 
   it("loads an item from a spec file on disk", async () => {

@@ -11,8 +11,15 @@ interface BatchFlags {
   concurrency?: string;
   continueOnError?: boolean;
   stopOnError?: boolean;
+  maxIterations?: string;
   report?: string;
   logLevel?: LogLevel;
+}
+
+/** Fixed-width item name, clipped with an ellipsis when too long. */
+function clipName(name: string, width = 24): string {
+  const s = name.length > width ? `${name.slice(0, width - 1)}…` : name;
+  return s.padEnd(width);
 }
 
 const MARK: Record<BatchItemResult["status"], string> = {
@@ -30,7 +37,7 @@ function formatItem(r: BatchItemResult): string {
   if (typeof u?.costUsd === "number" && u.costUsd > 0) meta.push(`$${u.costUsd.toFixed(2)}`);
   const metaStr = meta.length ? `  (${meta.join(", ")})` : "";
   const warn = r.report?.warnings.length ? `  ⚠${r.report.warnings.length}` : "";
-  return `  ${MARK[r.status]} ${r.name.padEnd(24)} ${r.status.padEnd(8)}${metaStr}${warn}  ${r.reason}`;
+  return `  ${MARK[r.status]} ${clipName(r.name)} ${r.status.padEnd(8)}${metaStr}${warn}  ${r.reason}`;
 }
 
 function formatReport(report: BatchReport): string {
@@ -58,6 +65,7 @@ export function registerBatch(program: Command): void {
     .command("batch <manifest>")
     .description("Run a punch list of loop specs (a .batch.yaml) with ordering + concurrency.")
     .option("-c, --concurrency <n>", "max items running at once (override manifest)")
+    .option("-m, --max-iterations <n>", "override every item's iteration budget")
     .option("--continue-on-error", "keep going after a failure (override manifest)")
     .option("--stop-on-error", "stop scheduling new items after the first failure")
     .option("--report <file>", "write the full aggregate JSON report to a file")
@@ -82,6 +90,7 @@ export function registerBatch(program: Command): void {
           baseDir,
           signal: controller.signal,
           concurrency: flags.concurrency ? Number(flags.concurrency) : undefined,
+          maxIterations: flags.maxIterations ? Number(flags.maxIterations) : undefined,
           continueOnError,
           log,
           onItemStart: (name) => log.info(`▶ ${name}`),
