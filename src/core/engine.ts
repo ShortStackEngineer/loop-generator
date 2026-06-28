@@ -14,6 +14,7 @@ import { createLogger, type Logger } from "./logger";
 import { resolveWorkspaceDir, type LoopSpec } from "./spec";
 import { isGitRepo, changeDetectionAvailable, snapshotTree, diffTrees, DEFAULT_IGNORE_GLOBS } from "./workspace";
 import { addUsage } from "./usage";
+import { workspacePreflight } from "../lint/spec-lint";
 
 export interface EngineRegistries {
   drivers: Registry<AgentDriver>;
@@ -133,6 +134,9 @@ export class LoopEngine {
     const runId = randomUUID();
     const baseDir = opts.baseDir ?? process.cwd();
     const workdir = resolveWorkspaceDir(spec, baseDir);
+    // Make the resolved workspace obvious up front — a wrong workdir (e.g. a
+    // compounded relative path landing in $HOME) is otherwise silent.
+    log.info(`workspace: ${workdir}`);
 
     const base: LoopReport = {
       spec: spec.name,
@@ -170,6 +174,9 @@ export class LoopEngine {
     // Preflight: driver + every evaluator.
     if (!opts.skipPreflight) {
       const checks: PreflightResult[] = [];
+      // Workspace/exec sanity (resolved workdir is a real project, referenced
+      // binaries/scripts exist) — catches misconfigured paths before any work.
+      checks.push(workspacePreflight(spec, workdir));
       if (driver.preflight) checks.push(await driver.preflight({ workdir, options: spec.driver.options }));
       for (const e of evaluators) {
         if (e.evaluator.preflight) checks.push(await e.evaluator.preflight({ workdir, options: e.options }));

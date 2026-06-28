@@ -43,7 +43,7 @@ export interface RunBatchOptions {
   maxIterations?: number;
 }
 
-interface ResolvedItem {
+export interface ResolvedItem {
   spec: LoopSpec;
   specFile?: string;
   baseDir: string;
@@ -57,8 +57,11 @@ interface ResolvedItem {
  * Resolve an item's spec (from a file or inline) and its effective run options.
  * Does not mutate the loaded/parsed spec — the iteration budget is passed to the
  * engine as an override, so re-running a manifest is side-effect free.
+ *
+ * Exported so the batch linter resolves item workspaces exactly as the runner
+ * does (the path arithmetic must agree, or lint findings would be misleading).
  */
-function resolveItem(item: BatchItem, manifest: BatchManifest, manifestDir: string): ResolvedItem {
+export function resolveItem(item: BatchItem, manifest: BatchManifest, manifestDir: string): ResolvedItem {
   let spec: LoopSpec;
   let specFile: string | undefined;
   let specBaseDir: string;

@@ -101,6 +101,40 @@ limits:
 See [`examples/`](./examples) for function (Claude SDK), API (grok), experiment/A-B,
 and offline (mock) specs.
 
+## Lint before you run (`lint`)
+
+A misconfigured spec can burn hours before failing for a reason that had nothing
+to do with the agent. `loopgen lint` catches those statically — in milliseconds,
+before any agent turn:
+
+```bash
+loopgen lint my-feature.loop.yaml
+loopgen lint punch-list.batch.yaml      # lints the manifest + every item's spec
+loopgen lint my.loop.yaml --strict      # exit non-zero on warnings too
+loopgen lint my.loop.yaml --json        # machine-readable findings
+```
+
+It flags, among other things:
+
+- **`SPEC-WORKDIR-NOT-PROJECT`** *(error)* — the resolved workspace isn't a git
+  repo and has no markers for the declared stack, yet the spec expects an
+  existing project. Catches a `workspace.dir` and a batch `base` that both go
+  relative and compound (e.g. `../..` applied twice, landing in `$HOME`).
+- **`SPEC-EVAL-BINARY-MISSING` / `SPEC-EVAL-FILE-MISSING`** — a check's binary or
+  referenced script doesn't exist where it will run.
+- **`SPEC-EVAL-DESTRUCTIVE-ENV`** — a check mutates a database without a test env
+  (it would alter your dev data every iteration).
+- **`SPEC-EVAL-SHARED-RESOURCE`** — multiple stateful checks the engine runs
+  concurrently can race on a shared database.
+- **`SPEC-SMOKE-SELF-FULFILLING`** — a smoke that creates records but never drives
+  a real endpoint may pass without exercising the feature.
+- **Batch rules** — `BATCH-MAXITER-OVERRIDE`, `BATCH-NEEDS-AS-ORDERING`,
+  `BATCH-FAILFAST-CHAIN`.
+
+Exit codes: `2` if any errors, `1` if `--strict` and warnings, else `0`. The
+error-severity workspace checks also run automatically as part of every `run`
+(the resolved workspace is printed up front); skip with `--skip-preflight`.
+
 ## Trustworthy results
 
 "All checks passed" is only meaningful if the checks actually exercise the new

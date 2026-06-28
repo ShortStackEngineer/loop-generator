@@ -107,3 +107,8 @@ export type {
   BatchItemResult,
   BatchItemStatus,
 } from "./batch/runner";
+
+// Lint (Layer 0: static pre-execution checks)
+export { lintSpec, lintBatch, lintPath, workspacePreflight } from "./lint";
+export type { LintResult } from "./lint";
+export type { LintFinding, LintSeverity, SpecRule } from "./lint/types";
