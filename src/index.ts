@@ -89,3 +89,21 @@ export type { TreeDiff } from "./core/workspace";
 // Generation
 export { generateSpec, specToYaml } from "./generate";
 export type { GenerateInput } from "./generate";
+
+// Batch
+export {
+  batchManifestSchema,
+  batchItemSchema,
+  parseBatchManifest,
+  loadBatchFile,
+  validateBatchManifest,
+  BatchValidationError,
+} from "./batch/manifest";
+export type { BatchManifest, BatchItem, LoadedBatch } from "./batch/manifest";
+export { runBatch } from "./batch/runner";
+export type {
+  RunBatchOptions,
+  BatchReport,
+  BatchItemResult,
+  BatchItemStatus,
+} from "./batch/runner";

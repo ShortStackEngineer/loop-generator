@@ -132,6 +132,44 @@ All caveats are collected in `report.warnings` and printed under `⚠ warnings:`
 Drivers that report a session id can also **resume** after a `max_turns` stop
 (opt-in: `driver.options.resume: true`).
 
+## Running a punch list (`batch`)
+
+To run many units of work — across one or more codebases — list them in a
+`.batch.yaml` manifest and run them with one command:
+
+```yaml
+# punch-list.batch.yaml
+version: 1
+concurrency: 2          # items run in parallel up to this many...
+continueOnError: true   # ...and a failure doesn't stop the others
+defaults:
+  maxIterations: 6      # merged into every item (item-level values win)
+items:
+  - name: add-retry
+    spec: loops/add-retry.loop.yaml
+    base: /repos/service-a            # which repo this item's workspace resolves in
+  - name: fix-pagination
+    spec: loops/fix-pagination.loop.yaml
+    base: /repos/service-a
+    needs: [add-retry]                # ordering: runs only after add-retry succeeds
+  - name: dark-mode
+    spec: loops/dark-mode.loop.yaml
+    base: /repos/web
+```
+
+```bash
+loopgen batch punch-list.batch.yaml --report batch-report.json
+# offline demo:  loopgen batch examples/punch-list.batch.yaml
+```
+
+The scheduler honors `needs` ordering and the `concurrency` cap, and **guarantees
+two items that resolve to the same workspace never run at once** — so parallelism
+is safe across distinct repos without one clobbering another (same-repo items
+auto-serialize). A failed or skipped dependency cascades: its dependents are
+skipped. You get a per-item summary (status · iterations · files · cost ·
+warnings) and an aggregate JSON report; the command exits non-zero if any item
+failed. Items can also `inline:` a full spec instead of referencing a file.
+
 ## Extending it
 
 The whole system is three plug-in points. Register your own and pass them to the

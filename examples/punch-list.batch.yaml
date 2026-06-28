@@ -1,0 +1,61 @@
+# Offline batch demo — a "punch list" run with the scripted `mock` driver.
+# Try it:  loopgen batch examples/punch-list.batch.yaml
+#
+# Shows: bounded concurrency, distinct workspaces running in parallel, and a
+# `needs` dependency. Items usually point at .loop.yaml files via `spec:` and a
+# per-item `base:` (one per repo) — here they're inlined so the demo is
+# self-contained and needs no agent. Each item's workspace is created under
+# examples/.batch-demo/ (git-ignored).
+version: 1
+name: offline-demo-punch-list
+concurrency: 2 # distinct-workspace items run in parallel; same-workspace items never overlap
+continueOnError: true # keep going if one item fails (set false / --stop-on-error to halt)
+items:
+  - name: write-answer
+    inline:
+      name: write-answer
+      requirements: Write "42" into answer.txt
+      workspace: { dir: ./.batch-demo/a }
+      driver:
+        uses: mock
+        options:
+          steps:
+            - files: { answer.txt: wrong } # first attempt fails the check
+            - files: { answer.txt: "42" } # corrected after feedback
+      evaluators:
+        - uses: command
+          as: check
+          options: { command: 'test "$(cat answer.txt)" = "42"' }
+      success: { type: all-pass }
+      limits: { maxIterations: 3 }
+
+  - name: write-greeting
+    inline:
+      name: write-greeting
+      requirements: Write "hello" into hello.txt
+      workspace: { dir: ./.batch-demo/b }
+      driver:
+        uses: mock
+        options: { steps: [{ files: { hello.txt: hello } }] }
+      evaluators:
+        - uses: command
+          as: check
+          options: { command: 'test "$(cat hello.txt)" = "hello"' }
+      success: { type: all-pass }
+      limits: { maxIterations: 2 }
+
+  - name: finalize
+    needs: [write-answer, write-greeting] # only runs after both above succeed
+    inline:
+      name: finalize
+      requirements: Drop a done marker
+      workspace: { dir: ./.batch-demo/c }
+      driver:
+        uses: mock
+        options: { steps: [{ files: { done.txt: ok } }] }
+      evaluators:
+        - uses: command
+          as: check
+          options: { command: test -f done.txt }
+      success: { type: all-pass }
+      limits: { maxIterations: 1 }
