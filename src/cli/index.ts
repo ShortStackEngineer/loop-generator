@@ -3,6 +3,7 @@ import { Command } from "commander";
 import { registerGenerate } from "./generate";
 import { registerRun } from "./run";
 import { registerBatch } from "./batch";
+import { registerLint } from "./lint";
 import { registerList } from "./list";
 import { registerVerifyDriver } from "./verify-driver";
 
@@ -16,6 +17,7 @@ program
 registerGenerate(program);
 registerRun(program);
 registerBatch(program);
+registerLint(program);
 registerList(program);
 registerVerifyDriver(program);
 

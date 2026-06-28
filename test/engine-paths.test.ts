@@ -79,6 +79,21 @@ describe("engine resolution + preflight paths", () => {
     expect(report.reason).toMatch(/task validation failed/);
   });
 
+  it("preflight blocks a project-expecting spec pointed at a non-project workdir", async () => {
+    const spec = parseSpec({
+      name: "misrouted",
+      requirements: "x",
+      stack: { language: "ruby", framework: "rails" },
+      driver: { uses: "mock", options: { steps: [{ files: { "a.txt": "1" } }] } },
+      // bin/rails is a project-local binstub → spec expects an existing project,
+      // but the tmp workdir has no Gemfile and isn't a repo.
+      evaluators: [{ uses: "command", as: "tests", options: { command: "bin/rails test" } }],
+    });
+    const report = await engine().run(spec, { baseDir: workdir });
+    expect(report.outcome).toBe("preflight-failed");
+    expect(report.reason).toMatch(/SPEC-WORKDIR-NOT-PROJECT/);
+  });
+
   it("aborts immediately when the run signal is already aborted", async () => {
     const spec = parseSpec({
       name: "x",
