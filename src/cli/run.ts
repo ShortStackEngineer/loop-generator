@@ -122,7 +122,7 @@ export function registerRun(program: Command): void {
     .option("--skip-baseline", "skip the baseline evaluation even if the spec enables it")
     .action(async (specPath: string, flags: RunFlags) => {
       const { spec, baseDir, file } = loadSpecFile(specPath);
-      if (flags.maxIterations) spec.limits.maxIterations = Number(flags.maxIterations);
+      const maxIterations = flags.maxIterations ? Number(flags.maxIterations) : undefined;
 
       // Tri-state: --baseline forces on, --skip-baseline forces off, else defer to spec.
       const baseline = flags.baseline ? true : flags.skipBaseline ? false : undefined;
@@ -145,6 +145,7 @@ export function registerRun(program: Command): void {
           signal: controller.signal,
           skipPreflight: flags.skipPreflight,
           baseline,
+          maxIterations,
           onIteration: (it) => console.log(formatIteration(it)),
           log,
         });

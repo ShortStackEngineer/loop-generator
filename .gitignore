@@ -11,6 +11,7 @@ dist/
 # Example run workspaces
 examples/.workspace/
 examples/target/
+examples/.batch-demo/
 
 # IDE / AI assistant
 .idea/
