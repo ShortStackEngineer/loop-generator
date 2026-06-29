@@ -96,6 +96,8 @@ success:
 limits:
   maxIterations: 6
   baseline: false        # run checks once before the agent (see "Trustworthy results")
+evaluation:
+  concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
 
 See [`examples/`](./examples) for function (Claude SDK), API (grok), experiment/A-B,
@@ -124,8 +126,9 @@ It flags, among other things:
   referenced script doesn't exist where it will run.
 - **`SPEC-EVAL-DESTRUCTIVE-ENV`** — a check mutates a database without a test env
   (it would alter your dev data every iteration).
-- **`SPEC-EVAL-SHARED-RESOURCE`** — multiple stateful checks the engine runs
-  concurrently can race on a shared database.
+- **`SPEC-EVAL-SHARED-RESOURCE`** — multiple stateful checks set to run in
+  parallel (`evaluation.concurrency > 1`) can race on a shared database.
+  Evaluators run sequentially by default, so this only fires when you opt in.
 - **`SPEC-SMOKE-SELF-FULFILLING`** — a smoke that creates records but never drives
   a real endpoint may pass without exercising the feature.
 - **Batch rules** — `BATCH-MAXITER-OVERRIDE`, `BATCH-NEEDS-AS-ORDERING`,
@@ -152,6 +155,11 @@ false positives:
   checks once *before* any agent work. If they already pass, your checks probably
   don't test the requirement — surfaced as a warning. Off by default because
   side-effecting checks (db migrate/seed) would run twice.
+- **Sequential evaluators (default):** evaluators run one at a time
+  (`evaluation.concurrency: 1`) so checks that share external state — several
+  `bin/rails` checks against one SQLite database, say — can't race and deadlock
+  into false failures. Raise `evaluation.concurrency` only for genuinely
+  independent checks that are safe to run in parallel.
 - **Spec-integrity guard:** if the loop spec lives inside the workspace, the
   agent can edit its own success criteria. The runner watches the spec file,
   excludes it from the work diff (so a spec-only edit can't fake "work"), and
