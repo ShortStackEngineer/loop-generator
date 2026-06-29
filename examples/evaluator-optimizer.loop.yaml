@@ -1,0 +1,85 @@
+# ── Popular loop #2: Anthropic's "verifiable goal" / evaluator-optimizer ────
+# The pattern Boris Cherny and the Anthropic write-ups push: stop hand-holding
+# the agent turn by turn. Instead, state a goal plus a SEPARATE, deterministic
+# checker, and let a builder agent iterate until every check passes. The checker
+# is the contract; the agent optimizes against it.
+#
+# loopgen is this loop's native shape: the driver is the builder, the evaluators
+# are the deterministic checkers, and `success` is the contract that closes the
+# loop. Here the contract combines correctness (unit + typecheck) with a numeric
+# bar (p95 latency) via the `experiment` evaluator — "close the loop with tests
+# AND metrics."
+#
+# The trust guard that matters most here is `baseline: strict`. The whole premise
+# is that the checker actually verifies the goal — so loopgen runs the checks ONCE
+# before the agent touches anything. If they already pass, the checker is vacuous
+# (it isn't testing the new behavior) and the run fails fast as `baseline-vacuous`
+# instead of reporting a hollow green. That is exactly the failure mode the
+# Anthropic guidance warns about, enforced mechanically.
+#
+# Run (needs an agent driver — the Claude Agent SDK + ANTHROPIC_API_KEY, or grok
+# (see the driver block below) — and a ./target repo with `npm test` and an
+# `npm run bench` that prints ONLY JSON like {"p95_ms": 210} on stdout (the
+# experiment evaluator parses the whole stdout, so keep it free of other output)):
+#   loopgen lint examples/evaluator-optimizer.loop.yaml
+#   loopgen run  examples/evaluator-optimizer.loop.yaml
+version: 1
+name: evaluator-optimizer-fetch
+description: Implement fetchWithRetry until a separate, deterministic checker is satisfied.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Implement and export `fetchWithRetry(url, opts)` in src/fetchWithRetry.ts:
+    - Retries on network errors and 5xx responses, up to `opts.retries` (default 3).
+    - Exponential backoff with jitter between attempts.
+    - Gives up and rejects with the last error once retries are exhausted.
+    - Never retries 4xx responses (they won't succeed on retry).
+  Add unit tests in src/fetchWithRetry.test.ts covering: success first try,
+  success after N transient failures, give-up after exhaustion, and no-retry-on-4xx.
+  Keep p95 latency under the bench's threshold — don't over-sleep between retries.
+driver:
+  # Drive with Grok instead: swap to `uses: grok` with
+  # `options: { alwaysApprove: true, maxTurns: 30 }` (see api-feature-grok.loop.yaml).
+  # Grok needs no API key on a cached `grok` login — verified headless.
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 30
+evaluators:
+  # Deterministic correctness checkers — the "verifier" half of the loop.
+  - uses: command
+    as: unit
+    options:
+      command: npm test -- fetchWithRetry
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+  # Numeric bar: read p95 from the bench's JSON output and require it to drop.
+  - uses: experiment
+    as: latency
+    options:
+      command: npm run bench --silent
+      metric: p95_ms
+      direction: decrease
+      maxValue: 150
+success:
+  # The goal is met only when correctness AND the latency bar both hold.
+  type: all
+  of:
+    - type: pass
+      evaluators: [unit, typecheck]
+    - type: score
+      evaluator: latency
+      lte: 150
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1200000
+  # The heart of the verifiable-goal pattern: a checker that's green before any
+  # work is a checker that isn't checking. `strict` makes that a hard failure.
+  baseline: strict

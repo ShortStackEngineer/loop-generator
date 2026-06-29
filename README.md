@@ -101,8 +101,12 @@ evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
 
-See [`examples/`](./examples) for function (Claude SDK), API (grok), experiment/A-B,
-and offline (mock) specs.
+See [`examples/`](./examples) for the building-block specs — function (Claude SDK),
+API (grok), experiment/A-B, and offline (mock) — and for the popular agent loops
+recreated declaratively: the [Ralph Wiggum loop](./examples/ralph-loop.loop.yaml),
+Anthropic's [evaluator-optimizer](./examples/evaluator-optimizer.loop.yaml), and
+Osmani's [loop-engineering harness](./examples/osmani-harness.batch.yaml). The
+[examples index](./examples/README.md) maps each pattern to a runnable spec.
 
 ## Lint before you run (`lint`)
 

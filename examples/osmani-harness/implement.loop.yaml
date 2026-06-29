@@ -1,0 +1,36 @@
+# Harness stage 2 of 3 — IMPLEMENT / maker (run via osmani-harness.batch.yaml).
+# Build what discover planned, gated by tests + typecheck. Runs only after the
+# discover stage succeeds (see `needs` in the batch manifest).
+version: 1
+name: harness-implement
+description: Implement the items in prd.json, keeping tests and types green.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: .
+requirements: |
+  Read prd.json (produced by the discover stage). Implement every item, in
+  priority order, so each one's `acceptance` is satisfied. Add or update tests
+  for the behavior you add. Keep all existing tests passing. Do not edit prd.json.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 40
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+success:
+  type: all-pass
+limits:
+  maxIterations: 10
+  iterationTimeoutMs: 1200000

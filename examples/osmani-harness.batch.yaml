@@ -1,0 +1,42 @@
+# ── Popular loop #3: Addy Osmani's "loop engineering" harness ───────────────
+# Osmani's compound loop is more than one agent: automations DISCOVER the work,
+# an isolated step IMPLEMENTS it (maker), a separate step VERIFIES it (checker),
+# and learnings persist so the next cycle compounds. The discipline is the value —
+# a maker and a checker that aren't the same pass, run in order.
+#
+# loopgen models this as a batch: a punch list of loop specs with `needs`
+# ordering. discover → implement → verify, each its own .loop.yaml. This file
+# shows the idioms the inline punch-list demo doesn't:
+#   • `spec:` — items point at real .loop.yaml files (a directory of specs, like
+#     a real harness), instead of inlining everything.
+#   • `defaults.base` — one shared repo (./target) for every stage, set once.
+#   • `needs` — implement waits for discover, verify waits for implement.
+#
+# What loopgen adds over a hand-rolled harness: the scheduler gives you the
+# dependency ordering and same-workspace exclusivity for free (Osmani recommends
+# wiring worktrees yourself), and each stage is independently lintable.
+#
+# Note: `loopgen lint` will flag the `needs` chain below as redundant-for-ordering
+# — and it's right. Because all three stages share ./target at concurrency 1,
+# they're already sequenced by manifest order. We keep `needs` anyway because it
+# documents the real data dependency (implement reads the prd.json discover
+# writes) and cascades a failure so a broken discover skips the rest. That's a
+# good demonstration of what the linter notices, not a misconfiguration.
+#
+# Run (needs the Claude Agent SDK + ANTHROPIC_API_KEY and a ./target repo):
+#   loopgen lint  examples/osmani-harness.batch.yaml
+#   loopgen batch examples/osmani-harness.batch.yaml
+version: 1
+name: osmani-loop-harness
+concurrency: 1 # stages share one workspace, so they serialize regardless
+defaults:
+  base: ./target # every stage edits the same repo; sub-specs use workspace.dir "."
+items:
+  - name: discover
+    spec: ./osmani-harness/discover.loop.yaml
+  - name: implement
+    spec: ./osmani-harness/implement.loop.yaml
+    needs: [discover] # maker waits for the plan
+  - name: verify
+    spec: ./osmani-harness/verify.loop.yaml
+    needs: [implement] # checker waits for the maker

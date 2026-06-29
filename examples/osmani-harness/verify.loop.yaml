@@ -1,0 +1,47 @@
+# Harness stage 3 of 3 — VERIFY / checker (run via osmani-harness.batch.yaml).
+# A separate pass from the maker: full suite + a coverage bar. This is the
+# maker/checker separation Osmani's harness is built around — the stage that
+# implemented the code is NOT the stage that signs off on it.
+version: 1
+name: harness-verify
+description: Independently verify the implementation — full suite plus a coverage bar.
+task:
+  type: experiment
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: .
+requirements: |
+  Do not add features. Run the full test suite and the coverage report. If any
+  acceptance item from prd.json is under-tested, add the missing tests (only
+  tests) until coverage clears the bar. Surface anything that can't be verified.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 20
+evaluators:
+  - uses: command
+    as: full-suite
+    options:
+      command: npm test
+  # Coverage as a numeric gate: `npm run coverage` prints JSON like {"lines": 91}.
+  - uses: experiment
+    as: coverage
+    options:
+      command: npm run coverage --silent
+      metric: lines
+      direction: increase
+      minValue: 85
+success:
+  type: all
+  of:
+    - type: pass
+      evaluators: [full-suite]
+    - type: score
+      evaluator: coverage
+      gte: 85
+limits:
+  maxIterations: 6
+  iterationTimeoutMs: 1200000
