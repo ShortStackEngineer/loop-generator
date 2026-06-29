@@ -45,7 +45,14 @@ export interface BaselineReport {
   evaluations: EvaluationResult[];
 }
 
-export type LoopOutcome = "success" | "max-iterations" | "preflight-failed" | "aborted" | "error";
+export type LoopOutcome =
+  | "success"
+  | "max-iterations"
+  | "preflight-failed"
+  | "aborted"
+  | "error"
+  | "baseline-vacuous"
+  | "spec-tampered";
 
 export interface LoopReport {
   spec: string;
@@ -76,8 +83,11 @@ export interface RunOptions {
   onIteration?: (report: IterationReport) => void;
   /** Skip preflight checks (not recommended). */
   skipPreflight?: boolean;
-  /** Force the pre-run baseline evaluation on/off, overriding the spec. */
-  baseline?: boolean;
+  /**
+   * Force the pre-run baseline evaluation, overriding the spec. `true`/`false`
+   * turn it on/off; `"strict"` also fails the run if the baseline already passes.
+   */
+  baseline?: boolean | "strict";
   /** Override the spec's iteration budget without mutating the spec object. */
   maxIterations?: number;
   /**
@@ -245,8 +255,10 @@ export class LoopEngine {
     // Spec-integrity guard: if the loop spec lives inside the workspace, the
     // agent can edit its own success criteria. Watch it for changes and keep it
     // out of the work diff so a spec-only edit can't masquerade as real work.
+    // `specGuard: "off"` disables the watch; `"error"` fails the run on tamper.
+    const specGuard = spec.limits.specGuard;
     let specWatch: { rel: string; hash: string } | null = null;
-    if (opts.specFile) {
+    if (specGuard !== "off" && opts.specFile) {
       const rel = path.relative(workdir, opts.specFile);
       if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) {
         const hash = hashFileSafe(opts.specFile);
@@ -261,10 +273,12 @@ export class LoopEngine {
     ];
 
     const runWarnings: string[] = [];
+    let specTampered = false;
     const checkSpecTamper = (): void => {
       if (!specWatch) return;
       const now = hashFileSafe(path.resolve(workdir, specWatch.rel));
       if (now && now !== specWatch.hash) {
+        specTampered = true;
         const msg = `the agent modified the loop spec file (${specWatch.rel}) during the run — success criteria may have been altered; this run evaluated the original in-memory spec, but re-verify the on-disk spec before re-running`;
         if (!runWarnings.includes(msg)) runWarnings.push(msg);
       }
@@ -278,7 +292,9 @@ export class LoopEngine {
 
     // Baseline evaluation: run the checks once before any agent work. If they
     // already pass, the checks probably don't test the requirement.
-    const wantBaseline = opts.baseline ?? spec.limits.baseline;
+    const baselineSetting = opts.baseline ?? spec.limits.baseline;
+    const wantBaseline = baselineSetting !== false;
+    const strictBaseline = baselineSetting === "strict";
     let baseline: BaselineReport | undefined;
     if (wantBaseline && evaluators.length) {
       log.info("running baseline evaluation (no agent) — disable with limits.baseline: false");
@@ -296,6 +312,17 @@ export class LoopEngine {
         const w = "success criteria already pass BEFORE any agent work — your checks likely do not verify the new requirement";
         runWarnings.push(w);
         log.warn(w);
+        // Strict baseline: a vacuous check set is a hard failure, not a caveat.
+        if (strictBaseline) {
+          return {
+            ...base,
+            outcome: "baseline-vacuous",
+            reason: `strict baseline: ${w}`,
+            baseline,
+            warnings: runWarnings,
+            durationMs: Date.now() - start,
+          };
+        }
       }
     }
 
@@ -404,17 +431,23 @@ export class LoopEngine {
       if (verdict.satisfied) {
         checkSpecTamper();
         const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
+        const warnings = [...runWarnings, ...iterWarnings];
+        // Spec-tamper in "error" mode: the agent altered its own success
+        // criteria, so a green can't be trusted — fail instead of reporting success.
+        const tamperFails = specTampered && specGuard === "error";
         return {
           ...base,
-          outcome: "success",
-          success: true,
-          reason: verdict.reason,
+          outcome: tamperFails ? "spec-tampered" : "success",
+          success: !tamperFails,
+          reason: tamperFails
+            ? `the agent modified the loop spec file during the run (specGuard: error) — success criteria may have been altered`
+            : verdict.reason,
           iterations,
           totalUsage,
           baseline,
           changedFiles: gitEnabled ? overall.files : undefined,
           diffStat: gitEnabled ? overall.stat : undefined,
-          warnings: [...runWarnings, ...iterWarnings],
+          warnings,
           durationMs: Date.now() - start,
         };
       }

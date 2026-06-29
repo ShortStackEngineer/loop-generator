@@ -13,6 +13,7 @@ interface RunFlags {
   logLevel?: LogLevel;
   skipPreflight?: boolean;
   baseline?: boolean;
+  strictBaseline?: boolean;
   skipBaseline?: boolean;
 }
 
@@ -119,13 +120,14 @@ export function registerRun(program: Command): void {
     .option("--log-level <level>", "debug|info|warn|error|silent", "info")
     .option("--skip-preflight", "skip driver/evaluator preflight checks")
     .option("--baseline", "run a pre-run baseline evaluation (detects vacuous checks)")
+    .option("--strict-baseline", "fail the run if the baseline already passes (vacuous checks)")
     .option("--skip-baseline", "skip the baseline evaluation even if the spec enables it")
     .action(async (specPath: string, flags: RunFlags) => {
       const { spec, baseDir, file } = loadSpecFile(specPath);
       const maxIterations = flags.maxIterations ? Number(flags.maxIterations) : undefined;
 
-      // Tri-state: --baseline forces on, --skip-baseline forces off, else defer to spec.
-      const baseline = flags.baseline ? true : flags.skipBaseline ? false : undefined;
+      // --strict-baseline forces strict, --baseline forces on, --skip-baseline forces off, else defer to spec.
+      const baseline = flags.strictBaseline ? "strict" : flags.baseline ? true : flags.skipBaseline ? false : undefined;
 
       const log = createLogger(flags.logLevel ?? "info", "loopgen");
       const engine = new LoopEngine(createDefaultRegistries(), log);
