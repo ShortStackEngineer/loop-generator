@@ -1,0 +1,84 @@
+# ── Popular loop #1: the "Ralph Wiggum" continuous coding loop ──────────────
+# Geoffrey Huntley's technique, popularized further by Addy Osmani: a single
+# agent runs in a `while :;` loop — each turn it reads a fix-list, picks the next
+# unfinished item, implements it, runs the tests, and updates its own notes
+# (AGENTS.md) so the next turn starts smarter. You stop it when the list is done.
+#
+# loopgen expresses Ralph's INNER loop directly: `run` re-invokes the same spec
+# with the previous result fed back, up to `maxIterations`. The fix-list lives in
+# the workspace (fix_plan.md); a `plan-complete` check turns "the list is empty"
+# into a real, machine-checkable success criterion — so the loop stops itself
+# instead of running forever.
+#
+# What loopgen adds over the raw bash version:
+#   • no-op detection — a "green" turn that changed no files is flagged, so the
+#     loop can't claim progress it didn't make.
+#   • the spec lives OUTSIDE workspace.dir (./target), so the agent edits the
+#     code and its own notes, but can't quietly rewrite its success criteria.
+#   • `loopgen lint` catches a self-fulfilling fix-list before you spend tokens.
+#
+# Run (needs an agent driver — the Claude Agent SDK + ANTHROPIC_API_KEY, or grok
+# (see the driver block below) — and a ./target repo with `npm test` and a
+# fix_plan.md of `- [ ]` items):
+#   loopgen lint examples/ralph-loop.loop.yaml
+#   loopgen run  examples/ralph-loop.loop.yaml
+version: 1
+name: ralph-punchlist
+description: Grind a fix_plan.md to completion, one item per turn, Ralph-style.
+task:
+  type: generic
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Work from fix_plan.md at the workspace root, which is a markdown checklist of
+  `- [ ]` (todo) / `- [x]` (done) items.
+
+  Each turn:
+    1. Read fix_plan.md and AGENTS.md. Pick the SINGLE highest-priority `- [ ]`
+       item that isn't done yet.
+    2. Implement it, following the conventions and gotchas recorded in AGENTS.md.
+    3. Add or update tests so the new behavior is pinned down.
+    4. Tick the item to `- [x]` in fix_plan.md, and append any new gotcha or
+       convention you discovered to AGENTS.md (this is how the loop compounds).
+
+  Do exactly one item per turn. Do not edit this loop spec or the test runner.
+driver:
+  # Drive with Grok instead: swap to `uses: grok` with
+  # `options: { alwaysApprove: true, maxTurns: 30 }` (see api-feature-grok.loop.yaml).
+  # Grok needs no API key on a cached `grok` login — verified headless.
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 40
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+  # The loop's real stop condition: succeed only once no `- [ ]` items remain.
+  # `!` inverts grep, so this passes exactly when the checklist is fully ticked.
+  - uses: command
+    as: plan-complete
+    options:
+      command: '! grep -q "\[ \]" fix_plan.md'
+success:
+  type: all-pass
+limits:
+  # Generous budget — Ralph is a grind. The plan-complete check ends it early
+  # once the list is empty, rather than burning the full budget.
+  maxIterations: 20
+  iterationTimeoutMs: 1200000
+  # Ralph legitimately starts red (items unchecked), so a baseline is optional
+  # here; flip to `strict` if you want to assert the plan isn't already done.
+  baseline: false
+  # The agent writes to fix_plan.md/AGENTS.md (inside ./target) but must not
+  # touch THIS spec. It already sits outside the workspace; this is belt-and-
+  # suspenders if you ever move it in.
+  specGuard: error

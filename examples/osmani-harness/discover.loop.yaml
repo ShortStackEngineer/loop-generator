@@ -1,0 +1,34 @@
+# Harness stage 1 of 3 — DISCOVER (run via osmani-harness.batch.yaml).
+# Triage the backlog into a machine-readable plan the implement stage consumes.
+# workspace.dir is "." because the batch sets `defaults.base: ./target`.
+version: 1
+name: harness-discover
+description: Triage open work into a structured prd.json the next stage can act on.
+task:
+  type: generic
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: .
+requirements: |
+  Read the codebase, README, and any TODO/FIXME comments or issues. Produce
+  prd.json at the repo root: a JSON array of work items, each
+  { "id": string, "title": string, "priority": "high"|"med"|"low",
+    "acceptance": string }. Order by priority. Do not implement anything yet —
+  this stage only plans.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 20
+evaluators:
+  # The plan must exist and be valid JSON — the contract the next stage relies on.
+  - uses: command
+    as: plan-is-valid-json
+    options:
+      command: node -e "JSON.parse(require('fs').readFileSync('prd.json','utf8'))"
+success:
+  type: all-pass
+limits:
+  maxIterations: 4
