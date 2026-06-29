@@ -253,27 +253,37 @@ export class LoopEngine {
     const baselineTree = gitEnabled ? snapshotTree(workdir) : null;
 
     // Spec-integrity guard: if the loop spec lives inside the workspace, the
-    // agent can edit its own success criteria. Watch it for changes and keep it
-    // out of the work diff so a spec-only edit can't masquerade as real work.
-    // `specGuard: "off"` disables the watch; `"error"` fails the run on tamper.
+    // agent can edit its own success criteria. Two independent concerns:
+    //   1. Always keep the spec out of the work diff so a spec-only edit can't
+    //      masquerade as real work — independent of the guard policy.
+    //   2. Hash-watch it for tampering, unless `specGuard: "off"`.
+    // (`"warn"` surfaces a caveat; `"error"` fails the run on tamper.)
     const specGuard = spec.limits.specGuard;
-    let specWatch: { rel: string; hash: string } | null = null;
-    if (specGuard !== "off" && opts.specFile) {
+    let specRel: string | undefined;
+    if (opts.specFile) {
       const rel = path.relative(workdir, opts.specFile);
-      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) {
-        const hash = hashFileSafe(opts.specFile);
-        if (hash) specWatch = { rel, hash };
-      }
+      if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) specRel = rel;
+    }
+    let specWatch: { rel: string; hash: string } | null = null;
+    if (specGuard !== "off" && specRel) {
+      const hash = hashFileSafe(path.resolve(workdir, specRel));
+      if (hash) specWatch = { rel: specRel, hash };
     }
 
     const ignoreGlobs = [
       ...DEFAULT_IGNORE_GLOBS,
       ...spec.workspace.ignore,
-      ...(specWatch ? [specWatch.rel] : []),
+      // Exclude the spec from the work diff whenever it's a valid in-workspace
+      // path — even with the watch off — so editing it never counts as "work".
+      ...(specRel ? [specRel] : []),
     ];
 
     const runWarnings: string[] = [];
     let specTampered = false;
+    // Re-hash the watched spec and flag tampering. Called on every terminal path
+    // that could have seen agent activity (per-iteration success, max-iterations,
+    // abort); pre-loop returns (preflight/validation/baseline-vacuous) can't have
+    // tampering. A no-op when the watch is inactive (specGuard "off" or no specFile).
     const checkSpecTamper = (): void => {
       if (!specWatch) return;
       const now = hashFileSafe(path.resolve(workdir, specWatch.rel));
