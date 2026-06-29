@@ -137,21 +137,24 @@ const evalDestructiveEnv: SpecRule = {
   },
 };
 
-/** multiple stateful evaluators that the engine runs concurrently → can race. */
+/** multiple stateful evaluators run in parallel (opt-in) → can race a shared DB. */
 const evalSharedResource: SpecRule = {
   id: "SPEC-EVAL-SHARED-RESOURCE",
   severity: "warn",
   preflight: false,
   run({ spec }) {
+    // Evaluators run sequentially by default; this only bites when the user
+    // opts into parallelism (evaluation.concurrency > 1) with stateful checks.
+    if (spec.evaluation.concurrency <= 1) return [];
     const stateful = commandEvaluators(spec).filter((e) => e.facts.stateful);
     if (stateful.length < 2) return [];
     return [
       {
         ruleId: "SPEC-EVAL-SHARED-RESOURCE",
         severity: "warn",
-        message: `${stateful.length} evaluators run stateful app/DB commands; the engine runs evaluators concurrently, so they can race on a shared database`,
-        path: "evaluators",
-        hint: "Make them independent, or run them serially (e.g. one ordered verify script).",
+        message: `${stateful.length} evaluators run stateful app/DB commands and evaluation.concurrency is ${spec.evaluation.concurrency}; running them in parallel can race on a shared database`,
+        path: "evaluation.concurrency",
+        hint: "Lower evaluation.concurrency to 1 (the default — runs them serially), or make the checks independent.",
       },
     ];
   },

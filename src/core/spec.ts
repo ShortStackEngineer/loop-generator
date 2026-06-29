@@ -80,6 +80,16 @@ export const loopSpecSchema = z
       })
       .default({ maxIterations: 5, baseline: false }),
 
+    /**
+     * How the engine runs a spec's evaluators. `concurrency` defaults to 1
+     * (fully sequential) so checks that share external state — several
+     * `bin/rails` checks hitting one database, say — can't race and deadlock
+     * into false failures. Raise it only for genuinely independent checks.
+     */
+    evaluation: z
+      .object({ concurrency: z.number().int().positive().default(1) })
+      .default({ concurrency: 1 }),
+
     /** Optional overrides for the task type's generated prompts. */
     prompts: z
       .object({

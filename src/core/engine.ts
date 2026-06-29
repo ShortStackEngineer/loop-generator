@@ -103,6 +103,31 @@ function firstLine(text: string | undefined): string {
   return text.split("\n").map((l) => l.trim()).find(Boolean) ?? "(no detail)";
 }
 
+/**
+ * Map `items` through `fn` with at most `limit` calls in flight at once,
+ * preserving the input order in the returned results. A `limit` at or above
+ * `items.length` behaves like `Promise.all`; a `limit` of `1` runs fully
+ * sequentially. Used to keep evaluators that share external state (one DB, say)
+ * from racing, while still allowing opt-in parallelism for independent checks.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  const workers = Math.max(1, Math.min(limit, items.length));
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]!, i);
+    }
+  };
+  await Promise.all(Array.from({ length: workers }, worker));
+  return results;
+}
+
 /** Combine the run signal with a per-iteration timeout, if configured. */
 function iterationSignal(external: AbortSignal | undefined, timeoutMs?: number): AbortSignal | undefined {
   const signals: AbortSignal[] = [];
@@ -261,6 +286,7 @@ export class LoopEngine {
         runId,
         iteration: -1,
         workdir,
+        concurrency: spec.evaluation.concurrency,
         signal: opts.signal,
         log: log.child("baseline"),
       });
@@ -336,6 +362,7 @@ export class LoopEngine {
         runId,
         iteration: i,
         workdir,
+        concurrency: spec.evaluation.concurrency,
         signal,
         log: iterLog.child("eval"),
       });
@@ -412,43 +439,43 @@ export class LoopEngine {
 
   private async runEvaluators(
     evaluators: { name: string; type: string; evaluator: Evaluator; options: Record<string, unknown> }[],
-    ctx: { runId: string; iteration: number; workdir: string; signal?: AbortSignal; log: Logger },
+    ctx: { runId: string; iteration: number; workdir: string; concurrency: number; signal?: AbortSignal; log: Logger },
   ): Promise<EvaluationResult[]> {
-    return Promise.all(
-      evaluators.map(async (e): Promise<EvaluationResult> => {
-        const start = Date.now();
-        try {
-          const outcome = await e.evaluator.evaluate({
-            runId: ctx.runId,
-            iteration: ctx.iteration,
-            workdir: ctx.workdir,
-            options: e.options,
-            signal: ctx.signal,
-            log: ctx.log.child(e.name),
-          });
-          return {
-            name: e.name,
-            type: e.type,
-            ok: outcome.ok ?? true,
-            passed: outcome.passed,
-            score: outcome.score,
-            feedback: outcome.feedback,
-            details: outcome.details,
-            error: outcome.error,
-            durationMs: Date.now() - start,
-          };
-        } catch (err) {
-          return {
-            name: e.name,
-            type: e.type,
-            ok: false,
-            passed: false,
-            feedback: `Evaluator threw: ${(err as Error).message}`,
-            error: (err as Error).message,
-            durationMs: Date.now() - start,
-          };
-        }
-      }),
-    );
+    // Sequential by default (concurrency: 1) so evaluators sharing external
+    // state can't race; order-preserving regardless of the limit.
+    return mapWithConcurrency(evaluators, ctx.concurrency, async (e): Promise<EvaluationResult> => {
+      const start = Date.now();
+      try {
+        const outcome = await e.evaluator.evaluate({
+          runId: ctx.runId,
+          iteration: ctx.iteration,
+          workdir: ctx.workdir,
+          options: e.options,
+          signal: ctx.signal,
+          log: ctx.log.child(e.name),
+        });
+        return {
+          name: e.name,
+          type: e.type,
+          ok: outcome.ok ?? true,
+          passed: outcome.passed,
+          score: outcome.score,
+          feedback: outcome.feedback,
+          details: outcome.details,
+          error: outcome.error,
+          durationMs: Date.now() - start,
+        };
+      } catch (err) {
+        return {
+          name: e.name,
+          type: e.type,
+          ok: false,
+          passed: false,
+          feedback: `Evaluator threw: ${(err as Error).message}`,
+          error: (err as Error).message,
+          durationMs: Date.now() - start,
+        };
+      }
+    });
   }
 }
