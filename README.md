@@ -1,9 +1,9 @@
 # loop-generator
 
-Generate and run **agent coding feedback loops**. You describe a task, the stack,
-and the tools that measure success; the generator emits a reusable spec; the
-runner invokes a coding agent and re-invokes it — feeding back the measurement
-results each time — until the goal is met or the iteration budget runs out.
+Generate and run agent coding feedback loops. You describe a task, the stack,
+and the tools that measure success. The generator emits a reusable spec, and the
+runner invokes a coding agent and re-invokes it, feeding back the measurement
+results after each turn, until the goal is met or the iteration budget runs out.
 
 ```
 LoopSpec (.loop.yaml) ──► LoopEngine ──► loop until success / maxIterations
@@ -14,8 +14,8 @@ LoopSpec (.loop.yaml) ──► LoopEngine ──► loop until success / maxIte
   (the coding agent)  (the feedback tools)     (prompt scaffolding per category)
 ```
 
-Each iteration: **drive the agent → run the evaluators → check success criteria →
-fold the results into feedback → repeat.**
+Each iteration follows the same path: drive the agent, run the evaluators, check
+the success criteria, fold the results into feedback, and repeat.
 
 ## Concepts
 
@@ -26,10 +26,11 @@ fold the results into feedback → repeat.**
 | **Task type** | Category knowledge: how to frame/instruct the agent and which evaluators to scaffold | `function`, `api`, `webapp`, `experiment`, `generic` |
 | **Success criteria** | Declarative rule over evaluator results | `all-pass`, `pass`, `score`, `all`/`any`/`not` |
 
-The generic `command` evaluator already covers **tests, linters, type checkers,
-and benchmarks** — anything with a CLI and an exit code. The `experiment`
+The generic `command` evaluator already covers tests, linters, type checkers,
+and benchmarks: anything with a CLI and an exit code. The `experiment`
 evaluator reads a numeric metric (from a command's JSON output or a file) and
-compares it to thresholds/baselines, for A/B tests and perf work.
+compares it against thresholds or baselines, which suits A/B tests and
+performance work.
 
 ## Install
 
@@ -43,7 +44,7 @@ export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive 
 
 ## Quick start
 
-Run the **offline demo** (no API key — uses the scripted `mock` driver):
+Run the offline demo (no API key needed; it uses the scripted `mock` driver):
 
 ```bash
 npm run loopgen -- run examples/mock-demo.loop.yaml
@@ -101,9 +102,10 @@ evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
 
-See [`examples/`](./examples) for the building-block specs — function (Claude SDK),
-API (grok), experiment/A-B, and offline (mock) — and for the popular agent loops
-recreated declaratively: the [Ralph Wiggum loop](./examples/ralph-loop.loop.yaml),
+See [`examples/`](./examples) for the building-block specs (function with the
+Claude SDK, API with grok, experiment/A-B, and offline with mock) and for common
+agent loops built declaratively: the
+[Ralph Wiggum loop](./examples/ralph-loop.loop.yaml),
 Anthropic's [evaluator-optimizer](./examples/evaluator-optimizer.loop.yaml), and
 Osmani's [loop-engineering harness](./examples/osmani-harness.batch.yaml). The
 [examples index](./examples/README.md) maps each pattern to a runnable spec.
@@ -111,7 +113,7 @@ Osmani's [loop-engineering harness](./examples/osmani-harness.batch.yaml). The
 ## Lint before you run (`lint`)
 
 A misconfigured spec can burn hours before failing for a reason that had nothing
-to do with the agent. `loopgen lint` catches those statically — in milliseconds,
+to do with the agent. `loopgen lint` catches those statically, in milliseconds,
 before any agent turn:
 
 ```bash
@@ -123,20 +125,21 @@ loopgen lint my.loop.yaml --json        # machine-readable findings
 
 It flags, among other things:
 
-- **`SPEC-WORKDIR-NOT-PROJECT`** *(error)* — the resolved workspace isn't a git
+- `SPEC-WORKDIR-NOT-PROJECT` *(error)*: the resolved workspace isn't a git
   repo and has no markers for the declared stack, yet the spec expects an
-  existing project. Catches a `workspace.dir` and a batch `base` that both go
-  relative and compound (e.g. `../..` applied twice, landing in `$HOME`).
-- **`SPEC-EVAL-BINARY-MISSING` / `SPEC-EVAL-FILE-MISSING`** — a check's binary or
+  existing project. This catches a `workspace.dir` and a batch `base` that both
+  go relative and compound (for example, `../..` applied twice, landing in
+  `$HOME`).
+- `SPEC-EVAL-BINARY-MISSING` / `SPEC-EVAL-FILE-MISSING`: a check's binary or
   referenced script doesn't exist where it will run.
-- **`SPEC-EVAL-DESTRUCTIVE-ENV`** — a check mutates a database without a test env
-  (it would alter your dev data every iteration).
-- **`SPEC-EVAL-SHARED-RESOURCE`** — multiple stateful checks set to run in
+- `SPEC-EVAL-DESTRUCTIVE-ENV`: a check mutates a database without a test env,
+  so it would alter your dev data every iteration.
+- `SPEC-EVAL-SHARED-RESOURCE`: multiple stateful checks set to run in
   parallel (`evaluation.concurrency > 1`) can race on a shared database.
   Evaluators run sequentially by default, so this only fires when you opt in.
-- **`SPEC-SMOKE-SELF-FULFILLING`** — a smoke that creates records but never drives
+- `SPEC-SMOKE-SELF-FULFILLING`: a smoke that creates records but never drives
   a real endpoint may pass without exercising the feature.
-- **Batch rules** — `BATCH-MAXITER-OVERRIDE`, `BATCH-NEEDS-AS-ORDERING`,
+- Batch rules: `BATCH-MAXITER-OVERRIDE`, `BATCH-NEEDS-AS-ORDERING`,
   `BATCH-FAILFAST-CHAIN`.
 
 Exit codes: `2` if any errors, `1` if `--strict` and warnings, else `0`. The
@@ -151,22 +154,23 @@ false positives:
 
 - **Change detection (git):** every iteration is diffed (non-destructively, via
   a throwaway index). The report shows a `git diff --stat`, and a green run that
-  changed **no files** is flagged as likely vacuous. Build/runtime artifacts
+  changed no files is flagged as likely vacuous. Build and runtime artifacts
   (logs, databases, compile caches, generated assets) are excluded so that
-  merely running the test suite can't masquerade as "the agent did work" — add
-  your own globs with `workspace.ignore`. Falls back to driver-reported files
+  merely running the test suite can't masquerade as "the agent did work"; add
+  your own globs with `workspace.ignore`. It falls back to driver-reported files
   when the workspace isn't a git repo (or is git-ignored).
 - **Baseline evaluation** (`limits.baseline: true`, or `--baseline`): runs the
   checks once *before* any agent work. If they already pass, your checks probably
-  don't test the requirement — surfaced as a warning. Off by default because
-  side-effecting checks (db migrate/seed) would run twice. Set
-  `limits.baseline: "strict"` (or `--strict-baseline`) to make that a **hard
-  failure** (`baseline-vacuous`) instead of a warning — a check that's green
-  before any work isn't verifying anything. Stack-agnostic: it just runs whatever
-  evaluators you defined on the pre-agent workspace.
+  don't test the requirement, so this is surfaced as a warning. It's off by
+  default because side-effecting checks (db migrate/seed) would run twice. Set
+  `limits.baseline: "strict"` (or `--strict-baseline`) to make that a hard
+  failure (`baseline-vacuous`) instead of a warning, on the principle that a
+  check that's green before any work isn't verifying anything. It's
+  stack-agnostic: it just runs whatever evaluators you defined on the pre-agent
+  workspace.
 - **Sequential evaluators (default):** evaluators run one at a time
-  (`evaluation.concurrency: 1`) so checks that share external state — several
-  `bin/rails` checks against one SQLite database, say — can't race and deadlock
+  (`evaluation.concurrency: 1`) so checks that share external state (several
+  `bin/rails` checks against one SQLite database, say) can't race and deadlock
   into false failures. Raise `evaluation.concurrency` only for genuinely
   independent checks that are safe to run in parallel.
 - **Spec-integrity guard** (`limits.specGuard`): if the loop spec lives inside the
@@ -179,15 +183,15 @@ false positives:
 - **Honest agent outcomes:** drivers report a `stopReason`
   (`completed | max_turns | aborted | error`). When the agent runs out of turns
   or errors but the checks pass anyway, the run still succeeds (checks are the
-  source of truth) **but the report says so** instead of showing a clean green.
+  source of truth), but the report says so instead of showing a clean green.
 
 All caveats are collected in `report.warnings` and printed under `⚠ warnings:`.
-Drivers that report a session id can also **resume** after a `max_turns` stop
+Drivers that report a session id can also resume after a `max_turns` stop
 (opt-in: `driver.options.resume: true`).
 
 ## Running a punch list (`batch`)
 
-To run many units of work — across one or more codebases — list them in a
+To run many units of work across one or more codebases, list them in a
 `.batch.yaml` manifest and run them with one command:
 
 ```yaml
@@ -215,13 +219,14 @@ loopgen batch punch-list.batch.yaml --report batch-report.json
 # offline demo:  loopgen batch examples/punch-list.batch.yaml
 ```
 
-The scheduler honors `needs` ordering and the `concurrency` cap, and **guarantees
-two items that resolve to the same workspace never run at once** — so parallelism
-is safe across distinct repos without one clobbering another (same-repo items
-auto-serialize). A failed or skipped dependency cascades: its dependents are
-skipped. You get a per-item summary (status · iterations · files · cost ·
-warnings) and an aggregate JSON report; the command exits non-zero if any item
-failed. Items can also `inline:` a full spec instead of referencing a file.
+The scheduler honors `needs` ordering and the `concurrency` cap, and it
+guarantees that two items resolving to the same workspace never run at once, so
+parallelism is safe across distinct repos without one clobbering another
+(same-repo items auto-serialize). A failed or skipped dependency cascades: its
+dependents are skipped. You get a per-item summary (status · iterations · files ·
+cost · warnings) and an aggregate JSON report, and the command exits non-zero if
+any item failed. Items can also `inline:` a full spec instead of referencing a
+file.
 
 ## Extending it
 
@@ -248,8 +253,8 @@ export const coverageEvaluator: Evaluator = {
 
 ### A new driver (agent backend)
 
-Implement `AgentDriver`, then **validate it against the conformance harness** —
-the apparatus this project gives you for building new integrations:
+Implement `AgentDriver`, then validate it against the conformance harness, which
+exists for building and checking new integrations:
 
 ```ts
 import { runDriverConformance, formatConformanceReport } from "loop-generator/testing";
