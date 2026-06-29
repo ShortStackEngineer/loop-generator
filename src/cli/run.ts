@@ -120,7 +120,7 @@ export function registerRun(program: Command): void {
     .option("--log-level <level>", "debug|info|warn|error|silent", "info")
     .option("--skip-preflight", "skip driver/evaluator preflight checks")
     .option("--baseline", "run a pre-run baseline evaluation (detects vacuous checks)")
-    .option("--strict-baseline", "fail the run if the baseline already passes (vacuous checks)")
+    .option("--strict-baseline", "fail the run if the baseline already passes (vacuous checks); takes precedence over --baseline/--skip-baseline")
     .option("--skip-baseline", "skip the baseline evaluation even if the spec enables it")
     .action(async (specPath: string, flags: RunFlags) => {
       const { spec, baseDir, file } = loadSpecFile(specPath);

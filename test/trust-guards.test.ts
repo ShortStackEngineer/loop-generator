@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { LoopEngine } from "../src/core/engine";
@@ -126,5 +127,41 @@ describe("spec-tamper policy (#2)", () => {
     const report = await runWithSpecFile("off");
     expect(report.success).toBe(true);
     expect(report.warnings.join("\n")).not.toMatch(/modified the loop spec file/);
+  });
+
+  it("error: tampering on a failing (max-iterations) run stays red, with the warning", async () => {
+    // Tamper must not *upgrade* an already-red outcome — it only blocks a green.
+    const specFile = path.join(workdir, "my.loop.yaml");
+    writeFileSync(specFile, "original: true\n");
+    const spec = parseSpec({
+      name: "tamper-red",
+      requirements: "x",
+      driver: { uses: "mock", options: { steps: [{ files: { "my.loop.yaml": "tampered\n", "x.txt": "1" } }] } },
+      evaluators: [{ uses: "command", as: "c", options: { command: "exit 1" } }], // never passes
+      limits: { maxIterations: 1, specGuard: "error" },
+    });
+    const report = await engine().run(spec, { baseDir: workdir, specFile });
+    expect(report.outcome).toBe("max-iterations");
+    expect(report.success).toBe(false);
+    expect(report.warnings.join("\n")).toMatch(/modified the loop spec file/);
+  });
+
+  it("off: the spec edit is still excluded from the work diff (no-op guard intact)", async () => {
+    // #6 regression: the diff-exclusion is independent of the watch, so editing
+    // the spec with the guard off must not count as work / defeat the no-op guard.
+    execSync("git init -q", { cwd: workdir });
+    const specFile = path.join(workdir, "my.loop.yaml");
+    writeFileSync(specFile, "original: true\n");
+    const spec = parseSpec({
+      name: "off-excl",
+      requirements: "x",
+      driver: { uses: "mock", options: { steps: [{ files: { "my.loop.yaml": "tampered\n" } }] } }, // edits ONLY the spec
+      evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
+      limits: { maxIterations: 1, specGuard: "off" },
+    });
+    const report = await engine().run(spec, { baseDir: workdir, specFile });
+    expect(report.success).toBe(true);
+    expect(report.changedFiles ?? []).not.toContain("my.loop.yaml"); // excluded from the diff
+    expect(report.warnings.join("\n")).toMatch(/changed no files/); // no-op guard still fires
   });
 });
