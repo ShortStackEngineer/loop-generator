@@ -95,7 +95,8 @@ success:
   type: all-pass         # all evaluators must pass
 limits:
   maxIterations: 6
-  baseline: false        # run checks once before the agent (see "Trustworthy results")
+  baseline: false        # false | true | strict — run checks before the agent; "strict" fails a vacuous (already-green) check set
+  specGuard: warn        # off | warn | error — what to do if the agent edits this spec file mid-run
 evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
@@ -154,17 +155,23 @@ false positives:
 - **Baseline evaluation** (`limits.baseline: true`, or `--baseline`): runs the
   checks once *before* any agent work. If they already pass, your checks probably
   don't test the requirement — surfaced as a warning. Off by default because
-  side-effecting checks (db migrate/seed) would run twice.
+  side-effecting checks (db migrate/seed) would run twice. Set
+  `limits.baseline: "strict"` (or `--strict-baseline`) to make that a **hard
+  failure** (`baseline-vacuous`) instead of a warning — a check that's green
+  before any work isn't verifying anything. Stack-agnostic: it just runs whatever
+  evaluators you defined on the pre-agent workspace.
 - **Sequential evaluators (default):** evaluators run one at a time
   (`evaluation.concurrency: 1`) so checks that share external state — several
   `bin/rails` checks against one SQLite database, say — can't race and deadlock
   into false failures. Raise `evaluation.concurrency` only for genuinely
   independent checks that are safe to run in parallel.
-- **Spec-integrity guard:** if the loop spec lives inside the workspace, the
-  agent can edit its own success criteria. The runner watches the spec file,
-  excludes it from the work diff (so a spec-only edit can't fake "work"), and
-  raises a warning if the agent modified it. (Best practice: keep specs outside
-  the target repo.)
+- **Spec-integrity guard** (`limits.specGuard`): if the loop spec lives inside the
+  workspace, the agent can edit its own success criteria. The runner watches the
+  spec file, excludes it from the work diff (so a spec-only edit can't fake
+  "work"), and by default (`warn`) raises a warning if the agent modified it. Set
+  `specGuard: "error"` to fail the run (`spec-tampered`) so an altered contract
+  can't report green; `"off"` disables the watch. (Best practice: keep specs
+  outside the target repo.)
 - **Honest agent outcomes:** drivers report a `stopReason`
   (`completed | max_turns | aborted | error`). When the agent runs out of turns
   or errors but the checks pass anyway, the run still succeeds (checks are the

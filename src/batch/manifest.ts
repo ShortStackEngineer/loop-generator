@@ -24,7 +24,7 @@ export const batchItemSchema = z
     needs: z.array(z.string()).default([]),
     /** Per-item overrides. */
     maxIterations: z.number().int().positive().optional(),
-    baseline: z.boolean().optional(),
+    baseline: z.union([z.boolean(), z.literal("strict")]).optional(),
     skipPreflight: z.boolean().optional(),
   })
   .refine((i) => Boolean(i.spec) !== Boolean(i.inline), {
@@ -43,7 +43,7 @@ export const batchManifestSchema = z.object({
     .object({
       base: z.string().optional(),
       maxIterations: z.number().int().positive().optional(),
-      baseline: z.boolean().optional(),
+      baseline: z.union([z.boolean(), z.literal("strict")]).optional(),
       skipPreflight: z.boolean().optional(),
     })
     .optional(),

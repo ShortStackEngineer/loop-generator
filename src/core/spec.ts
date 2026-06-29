@@ -75,10 +75,19 @@ export const loopSpecSchema = z
          * Run the evaluators once before any agent work. If they already pass,
          * the checks probably don't verify the requirement. Off by default
          * because checks with side effects (db migrate/seed) would run twice.
+         * `"strict"` turns that signal into a hard failure: a passing baseline
+         * means the checks are vacuous, so the run fails instead of warning.
          */
-        baseline: z.boolean().default(false),
+        baseline: z.union([z.boolean(), z.literal("strict")]).default(false),
+        /**
+         * What to do if the agent edits the loop spec file during the run (only
+         * watched when the spec lives inside the workspace). `"warn"` (default)
+         * surfaces a caveat; `"error"` fails the run so an altered success
+         * contract can't report green; `"off"` disables the check.
+         */
+        specGuard: z.enum(["off", "warn", "error"]).default("warn"),
       })
-      .default({ maxIterations: 5, baseline: false }),
+      .default({ maxIterations: 5, baseline: false, specGuard: "warn" }),
 
     /**
      * How the engine runs a spec's evaluators. `concurrency` defaults to 1

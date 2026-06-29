@@ -12,6 +12,7 @@ interface BatchFlags {
   continueOnError?: boolean;
   stopOnError?: boolean;
   maxIterations?: string;
+  strictBaseline?: boolean;
   report?: string;
   logLevel?: LogLevel;
 }
@@ -66,6 +67,7 @@ export function registerBatch(program: Command): void {
     .description("Run a punch list of loop specs (a .batch.yaml) with ordering + concurrency.")
     .option("-c, --concurrency <n>", "max items running at once (override manifest)")
     .option("-m, --max-iterations <n>", "override every item's iteration budget")
+    .option("--strict-baseline", "fail any item whose baseline already passes (vacuous checks)")
     .option("--continue-on-error", "keep going after a failure (override manifest)")
     .option("--stop-on-error", "stop scheduling new items after the first failure")
     .option("--report <file>", "write the full aggregate JSON report to a file")
@@ -91,6 +93,7 @@ export function registerBatch(program: Command): void {
           signal: controller.signal,
           concurrency: flags.concurrency ? Number(flags.concurrency) : undefined,
           maxIterations: flags.maxIterations ? Number(flags.maxIterations) : undefined,
+          baseline: flags.strictBaseline ? "strict" : undefined,
           continueOnError,
           log,
           onItemStart: (name) => log.info(`▶ ${name}`),

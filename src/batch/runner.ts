@@ -41,6 +41,8 @@ export interface RunBatchOptions {
   continueOnError?: boolean;
   /** Override every item's iteration budget (wins over item/defaults). */
   maxIterations?: number;
+  /** Override every item's baseline setting (e.g. "strict" to fail vacuous checks). */
+  baseline?: boolean | "strict";
 }
 
 export interface ResolvedItem {
@@ -49,7 +51,7 @@ export interface ResolvedItem {
   baseDir: string;
   workspace: string;
   maxIterations?: number;
-  baseline?: boolean;
+  baseline?: boolean | "strict";
   skipPreflight?: boolean;
 }
 
@@ -152,7 +154,7 @@ export async function runBatch(
         baseDir: r.baseDir,
         specFile: r.specFile,
         maxIterations: opts.maxIterations ?? r.maxIterations,
-        baseline: r.baseline,
+        baseline: opts.baseline ?? r.baseline,
         skipPreflight: r.skipPreflight,
         signal: opts.signal,
         log: log.child(item.name),
