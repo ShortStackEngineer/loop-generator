@@ -1,0 +1,55 @@
+# A function-level feature driven by the GitHub Copilot CLI.
+#
+# Requires: the `copilot` CLI installed (e.g. `brew install copilot` or
+# `npm i -g @github/copilot`) and authenticated — run `copilot` once interactively,
+# or set GH_TOKEN/GITHUB_TOKEN for an unattended run. Point `workspace.dir` at a
+# real TypeScript project with `npm test` set up.
+#
+# Copilot is an agentic CLI: it edits files and runs tools itself, so this driver
+# just spawns it (headless `copilot -p`) confined to the workspace. SUCCESS means
+# the checks pass AND the agent actually changed files — the runner reports a
+# per-iteration git diff and flags a "green" run that touched nothing.
+version: 1
+name: add-retry-to-fetchUser
+description: Add exponential backoff to fetchUser() with tests.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Add exponential backoff (max 3 retries, jittered) to `fetchUser()`:
+    - Keep the existing signature and return type.
+    - Retry only on network errors and 5xx responses; never on 4xx.
+    - Give up after 3 attempts and rethrow the last error.
+  Add unit tests covering: success on the first try, success after a transient
+  failure, and exhausting all retries. Keep the existing tests passing.
+driver:
+  uses: github-copilot
+  options:
+    allowAllTools: true # headless: auto-approve tool use (required for -p runs)
+    # --- Optional knobs (omit to use the CLI defaults). ---
+    # model: claude-sonnet-4.5   # or "gpt-5", "auto"; omit for the CLI default
+    # reasoningEffort: high      # none | low | medium | high | xhigh | max
+    # resume: true               # continue the same Copilot session across iterations
+    # env:                       # e.g. an unattended token for CI
+    #   GH_TOKEN: ${GH_TOKEN}
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+success:
+  type: all-pass
+limits:
+  maxIterations: 6
+  iterationTimeoutMs: 1200000
+  # Run the checks once before the agent: if the retry tests already "pass",
+  # they aren't actually exercising the new backoff behavior.
+  baseline: true

@@ -21,7 +21,7 @@ the success criteria, fold the results into feedback, and repeat.
 
 | Piece | What it is | Built-ins |
 |-------|-----------|-----------|
-| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `mock` |
+| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `github-copilot`, `mock` |
 | **Evaluator** | A "feedback tool" that measures the workspace and returns pass/fail + actionable feedback | `command`, `experiment` |
 | **Task type** | Category knowledge: how to frame/instruct the agent and which evaluators to scaffold | `function`, `api`, `webapp`, `experiment`, `generic` |
 | **Success criteria** | Declarative rule over evaluator results | `all-pass`, `pass`, `score`, `all`/`any`/`not` |
@@ -36,10 +36,12 @@ performance work.
 
 ```bash
 npm install
-# The Claude Agent SDK and Grok Build CLI are optional backends.
+# The Claude Agent SDK, Grok Build CLI, and GitHub Copilot CLI are optional backends.
 # For real agent runs, set credentials for the driver you use:
 export ANTHROPIC_API_KEY=...   # for claude-agent-sdk (or Claude login / Bedrock / Vertex)
 export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive login)
+# github-copilot: install the `copilot` CLI and run it once to authenticate
+#                 (or set GH_TOKEN / GITHUB_TOKEN for an unattended run)
 ```
 
 ## Quick start

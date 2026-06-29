@@ -56,6 +56,7 @@ export type { TaskType } from "./tasks/types";
 export { mockDriver } from "./drivers/mock";
 export { claudeAgentSdkDriver } from "./drivers/claude-agent-sdk";
 export { grokDriver } from "./drivers/grok";
+export { githubCopilotDriver } from "./drivers/github-copilot";
 export { commandEvaluator } from "./evaluators/command";
 export { experimentEvaluator } from "./evaluators/experiment";
 export {
