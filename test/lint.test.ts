@@ -171,13 +171,16 @@ describe("SPEC-EVAL rules", () => {
   });
 
   it("warns when 2+ stateful evaluators will run concurrently", () => {
-    const s = spec({
-      evaluators: [
-        { uses: "command", as: "a", options: { command: "bin/rails test" } },
-        { uses: "command", as: "b", options: { command: "bin/rails db:seed" } },
-      ],
-    });
-    expect(ids(lintSpec(s, { workdir: dir }))).toContain("SPEC-EVAL-SHARED-RESOURCE");
+    const evaluators = [
+      { uses: "command", as: "a", options: { command: "bin/rails test" } },
+      { uses: "command", as: "b", options: { command: "bin/rails db:seed" } },
+    ];
+    // Opting into parallelism with stateful checks → race risk warning.
+    const parallel = spec({ evaluation: { concurrency: 2 }, evaluators });
+    expect(ids(lintSpec(parallel, { workdir: dir }))).toContain("SPEC-EVAL-SHARED-RESOURCE");
+    // The default is sequential (concurrency: 1), which is safe → no warning.
+    const sequential = spec({ evaluators });
+    expect(ids(lintSpec(sequential, { workdir: dir }))).not.toContain("SPEC-EVAL-SHARED-RESOURCE");
   });
 
   it("warns on mixed absolute-cd vs bare project commands", () => {
