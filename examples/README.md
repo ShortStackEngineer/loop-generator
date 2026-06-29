@@ -60,6 +60,7 @@ over.
 | [`punch-list.batch.yaml`](./punch-list.batch.yaml) | mock (offline) | A batch with concurrency, distinct workspaces, and a `needs` dependency (inline specs) |
 | [`function-fizzbuzz.loop.yaml`](./function-fizzbuzz.loop.yaml) | Claude Agent SDK | A `function` task: implement + tests + typecheck |
 | [`api-feature-grok.loop.yaml`](./api-feature-grok.loop.yaml) | grok | An `api` task driven by the grok CLI |
+| [`copilot-feature.loop.yaml`](./copilot-feature.loop.yaml) | github-copilot | A `function` task driven by the GitHub Copilot CLI |
 | [`experiment-ab.loop.yaml`](./experiment-ab.loop.yaml) | Claude Agent SDK | An `experiment` task: converge on a metric with the `experiment` evaluator |
 
 ```bash

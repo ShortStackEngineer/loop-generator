@@ -61,7 +61,7 @@ LoopSpec (.loop.yaml) → parseSpec → LoopEngine.run() → loop until success/
 - **Plug-in contracts** are the `types.ts` in each plug-in dir — read these
   before implementing one:
   - `src/drivers/types.ts` — `AgentDriver` (`name`, optional `preflight`, `run`).
-    Built-ins: `mock`, `claude-agent-sdk`, `grok`. `run` returns an
+    Built-ins: `mock`, `claude-agent-sdk`, `grok`, `github-copilot`. `run` returns an
     `AgentRunResult` with a `stopReason` (`completed|max_turns|aborted|error`)
     that the engine turns into honest warnings on otherwise-green runs.
   - `src/evaluators/types.ts` — `Evaluator` (a "feedback tool": measure the
