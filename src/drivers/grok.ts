@@ -59,7 +59,7 @@ export const grokDriver: AgentDriver = {
     const warnings: string[] = [];
     if (!process.env.XAI_API_KEY) {
       warnings.push(
-        "No XAI_API_KEY detected. The grok CLI may require an interactive login (opens browser) or a valid key for unattended runs.",
+        "No XAI_API_KEY detected. The grok CLI will use a cached login if you've signed in before; otherwise it may require an interactive login (opens browser) or a key for unattended runs.",
       );
     }
 
