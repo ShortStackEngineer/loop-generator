@@ -19,6 +19,14 @@ export const specEvaluatorSchema = z.object({
   /** Optional instance alias (so two `command` checks can be named distinctly). */
   as: z.string().optional(),
   options: optionsSchema.default({}),
+  /**
+   * Files this check depends on, watched by the evaluator-integrity guard
+   * (`limits.evaluatorGuard`) in addition to the test files auto-detected from a
+   * `command`. Each entry is a workspace-relative path to a file or a directory
+   * (directories watch their test-like files recursively). Use this when the
+   * check's contract isn't obvious from the command alone.
+   */
+  guard: z.array(z.string()).optional(),
 });
 
 export const loopSpecSchema = z
@@ -86,8 +94,16 @@ export const loopSpecSchema = z
          * contract can't report green; `"off"` disables the check.
          */
         specGuard: z.enum(["off", "warn", "error"]).default("warn"),
+        /**
+         * What to do if the agent edits a file an evaluator depends on (the test
+         * files a `command` check runs, plus any `evaluators[].guard` paths). The
+         * real success criteria live in those files, so editing them can fake a
+         * green. `"warn"` (default) surfaces a caveat; `"error"` fails the run
+         * (outcome `evaluator-tampered`); `"off"` disables the check.
+         */
+        evaluatorGuard: z.enum(["off", "warn", "error"]).default("warn"),
       })
-      .default({ maxIterations: 5, baseline: false, specGuard: "warn" }),
+      .default({ maxIterations: 5, baseline: false, specGuard: "warn", evaluatorGuard: "warn" }),
 
     /**
      * How the engine runs a spec's evaluators. `concurrency` defaults to 1

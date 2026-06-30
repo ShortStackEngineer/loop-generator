@@ -86,6 +86,7 @@ export type { PreflightResult } from "./core/preflight";
 export { runCommand } from "./core/exec";
 export { isGitRepo, isIgnored, changeDetectionAvailable, snapshotTree, diffTrees } from "./core/workspace";
 export type { TreeDiff } from "./core/workspace";
+export { resolveGuardedFiles, isTestLikePath } from "./core/evaluator-guard";
 
 // Generation
 export { generateSpec, specToYaml } from "./generate";
