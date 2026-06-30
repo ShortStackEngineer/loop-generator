@@ -100,6 +100,7 @@ limits:
   maxIterations: 6
   baseline: false        # false | true | strict — run checks before the agent; "strict" fails a vacuous (already-green) check set
   specGuard: warn        # off | warn | error — what to do if the agent edits this spec file mid-run
+  evaluatorGuard: warn   # off | warn | error — what to do if the agent edits the test files a check runs
 evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
@@ -182,6 +183,14 @@ false positives:
   `specGuard: "error"` to fail the run (`spec-tampered`) so an altered contract
   can't report green; `"off"` disables the watch. (Best practice: keep specs
   outside the target repo.)
+- **Evaluator-integrity guard** (`limits.evaluatorGuard`): the real success
+  criteria for a `command` check are the test files it runs, and the agent could
+  fake a green by editing them. The runner watches those files — auto-detected
+  from the command (e.g. `bin/rails test test/foo_test.rb`), plus any
+  `evaluators[].guard` paths — excludes them from the work diff, and by default
+  (`warn`) raises a warning if any changed. Set `evaluatorGuard: "error"` to fail
+  the run (`evaluator-tampered`); `"off"` disables it. A bare runner with no file
+  arguments (`npm test`) names nothing and is intentionally not watched.
 - **Honest agent outcomes:** drivers report a `stopReason`
   (`completed | max_turns | aborted | error`). When the agent runs out of turns
   or errors but the checks pass anyway, the run still succeeds (checks are the

@@ -13,6 +13,7 @@ import type { PreflightResult } from "./preflight";
 import { createLogger, type Logger } from "./logger";
 import { resolveWorkspaceDir, type LoopSpec } from "./spec";
 import { isGitRepo, changeDetectionAvailable, snapshotTree, diffTrees, DEFAULT_IGNORE_GLOBS } from "./workspace";
+import { resolveGuardedFiles } from "./evaluator-guard";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
 
@@ -52,7 +53,8 @@ export type LoopOutcome =
   | "aborted"
   | "error"
   | "baseline-vacuous"
-  | "spec-tampered";
+  | "spec-tampered"
+  | "evaluator-tampered";
 
 export interface LoopReport {
   spec: string;
@@ -270,12 +272,26 @@ export class LoopEngine {
       if (hash) specWatch = { rel: specRel, hash };
     }
 
+    // Evaluator-integrity guard: the real success criteria for a `command` check
+    // are the test files it runs. Watch those (auto-detected from commands plus
+    // explicit `evaluators[].guard`) so the agent can't fake a green by editing
+    // them, and keep them out of the work diff so such edits don't count as work.
+    const evaluatorGuard = spec.limits.evaluatorGuard;
+    const guardedRels = evaluatorGuard === "off" ? [] : resolveGuardedFiles(spec, workdir);
+    const evaluatorWatch: { rel: string; hash: string }[] = [];
+    for (const rel of guardedRels) {
+      const hash = hashFileSafe(path.resolve(workdir, rel));
+      if (hash) evaluatorWatch.push({ rel, hash });
+    }
+
     const ignoreGlobs = [
       ...DEFAULT_IGNORE_GLOBS,
       ...spec.workspace.ignore,
       // Exclude the spec from the work diff whenever it's a valid in-workspace
       // path — even with the watch off — so editing it never counts as "work".
       ...(specRel ? [specRel] : []),
+      // Likewise, guarded evaluator files: editing the checks isn't "work".
+      ...guardedRels,
     ];
 
     const runWarnings: string[] = [];
@@ -290,6 +306,24 @@ export class LoopEngine {
       if (now && now !== specWatch.hash) {
         specTampered = true;
         const msg = `the agent modified the loop spec file (${specWatch.rel}) during the run — success criteria may have been altered; this run evaluated the original in-memory spec, but re-verify the on-disk spec before re-running`;
+        if (!runWarnings.includes(msg)) runWarnings.push(msg);
+      }
+    };
+    let evaluatorTampered = false;
+    let tamperedEvalFiles: string[] = [];
+    // Re-hash guarded evaluator files and flag tampering — same lifecycle as
+    // checkSpecTamper. A watched file that changed (or went missing) is tampering.
+    const checkEvaluatorTamper = (): void => {
+      if (!evaluatorWatch.length) return;
+      const changed: string[] = [];
+      for (const w of evaluatorWatch) {
+        const now = hashFileSafe(path.resolve(workdir, w.rel));
+        if (now !== w.hash) changed.push(w.rel);
+      }
+      if (changed.length) {
+        evaluatorTampered = true;
+        tamperedEvalFiles = changed;
+        const msg = `the agent modified file(s) an evaluator depends on (${changed.join(", ")}) — the success checks themselves may have been altered; re-verify before trusting this result`;
         if (!runWarnings.includes(msg)) runWarnings.push(msg);
       }
     };
@@ -340,6 +374,7 @@ export class LoopEngine {
     for (let i = 0; i < maxIterations; i++) {
       if (opts.signal?.aborted) {
         checkSpecTamper();
+        checkEvaluatorTamper();
         return {
           ...base,
           outcome: "aborted",
@@ -440,18 +475,26 @@ export class LoopEngine {
 
       if (verdict.satisfied) {
         checkSpecTamper();
+        checkEvaluatorTamper();
         const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
         const warnings = [...runWarnings, ...iterWarnings];
-        // Spec-tamper in "error" mode: the agent altered its own success
-        // criteria, so a green can't be trusted — fail instead of reporting success.
-        const tamperFails = specTampered && specGuard === "error";
+        // Tamper in "error" mode: the agent altered its own success criteria
+        // (the spec, or the files an evaluator runs), so a green can't be
+        // trusted — fail instead of reporting success. Spec-tamper takes
+        // precedence when both fire.
+        const specTamperFails = specTampered && specGuard === "error";
+        const evalTamperFails = evaluatorTampered && evaluatorGuard === "error";
+        const tamperFails = specTamperFails || evalTamperFails;
+        const tamperOutcome: LoopOutcome = specTamperFails ? "spec-tampered" : "evaluator-tampered";
         return {
           ...base,
-          outcome: tamperFails ? "spec-tampered" : "success",
+          outcome: tamperFails ? tamperOutcome : "success",
           success: !tamperFails,
-          reason: tamperFails
+          reason: specTamperFails
             ? `the agent modified the loop spec file during the run (specGuard: error) — success criteria may have been altered`
-            : verdict.reason,
+            : evalTamperFails
+              ? `the agent modified evaluator file(s) during the run (evaluatorGuard: error): ${tamperedEvalFiles.join(", ")} — success checks may have been altered`
+              : verdict.reason,
           iterations,
           totalUsage,
           baseline,
@@ -464,6 +507,7 @@ export class LoopEngine {
     }
 
     checkSpecTamper();
+    checkEvaluatorTamper();
     const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
     return {
       ...base,
