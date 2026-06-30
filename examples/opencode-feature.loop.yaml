@@ -1,0 +1,65 @@
+# A function-level feature driven by OpenCode, using a local LM Studio model.
+#
+# Requires: the `opencode` CLI installed (e.g. `brew install sst/tap/opencode`,
+# `npm i -g opencode-ai`, or `curl -fsSL https://opencode.ai/install | bash`) and
+# a configured provider. Here the model points at a local LM Studio endpoint, so
+# inference runs on your machine with no API key. Point `workspace.dir` at a real
+# TypeScript project with `npm test` set up.
+#
+# OpenCode is an agentic CLI: it edits files and runs tools itself, so this driver
+# just spawns it (headless `opencode run --format json`) confined to the workspace
+# via `--dir`. SUCCESS means the checks pass AND the agent actually changed files —
+# the runner reports a per-iteration git diff and flags a "green" run that touched
+# nothing.
+#
+# LM Studio note: load a tool-calling-capable model in LM Studio and make sure its
+# id matches what you pass below (run `opencode models` to see configured ids, and
+# `curl http://127.0.0.1:1234/v1/models` to see what's actually loaded). A model
+# that can't emit structured tool calls won't be able to edit files.
+version: 1
+name: add-retry-to-fetchUser
+description: Add exponential backoff to fetchUser() with tests.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ./target
+requirements: |
+  Add exponential backoff (max 3 retries, jittered) to `fetchUser()`:
+    - Keep the existing signature and return type.
+    - Retry only on network errors and 5xx responses; never on 4xx.
+    - Give up after 3 attempts and rethrow the last error.
+  Add unit tests covering: success on the first try, success after a transient
+  failure, and exhausting all retries. Keep the existing tests passing.
+driver:
+  uses: opencode
+  options:
+    # provider/model in OpenCode's form; this is a local LM Studio model.
+    model: lmstudio/qwen/qwen3-coder-next
+    dangerouslySkipPermissions: true # headless: auto-approve edits (required)
+    # --- Optional knobs (omit to use the CLI defaults). ---
+    # agent: build              # a named OpenCode agent
+    # variant: high             # provider reasoning variant/effort
+    # pure: true                # ignore global plugins/MCP servers for a clean run
+    # resume: true              # continue the same OpenCode session across iterations
+    # env:                      # e.g. a sandboxed config dir
+    #   XDG_CONFIG_HOME: ./.opencode-clean
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+success:
+  type: all-pass
+limits:
+  maxIterations: 6
+  iterationTimeoutMs: 1200000
+  # Run the checks once before the agent: if the retry tests already "pass",
+  # they aren't actually exercising the new backoff behavior.
+  baseline: true

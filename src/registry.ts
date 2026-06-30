@@ -7,6 +7,7 @@ import { mockDriver } from "./drivers/mock";
 import { claudeAgentSdkDriver } from "./drivers/claude-agent-sdk";
 import { grokDriver } from "./drivers/grok";
 import { githubCopilotDriver } from "./drivers/github-copilot";
+import { opencodeDriver } from "./drivers/opencode";
 import { commandEvaluator } from "./evaluators/command";
 import { experimentEvaluator } from "./evaluators/experiment";
 import { builtinTaskTypes } from "./tasks/builtin";
@@ -17,6 +18,7 @@ export function createDriverRegistry(): Registry<AgentDriver> {
   r.register(claudeAgentSdkDriver);
   r.register(grokDriver);
   r.register(githubCopilotDriver);
+  r.register(opencodeDriver);
   return r;
 }
 
