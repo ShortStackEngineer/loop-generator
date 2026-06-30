@@ -36,8 +36,10 @@ requirements: |
 driver:
   uses: opencode
   options:
-    # provider/model in OpenCode's form; this is a local LM Studio model.
-    model: lmstudio/qwen/qwen3-coder-next
+    # provider/model in OpenCode's form. The `lmstudio/` prefix selects the
+    # LM Studio provider; the rest is the model id LM Studio has loaded. (Without
+    # the provider prefix OpenCode mis-resolves the model and the request fails.)
+    model: lmstudio/google/gemma-4-26b-a4b-qat
     dangerouslySkipPermissions: true # headless: auto-approve edits (required)
     # --- Optional knobs (omit to use the CLI defaults). ---
     # agent: build              # a named OpenCode agent
