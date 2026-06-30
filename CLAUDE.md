@@ -53,7 +53,8 @@ LoopSpec (.loop.yaml) → parseSpec → LoopEngine.run() → loop until success/
   (drive agent → snapshot/diff workspace → run evaluators → `evaluateCriteria` →
   `buildFeedback`) → terminal report. Read this first; `LoopReport.outcome` is
   the canonical list of how a run can end (`success | max-iterations |
-  preflight-failed | aborted | error | baseline-vacuous | spec-tampered`).
+  preflight-failed | aborted | error | baseline-vacuous | spec-tampered |
+  evaluator-tampered`).
 - **`src/core/registry.ts` + `src/registry.ts`** — `Registry<T>` is a typed
   name→plug-in map. `createDefaultRegistries()` wires the built-ins; the engine
   takes the three registries as a constructor arg, so adding a plug-in is
@@ -97,6 +98,14 @@ engine, preserve them:
   is always excluded from the work diff; when it lives in the workspace it's
   hash-watched, and `error` mode turns a mid-run spec edit into a
   `spec-tampered` failure.
+- **Evaluator-integrity guard** (`limits.evaluatorGuard: off|warn|error`,
+  `src/core/evaluator-guard.ts`): the same shape as `specGuard`, applied to the
+  test files an evaluator runs (the real success criteria). `resolveGuardedFiles`
+  collects test-like files named in a `command` (a bare runner like `npm test`
+  names none) plus explicit `evaluators[].guard` paths; they're hash-watched and
+  excluded from the work diff, and `error` mode turns a mid-run edit of them into
+  an `evaluator-tampered` failure (`warn` just surfaces it; spec-tamper takes
+  precedence when both fire).
 
 ### Layer 0: lint (`src/lint/`)
 
