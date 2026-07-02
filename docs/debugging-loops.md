@@ -7,8 +7,7 @@ precisely (the `outcome` field) and attaches honest warnings even to green runs.
 This page turns that vocabulary into a diagnosis and a concrete fix, confirming
 the root cause **without re-spending agent budget** wherever possible.
 
-(Claude Code users can run this as the in-repo `debug-loop` skill; this page
-stands alone for everyone else.)
+(If you use Claude Code, the `debug-loop` skill runs this diagnosis for you.)
 
 ## The mindset
 

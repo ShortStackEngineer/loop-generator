@@ -1,16 +1,16 @@
 # Authoring a loop you can trust
 
-This is the human-readable version of the workflow that produces a **runnable and
-trustworthy** `.loop.yaml` — not just a well-formed one. (Claude Code users can
-run the same workflow hands-free via the in-repo `author-loop` skill; this page
-stands alone for everyone else.)
+A `.loop.yaml` that parses isn't necessarily one worth running. This guide covers
+how to author a spec that's **runnable and trustworthy** — one whose checks
+actually test the requirement and start RED before the agent begins. (If you use
+Claude Code, the `author-loop` skill runs these steps for you.)
 
-`loopgen generate` already turns flags into a valid skeleton. The value this
-workflow adds is the judgment a flag can't: reading the actual target repo to
-pick the **right** checks, writing concrete requirements, choosing the trust
-policy, and then **proving** the spec before any agent budget is spent.
+`loopgen generate` already turns flags into a valid skeleton. What it can't supply
+is the judgment: reading the actual target repo to pick the **right** checks,
+writing concrete requirements, choosing the trust policy, and **proving** the spec
+before any agent budget is spent.
 
-## The one rule that makes this worth doing
+## The one rule that matters most
 
 **Every check must (a) test the requirement and (b) be RED before the agent
 starts.** A loop is only as good as its evaluators — "all checks passed" means

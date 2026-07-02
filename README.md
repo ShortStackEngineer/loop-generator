@@ -37,8 +37,8 @@ performance work.
 ## When to use it (and when not)
 
 A loop is only as good as the checks you hand it. loop-generator shines where
-success is mechanically checkable and misleads where it isn't. Being straight
-about that line is the point — set expectations before you spend agent budget.
+success is mechanically checkable and misleads where it isn't, so it's worth
+knowing which side of that line a task falls on before you spend agent budget.
 
 **Works best when**
 
@@ -77,9 +77,8 @@ The trust guards ([Trustworthy results](#trustworthy-results)) make them
   surface check without doing the real work: hard-code the expected value, weaken
   an assertion, ship the narrowest patch that passes.
 - **Context degradation over many iterations.** The agent re-derives state and
-  drifts as the loop grows; feeding the last diff back and human-in-the-loop
-  review (see the [roadmap](./docs/ROADMAP.md)) mitigate this — they don't cure
-  it.
+  drifts as the loop grows; feeding the last diff back into the next prompt
+  mitigates this — it doesn't cure it.
 - **The underlying unreliability of LLM agents on large, novel work.** More
   iterations don't turn an unreliable agent into a reliable one on a task it
   can't hold in its head.
@@ -239,8 +238,8 @@ judgment a flag can't encode:
   reproduce the failing check cheaply (lint + run it by hand, zero agent turns),
   and map the root cause to a concrete fix.
 
-Claude Code users can invoke these hands-free as the in-repo `author-loop` and
-`debug-loop` skills; the docs above stand alone for everyone else.
+If you use Claude Code, the in-repo `author-loop` and `debug-loop` skills run
+these workflows for you.
 
 ## Running a punch list (`batch`)
 
