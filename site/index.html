@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>loop-generator — agent coding feedback loops you can trust</title>
+<meta name="description" content="Describe a task and the checks that measure success. loop-generator drives a coding agent against them — with tamper guards, baseline checks, and budget ceilings — until the goal is verifiably met.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="index.html"><span class="loopmark"></span>loop-generator</a>
+    <nav class="site-nav">
+      <a href="docs/getting-started.html">Getting started</a>
+      <a href="docs/authoring.html">Authoring</a>
+      <a href="docs/debugging.html">Debugging</a>
+      <a href="docs/trust.html">Lint &amp; trust</a>
+      <a href="docs/roadmap.html">Roadmap</a>
+      <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="wrap">
+    <div class="kicker">Feedback loops for coding agents</div>
+    <h1>Starts <span class="red">RED</span>.<br>Ends <span class="green">GREEN</span>.<br>Provably.</h1>
+    <p class="lead">
+      A prompt gets you one answer. A loop gets you a result — but only if
+      something inside it can say <em>no</em>. loop-generator runs a coding
+      agent against the checks <em>you</em> define, feeds every failure back as
+      the next prompt, and repeats until the checks pass or the budget runs out.
+      With layered guards so a green run actually means something.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" href="docs/getting-started.html">Get started</a>
+      <a class="btn ghost" href="https://github.com/ShortStackEngineer/loop-generator">View on GitHub</a>
+    </div>
+    <pre><code><span class="c"># offline demo — no API key needed</span>
+npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section>
+  <div class="wrap">
+    <div class="kicker">How it works</div>
+    <h2>One spec. One engine. Repeat until verified.</h2>
+    <p class="lead narrow" style="margin:0">
+      A <code>.loop.yaml</code> spec describes the task, the workspace, the
+      agent backend, and the tools that measure success. The engine does the rest.
+    </p>
+    <div class="flow">
+      <div class="node"><strong>.loop.yaml</strong><span>task + checks</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><strong>drive agent</strong><span>any backend</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><strong>diff workspace</strong><span>did work happen?</span></div>
+      <div class="arrow">→</div>
+      <div class="node hot"><strong>run evaluators</strong><span>the gate</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><strong>feedback</strong><span>failures + last diff</span></div>
+      <div class="arrow">↺</div>
+      <div class="node"><strong>report</strong><span>honest outcome</span></div>
+    </div>
+    <p style="color:var(--ink-soft); font-size:0.95rem">
+      Each iteration: drive the agent, snapshot and diff the workspace, run the
+      evaluators, check the success criteria, fold the results — including a
+      bounded diff of what the agent changed last turn — into the next prompt.
+    </p>
+
+    <div class="grid cols-2" style="margin-top:2.2rem">
+      <div class="card">
+        <span class="mono-tag">AgentDriver</span>
+        <h3>Bring any coding agent</h3>
+        <p>One interface wraps the agent backend. Built-ins:
+        <code>claude-agent-sdk</code>, <code>grok</code>,
+        <code>github-copilot</code>, <code>opencode</code>, and a scripted
+        <code>mock</code> for offline runs. A conformance harness
+        (<code>loopgen verify-driver</code>) is the gate for writing your own.</p>
+      </div>
+      <div class="card">
+        <span class="mono-tag">Evaluator</span>
+        <h3>Checks that can say no</h3>
+        <p>The heart of the loop. <code>command</code> covers anything with a
+        CLI and an exit code — tests, linters, type checkers, builds.
+        <code>experiment</code> compares a numeric metric against thresholds or
+        baselines for perf and A/B work. Or register your own in ~15 lines.</p>
+      </div>
+      <div class="card">
+        <span class="mono-tag">TaskType</span>
+        <h3>Prompt scaffolding per category</h3>
+        <p><code>function</code>, <code>api</code>, <code>webapp</code>,
+        <code>experiment</code>, <code>generic</code> — each frames the agent's
+        instructions and recommends evaluators for its category. Advisory by
+        design: an unknown type falls back gracefully, never breaks a run.</p>
+      </div>
+      <div class="card">
+        <span class="mono-tag">Success criteria</span>
+        <h3>Declarative definition of done</h3>
+        <p><code>all-pass</code> for the common case; <code>pass</code>,
+        <code>score</code>, and composable <code>all</code>/<code>any</code>/<code>not</code>
+        rules for thresholds and partial gates. Done is a rule over evaluator
+        results — not the agent's opinion.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TRUST ============ -->
+<section class="alt">
+  <div class="wrap">
+    <div class="kicker">The differentiator</div>
+    <h2>“All checks passed” — but did they mean anything?</h2>
+    <p class="lead narrow" style="margin:0 0 0.6rem">
+      An unattended loop with a weak gate is just an agent agreeing with itself.
+      The engine ships layered false-positive defenses so a green run is a
+      verified claim, not a hopeful one.
+    </p>
+    <div class="grid cols-3">
+      <div class="card">
+        <h3>Change detection</h3>
+        <p>Every iteration is git-diffed via a throwaway index. A green run that
+        changed no files is flagged as likely vacuous — build artifacts
+        excluded, so merely running the suite can't masquerade as work.</p>
+      </div>
+      <div class="card">
+        <h3>Baseline evaluation</h3>
+        <p>Run the checks <em>before</em> any agent work. Already green? Then they
+        probably don't test the requirement. <code>baseline: strict</code> makes
+        that a hard <code>baseline-vacuous</code> failure.</p>
+      </div>
+      <div class="card">
+        <h3>Spec-integrity guard</h3>
+        <p>The agent can't fake a green by editing its own success criteria. The
+        spec file is hash-watched and excluded from the work diff;
+        <code>specGuard: error</code> fails the run as <code>spec-tampered</code>.</p>
+      </div>
+      <div class="card">
+        <h3>Evaluator-integrity guard</h3>
+        <p>The test files a check runs <em>are</em> the real contract. They're
+        hash-watched too — a mid-run edit surfaces as a warning or an
+        <code>evaluator-tampered</code> failure.</p>
+      </div>
+      <div class="card">
+        <h3>Budget ceilings</h3>
+        <p><code>maxCostUsd</code> and <code>maxTokens</code> cap cumulative
+        driver-reported spend. A non-converging loop stops with
+        <code>budget-exceeded</code> instead of funding another turn.</p>
+      </div>
+      <div class="card">
+        <h3>Honest outcomes</h3>
+        <p>If the agent errored or ran out of turns while the checks happened to
+        pass, the report says so. Every caveat lands in
+        <code>report.warnings</code> — a warning on a green run is a finding.</p>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:2rem">
+      <strong>Plus a linter that runs in milliseconds.</strong>
+      <code>loopgen lint</code> catches the misconfigurations that waste hours —
+      wrong workspace, missing binaries, destructive DB checks, self-fulfilling
+      smoke tests — before a single agent turn is spent.
+      <a href="docs/trust.html">Every rule, documented →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ THE SPEC ============ -->
+<section>
+  <div class="wrap">
+    <div class="kicker">The spec</div>
+    <h2>The whole loop in one file</h2>
+    <p class="lead narrow" style="margin:0">
+      Version it, review it, reuse it. <code>loopgen generate -i --verify</code>
+      scaffolds one interactively and proves it's lint-clean and starts RED.
+    </p>
+    <pre style="margin-top:1.8rem"><code><span class="k">name:</span> add-retry-to-fetchUser
+<span class="k">task:</span>
+  <span class="k">type:</span> function
+<span class="k">workspace:</span>
+  <span class="k">dir:</span> ./target
+<span class="k">requirements:</span> <span class="s">|
+  Add exponential backoff (max 3 retries) to fetchUser(). Keep the signature.</span>
+<span class="k">driver:</span>
+  <span class="k">uses:</span> claude-agent-sdk
+<span class="k">evaluators:</span>
+  - <span class="k">uses:</span> command
+    <span class="k">as:</span> tests
+    <span class="k">options:</span> { command: npm test }
+  - <span class="k">uses:</span> command
+    <span class="k">as:</span> typecheck
+    <span class="k">options:</span> { command: npx tsc --noEmit }
+<span class="k">success:</span>
+  <span class="k">type:</span> all-pass
+<span class="k">limits:</span>
+  <span class="k">maxIterations:</span> 6
+  <span class="k">baseline:</span> strict      <span class="c"># fail fast if the checks were already green</span>
+  <span class="k">evaluatorGuard:</span> error <span class="c"># editing the tests fails the run</span>
+  <span class="k">maxCostUsd:</span> 5.0</code></pre>
+    <p style="color:var(--ink-soft); font-size:0.95rem">
+      Need to run many units of work? A <code>.batch.yaml</code> punch list runs
+      specs across repos with dependency ordering, a concurrency cap, and
+      same-workspace auto-serialization.
+      <a href="docs/getting-started.html#batch">Batch runs →</a>
+    </p>
+  </div>
+</section>
+
+<!-- ============ HONESTY ============ -->
+<section class="alt">
+  <div class="wrap">
+    <div class="kicker">Straight talk</div>
+    <h2>Where loops pay off — and where they don't</h2>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3><span class="pill green">GOOD FIT</span>&nbsp; Mechanically checkable work</h3>
+        <p>A failing test that encodes the new behavior. A metric to move: p95
+        under X&nbsp;ms, coverage ≥ 90%, bundle under Y&nbsp;KB. Repo-wide
+        remediation against a concrete check — retries, logging, a lint rule,
+        a flaky suite dragged to green.</p>
+      </div>
+      <div class="card">
+        <h3><span class="pill red">POOR FIT</span>&nbsp; Judgment-heavy work</h3>
+        <p>"Improve the architecture." "Make the UI delightful." No exit-zero
+        definition of done means the loop can only tell you the checks were the
+        wrong contract. A passing check doesn't make subjective work good.</p>
+      </div>
+    </div>
+    <p style="max-width:820px; color:var(--ink-soft)">
+      And some things no loop framework can solve: mis-specified checks, agents
+      that game metrics, context drift over long runs. The trust guards make
+      those failure modes <em>visible</em> — they don't eliminate them. If you
+      can't write a check that's RED before the work and GREEN only when the
+      requirement is met, the task isn't ready for a loop.
+      <a href="docs/authoring.html">How to prove that up front →</a>
+    </p>
+  </div>
+</section>
+
+<!-- ============ EXTEND / LIBRARY ============ -->
+<section>
+  <div class="wrap">
+    <div class="kicker">Extending it</div>
+    <h2>Three plug-in points. Zero engine edits.</h2>
+    <p class="lead narrow" style="margin:0">
+      Drivers, evaluators, and task types are typed registries — register your
+      own and pass them in. The engine never changes.
+    </p>
+    <div class="grid cols-2" style="align-items:start">
+      <pre style="margin:1.8rem 0 0"><code><span class="c">// a custom evaluator, complete</span>
+<span class="k">import</span> { <span class="k">type</span> Evaluator } <span class="k">from</span> <span class="s">"loop-generator"</span>;
+
+<span class="k">export const</span> coverage: Evaluator = {
+  type: <span class="s">"coverage"</span>,
+  <span class="k">async</span> evaluate(ctx) {
+    <span class="k">const</span> pct = <span class="k">await</span> measure(ctx.workdir);
+    <span class="k">return</span> {
+      passed: pct >= 0.9,
+      score: pct,
+      feedback: <span class="s">`coverage ${(pct*100).toFixed(1)}% (need ≥ 90%)`</span>,
+    };
+  },
+};</code></pre>
+      <pre style="margin:1.8rem 0 0"><code><span class="c">// or use the engine as a library</span>
+<span class="k">import</span> {
+  LoopEngine,
+  createDefaultRegistries,
+  parseSpec,
+} <span class="k">from</span> <span class="s">"loop-generator"</span>;
+
+<span class="k">const</span> engine = <span class="k">new</span> LoopEngine(createDefaultRegistries());
+<span class="k">const</span> report = <span class="k">await</span> engine.run(
+  parseSpec(spec),
+  { baseDir: process.cwd() },
+);
+console.log(report.success, report.reason);</code></pre>
+    </div>
+    <p style="color:var(--ink-soft); font-size:0.95rem; margin-top:1.4rem">
+      New driver? <code>loop-generator/testing</code> exports a conformance
+      harness that drives it against temp workspaces and asserts the behavioral
+      contract — reports a name, creates files, applies feedback across
+      iterations, handles aborts.
+    </p>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="alt" style="text-align:center">
+  <div class="wrap">
+    <h2>Stop babysitting green checkmarks.</h2>
+    <p class="lead" style="max-width:46ch; margin-left:auto; margin-right:auto">
+      Write the checks once. Let the loop grind toward them. Trust the report.
+    </p>
+    <div class="cta-row" style="justify-content:center">
+      <a class="btn primary" href="docs/getting-started.html">Read the docs</a>
+      <a class="btn ghost" href="https://github.com/ShortStackEngineer/loop-generator">Star on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="inner">
+    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>
+      <a href="docs/getting-started.html">Docs</a> ·
+      <a href="docs/roadmap.html">Roadmap</a> ·
+      <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

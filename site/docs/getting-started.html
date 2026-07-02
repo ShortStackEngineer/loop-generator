@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started — loop-generator</title>
+<meta name="description" content="Install loop-generator, run the offline demo, and write your first .loop.yaml spec.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
+    <nav class="site-nav">
+      <a class="active" href="getting-started.html">Getting started</a>
+      <a href="authoring.html">Authoring</a>
+      <a href="debugging.html">Debugging</a>
+      <a href="trust.html">Lint &amp; trust</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap docs-body">
+  <aside class="docs-toc">
+    <div class="toc-title">On this page</div>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quick start</a>
+    <a href="#concepts">Concepts</a>
+    <a href="#spec">The spec</a>
+    <a href="#examples">Examples</a>
+    <a href="#batch">Batch runs</a>
+    <a href="#extending">Extending it</a>
+    <a href="#development">Development</a>
+  </aside>
+
+  <main class="docs-content">
+    <h1>Getting started</h1>
+    <p class="lead">
+      loop-generator generates and runs agent coding feedback loops. You
+      describe a task, the stack, and the tools that measure success; the
+      runner invokes a coding agent and re-invokes it, feeding back the
+      measurement results after each turn, until the goal is met or the
+      iteration budget runs out.
+    </p>
+
+    <h2 id="install">Install</h2>
+<pre><code>npm install</code></pre>
+    <p>
+      The Claude Agent SDK, Grok Build CLI, GitHub Copilot CLI, and opencode
+      are <em>optional</em> backends. For real agent runs, set credentials for
+      the driver you use:
+    </p>
+<pre><code><span class="k">export</span> ANTHROPIC_API_KEY=...  <span class="c"># claude-agent-sdk (or Claude login / Bedrock / Vertex)</span>
+<span class="k">export</span> XAI_API_KEY=...        <span class="c"># grok (or run `grok` interactive login)</span>
+<span class="c"># github-copilot: install the `copilot` CLI and run it once to authenticate</span>
+<span class="c">#                 (or set GH_TOKEN / GITHUB_TOKEN for an unattended run)</span>
+<span class="c"># opencode: install the `opencode` CLI; runs against local models, no key needed</span></code></pre>
+    <div class="callout">
+      No key? No problem. The <code>mock</code> driver is scripted and fully
+      offline — everything on this page except a real agent run works without
+      any credentials.
+    </div>
+
+    <h2 id="quickstart">Quick start</h2>
+    <p>Run the offline demo:</p>
+<pre><code>npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
+    <p>Generate a new loop and run it:</p>
+<pre><code>npm run loopgen -- generate -i           <span class="c"># interactive</span>
+npm run loopgen -- generate -i --verify  <span class="c"># …and prove it's lint-clean + starts RED</span>
+npm run loopgen -- run my-loop.loop.yaml</code></pre>
+    <p>
+      <code>--verify</code> encodes the authoring contract: after writing the
+      spec it lints it and runs the checks once with no agent turns, confirming
+      they start <span class="pill red">RED</span> — a green check before any
+      work probably doesn't test the requirement. Exit codes match
+      <code>lint</code>: <code>2</code> on lint errors, <code>1</code> on a
+      vacuous/GREEN check set, else <code>0</code>.
+    </p>
+    <p>List what's registered, or verify a driver:</p>
+<pre><code>npm run loopgen -- list
+npm run loopgen -- verify-driver mock</code></pre>
+    <p>
+      After <code>npm run build &amp;&amp; npm link</code> — or a global install —
+      you can use the <code>loopgen</code> binary directly instead of
+      <code>npm run loopgen -- &lt;args&gt;</code>.
+    </p>
+
+    <h2 id="concepts">Concepts</h2>
+    <table>
+      <thead><tr><th>Piece</th><th>What it is</th><th>Built-ins</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Driver</strong></td>
+          <td>Wraps a coding agent behind one interface</td>
+          <td><code>claude-agent-sdk</code>, <code>grok</code>, <code>github-copilot</code>, <code>opencode</code>, <code>mock</code></td>
+        </tr>
+        <tr>
+          <td><strong>Evaluator</strong></td>
+          <td>A "feedback tool" that measures the workspace and returns pass/fail + actionable feedback</td>
+          <td><code>command</code>, <code>experiment</code></td>
+        </tr>
+        <tr>
+          <td><strong>Task type</strong></td>
+          <td>Category knowledge: how to frame the agent and which evaluators to scaffold</td>
+          <td><code>function</code>, <code>api</code>, <code>webapp</code>, <code>experiment</code>, <code>generic</code></td>
+        </tr>
+        <tr>
+          <td><strong>Success criteria</strong></td>
+          <td>Declarative rule over evaluator results</td>
+          <td><code>all-pass</code>, <code>pass</code>, <code>score</code>, <code>all</code>/<code>any</code>/<code>not</code></td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The generic <code>command</code> evaluator already covers tests, linters,
+      type checkers, and benchmarks: anything with a CLI and an exit code. The
+      <code>experiment</code> evaluator reads a numeric metric (from a command's
+      JSON output or a file) and compares it against thresholds or baselines,
+      which suits A/B tests and performance work.
+    </p>
+
+    <h2 id="spec">The spec</h2>
+<pre><code><span class="k">version:</span> 1
+<span class="k">name:</span> add-retry-to-fetchUser
+<span class="k">task:</span>
+  <span class="k">type:</span> function
+<span class="k">stack:</span>
+  <span class="k">language:</span> typescript
+  <span class="k">packageManager:</span> npm
+<span class="k">workspace:</span>
+  <span class="k">dir:</span> ./target          <span class="c"># the directory the agent edits (relative to this file)</span>
+<span class="k">requirements:</span> <span class="s">|
+  Add exponential backoff (max 3 retries) to fetchUser(). Keep the signature.</span>
+<span class="k">driver:</span>
+  <span class="k">uses:</span> claude-agent-sdk
+  <span class="k">options:</span>
+    <span class="k">model:</span> claude-opus-4-8
+    <span class="k">maxTurns:</span> 30
+<span class="k">evaluators:</span>
+  - <span class="k">uses:</span> command
+    <span class="k">as:</span> tests
+    <span class="k">options:</span> { command: npm test }
+  - <span class="k">uses:</span> command
+    <span class="k">as:</span> typecheck
+    <span class="k">options:</span> { command: npx tsc --noEmit }
+<span class="k">success:</span>
+  <span class="k">type:</span> all-pass         <span class="c"># all evaluators must pass</span>
+<span class="k">limits:</span>
+  <span class="k">maxIterations:</span> 6
+  <span class="k">baseline:</span> false        <span class="c"># false | true | strict — run checks before the agent</span>
+  <span class="k">specGuard:</span> warn        <span class="c"># off | warn | error — agent edits this spec mid-run</span>
+  <span class="k">evaluatorGuard:</span> warn   <span class="c"># off | warn | error — agent edits the test files a check runs</span>
+  <span class="k">maxCostUsd:</span> 5.0        <span class="c"># optional — stop with "budget-exceeded" past this cumulative cost</span>
+  <span class="k">maxTokens:</span> 2000000     <span class="c"># optional — same, on cumulative input+output tokens</span>
+<span class="k">evaluation:</span>
+  <span class="k">concurrency:</span> 1         <span class="c"># run evaluators sequentially (default; safe for shared DB/state)</span></code></pre>
+    <p>
+      Field-by-field guidance — including which trust settings to pick and why —
+      lives in <a href="authoring.html">Authoring a loop you can trust</a>.
+    </p>
+
+    <h2 id="examples">Examples</h2>
+    <p>
+      The <a href="https://github.com/ShortStackEngineer/loop-generator/tree/master/examples">examples
+      directory</a> is a guided tour, ordered from the simplest offline loop up
+      to full loop patterns:
+    </p>
+    <ul>
+      <li><strong>Building blocks</strong> — start with the offline
+        <code>mock-demo</code> (no API key), then one spec per mechanism: each
+        driver, the <code>function</code> / <code>api</code> /
+        <code>experiment</code> task types, and a batch run.</li>
+      <li><strong>Loop patterns</strong> — established patterns written as specs
+        with the trust guards on: the Ralph Wiggum loop, the
+        evaluator-optimizer, and a discover → implement → verify harness.</li>
+      <li><strong>Self-contained projects</strong> — examples that run
+        end-to-end without pointing at your own repo.</li>
+    </ul>
+
+    <h2 id="batch">Batch runs (punch lists)</h2>
+    <p>
+      To run many units of work across one or more codebases, list them in a
+      <code>.batch.yaml</code> manifest and run them with one command:
+    </p>
+<pre><code><span class="c"># punch-list.batch.yaml</span>
+<span class="k">version:</span> 1
+<span class="k">concurrency:</span> 2          <span class="c"># items run in parallel up to this many…</span>
+<span class="k">continueOnError:</span> true   <span class="c"># …and a failure doesn't stop the others</span>
+<span class="k">defaults:</span>
+  <span class="k">maxIterations:</span> 6      <span class="c"># merged into every item (item-level values win)</span>
+<span class="k">items:</span>
+  - <span class="k">name:</span> add-retry
+    <span class="k">spec:</span> loops/add-retry.loop.yaml
+    <span class="k">base:</span> /repos/service-a          <span class="c"># which repo this item's workspace resolves in</span>
+  - <span class="k">name:</span> fix-pagination
+    <span class="k">spec:</span> loops/fix-pagination.loop.yaml
+    <span class="k">base:</span> /repos/service-a
+    <span class="k">needs:</span> [add-retry]              <span class="c"># runs only after add-retry succeeds</span>
+  - <span class="k">name:</span> dark-mode
+    <span class="k">spec:</span> loops/dark-mode.loop.yaml
+    <span class="k">base:</span> /repos/web</code></pre>
+<pre><code>npm run loopgen -- batch punch-list.batch.yaml --report batch-report.json
+<span class="c"># offline demo:</span>
+npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml</code></pre>
+    <p>
+      The scheduler honors <code>needs</code> ordering and the
+      <code>concurrency</code> cap, and guarantees that two items resolving to
+      the same workspace never run at once — same-repo items auto-serialize, so
+      parallelism is safe across distinct repos. A failed or skipped dependency
+      cascades: its dependents are skipped. You get a per-item summary
+      (status · iterations · files · cost · warnings), an aggregate JSON report,
+      and a non-zero exit if any item failed. Items can also <code>inline:</code>
+      a full spec instead of referencing a file.
+    </p>
+
+    <h2 id="extending">Extending it</h2>
+    <p>
+      The whole system is three plug-in points. Register your own and pass them
+      to the engine — adding a plug-in never means editing the engine.
+    </p>
+
+    <h3>A new evaluator (feedback tool)</h3>
+<pre><code><span class="k">import</span> { <span class="k">type</span> Evaluator } <span class="k">from</span> <span class="s">"loop-generator"</span>;
+
+<span class="k">export const</span> coverageEvaluator: Evaluator = {
+  type: <span class="s">"coverage"</span>,
+  <span class="k">async</span> evaluate(ctx) {
+    <span class="k">const</span> pct = <span class="k">await</span> measureCoverage(ctx.workdir);   <span class="c">// your logic</span>
+    <span class="k">return</span> {
+      passed: pct >= 0.9,
+      score: pct,
+      feedback: <span class="s">`coverage ${(pct * 100).toFixed(1)}% (need ≥ 90%)`</span>,
+    };
+  },
+};</code></pre>
+
+    <h3>A new driver (agent backend)</h3>
+    <p>
+      Implement <code>AgentDriver</code>, then validate it against the
+      conformance harness:
+    </p>
+<pre><code><span class="k">import</span> { runDriverConformance, formatConformanceReport } <span class="k">from</span> <span class="s">"loop-generator/testing"</span>;
+<span class="k">import</span> { myDriver } <span class="k">from</span> <span class="s">"./my-driver"</span>;
+
+<span class="k">const</span> report = <span class="k">await</span> runDriverConformance({ makeDriver: () => myDriver });
+console.log(formatConformanceReport(report));   <span class="c">// ✓/✗ per behavioral contract</span></code></pre>
+    <p>
+      The harness drives your agent against temp workspaces and asserts the
+      contract: it reports a name, creates a requested file, applies feedback
+      across iterations, and handles aborts. Prompt-driven drivers (like the
+      Claude SDK) work out of the box; scripted drivers supply an
+      <code>optionsFor</code> mapping. The CLI exposes it too:
+    </p>
+<pre><code>npm run loopgen -- verify-driver claude-agent-sdk</code></pre>
+
+    <h3>Use the engine as a library</h3>
+<pre><code><span class="k">import</span> { LoopEngine, createDefaultRegistries, parseSpec } <span class="k">from</span> <span class="s">"loop-generator"</span>;
+
+<span class="k">const</span> engine = <span class="k">new</span> LoopEngine(createDefaultRegistries());
+<span class="k">const</span> report = <span class="k">await</span> engine.run(parseSpec(spec), { baseDir: process.cwd() });
+console.log(report.success, report.reason);</code></pre>
+
+    <h2 id="development">Development</h2>
+<pre><code>npm run typecheck
+npm test
+npm run build</code></pre>
+    <p>Test quality gates:</p>
+<pre><code>npm run coverage   <span class="c"># vitest + v8 coverage (gate: 85% lines/functions/statements, 80% branches)</span>
+npm run mutation   <span class="c"># Stryker mutation testing (gate: 60% mutation score)</span></code></pre>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="inner">
+    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>
+      <a href="../index.html">Home</a> ·
+      <a href="roadmap.html">Roadmap</a> ·
+      <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>
