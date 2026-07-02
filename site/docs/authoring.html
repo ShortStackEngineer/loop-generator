@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Authoring a loop you can trust — loop-generator</title>
+<meta name="description" content="How to author a .loop.yaml spec that's runnable and trustworthy — checks that test the requirement and start RED before the agent begins.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
+    <nav class="site-nav">
+      <a href="getting-started.html">Getting started</a>
+      <a class="active" href="authoring.html">Authoring</a>
+      <a href="debugging.html">Debugging</a>
+      <a href="trust.html">Lint &amp; trust</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap docs-body">
+  <aside class="docs-toc">
+    <div class="toc-title">On this page</div>
+    <a href="#one-rule">The one rule</a>
+    <a href="#goal">1. Pin down the goal</a>
+    <a href="#inspect">2. Inspect the repo</a>
+    <a href="#decide">3. Decide the spec</a>
+    <a href="#generate">4. Generate, then edit</a>
+    <a href="#prove">5. Prove it</a>
+    <a href="#run">6. Run it</a>
+    <a href="#guardrails">Guardrails</a>
+    <a href="#reference">Reference</a>
+  </aside>
+
+  <main class="docs-content">
+    <h1>Authoring a loop you can trust</h1>
+    <p class="lead">
+      A <code>.loop.yaml</code> that parses isn't necessarily one worth running.
+      This guide covers how to author a spec that's <strong>runnable and
+      trustworthy</strong> — one whose checks actually test the requirement and
+      start RED before the agent begins. (If you use Claude Code, the in-repo
+      <code>author-loop</code> skill runs these steps for you.)
+    </p>
+    <p>
+      <code>loopgen generate</code> already turns flags into a valid skeleton.
+      What it can't supply is the judgment: reading the actual target repo to
+      pick the <strong>right</strong> checks, writing concrete requirements,
+      choosing the trust policy, and <strong>proving</strong> the spec before
+      any agent budget is spent.
+    </p>
+
+    <h2 id="one-rule">The one rule that matters most</h2>
+    <div class="callout danger">
+      <strong>Every check must (a) test the requirement and (b) be
+      <span class="pill red">RED</span> before the agent starts.</strong>
+      A loop is only as good as its evaluators — "all checks passed" means
+      nothing if the checks don't exercise the new behavior or were already
+      green on the untouched workspace. Step 5 confirms exactly that.
+    </div>
+
+    <h2 id="goal">1. Pin down the goal</h2>
+    <p>Write the goal as something a command can verify. Push vague asks until they're testable:</p>
+    <ul>
+      <li>"Make search better" is unusable.</li>
+      <li>"Add case-insensitive substring matching to <code>searchUsers()</code>
+        so <code>/users?q=AL</code> matches <code>alice</code>" is a loop.</li>
+    </ul>
+    <p>You also need three more things:</p>
+    <ul>
+      <li><strong>Where the work happens</strong> — the target repo, which
+        becomes <code>workspace.dir</code>. Get an absolute path, or confirm the
+        path relative to where the spec file will live.</li>
+      <li><strong>What "done" looks like</strong> — the signal that proves
+        success: a failing test that should pass, a metric that should move, a
+        build that should stay green.</li>
+      <li><strong>Which driver</strong> — <code>claude-agent-sdk</code>
+        (default), <code>grok</code>, <code>github-copilot</code>, or
+        <code>mock</code> (the offline demo). Real drivers need credentials.</li>
+    </ul>
+    <p>
+      If the goal is too vague to write a check for, resolve that
+      <strong>now</strong>. A loop with no real check is the most common way
+      these waste hours.
+    </p>
+
+    <h2 id="inspect">2. Inspect the target repo — don't trust the defaults</h2>
+    <p>This is the step generation can't do for you. Open the workspace and find ground truth:</p>
+    <ul>
+      <li><strong>Language / package manager / framework</strong> — from
+        <code>package.json</code>, <code>pyproject.toml</code>,
+        <code>go.mod</code>, <code>Cargo.toml</code>, <code>Gemfile</code>,
+        <code>pom.xml</code>.</li>
+      <li><strong>The REAL commands.</strong> The generic scaffold guesses
+        (<code>npm test</code>, <code>npx tsc --noEmit</code>,
+        <code>pytest -q</code>, and so on). Replace them with what the repo
+        actually uses — read the <code>package.json</code> scripts, the
+        Makefile, the CI config. A wrong test command is a guaranteed failed run.</li>
+      <li><strong>The thing being changed</strong> — find the file, function, or
+        endpoint named in the goal so the requirements can reference real
+        symbols and paths.</li>
+      <li><strong>Is it a git repo?</strong> Change detection and snapshots rely
+        on git; a non-repo workspace trips the
+        <code>SPEC-WORKDIR-NOT-PROJECT</code> lint rule.</li>
+      <li><strong>State and side effects</strong> — does the test command touch
+        a database or a dev server? That decides
+        <code>evaluation.concurrency</code> and whether a strict baseline is
+        safe to run twice.</li>
+    </ul>
+
+    <h2 id="decide">3. Decide the spec (with reasons)</h2>
+    <ul>
+      <li><strong><code>task.type</code></strong> — <code>function</code> /
+        <code>api</code> / <code>webapp</code> / <code>experiment</code> /
+        <code>generic</code>. Picks the prompt framing and the checks the
+        scaffold suggests.</li>
+      <li><strong><code>evaluators</code></strong> — the heart of the spec.
+        Include at least one check that <em>fails until the requirement is
+        met</em> (usually a test asserting the new behavior), and use the repo's
+        real commands. For a numeric target, use the <code>experiment</code>
+        evaluator. Avoid smoke tests that create their own data but never drive
+        the real entrypoint — they can pass without exercising the feature.</li>
+      <li><strong><code>success</code></strong> — <code>all-pass</code> is the
+        common case; use <code>score</code> / <code>pass</code> /
+        <code>all</code> / <code>any</code> for thresholds or partial gates.</li>
+      <li><strong><code>limits.baseline</code></strong> — default to
+        <strong><code>"strict"</code></strong> so an already-green (vacuous)
+        check set fails fast with <code>baseline-vacuous</code>. Drop to
+        <code>false</code> only when the checks side-effect and can't be run
+        twice.</li>
+      <li><strong><code>limits.specGuard</code></strong> — keep the spec
+        <strong>outside</strong> <code>workspace.dir</code> and leave it at
+        <code>warn</code>. If it must live inside the repo the agent edits, set
+        <code>error</code>.</li>
+      <li><strong><code>limits.evaluatorGuard</code></strong> — the test files a
+        <code>command</code> check runs are the real success criteria; leave at
+        <code>warn</code> (or <code>error</code>) so the agent can't fake a
+        green by editing them.</li>
+      <li><strong><code>limits.maxIterations</code></strong> — a budget, not a
+        target. 5–8 is typical; small, well-checked tasks need fewer.</li>
+    </ul>
+
+    <h2 id="generate">4. Generate the skeleton, then edit</h2>
+    <p>
+      Generate a guaranteed-valid skeleton, then fix the fields the defaults got
+      wrong. Editing a generated file beats hand-writing YAML — the skeleton
+      always parses, so you only change values.
+    </p>
+<pre><code>loopgen generate \
+  -n <span class="s">"add-retry-to-fetchUser"</span> \
+  -t function -l typescript -f express \
+  -d claude-agent-sdk \
+  -r <span class="s">"Add exponential backoff (max 3 retries) to fetchUser(); keep the signature."</span> \
+  -m 6 -o ./loops/add-retry.loop.yaml</code></pre>
+    <p>
+      (From the repo without a build, prefix with <code>npm run loopgen --</code>,
+      e.g. <code>npm run loopgen -- generate …</code>.)
+    </p>
+    <p>
+      Then edit the file to: swap in the <strong>real</strong> test/build
+      commands, set <code>workspace.dir</code> to the target repo, set
+      <code>limits.baseline: strict</code>, tighten <code>requirements</code>,
+      and adjust <code>success</code> if needed. Keep the spec
+      <strong>outside</strong> the target repo and point
+      <code>workspace.dir</code> at it.
+    </p>
+
+    <h2 id="prove">5. Prove it — the part that earns trust</h2>
+    <p>Two gates, neither of which spends agent budget.</p>
+
+    <h3>a. Lint clean</h3>
+<pre><code>loopgen lint ./loops/add-retry.loop.yaml --strict</code></pre>
+    <p>
+      Resolve every <code>✗</code> error and <code>⚠</code> warning. Don't hand
+      off a spec with open errors. Each rule and its fix is documented in
+      <a href="trust.html#lint">the lint reference</a>.
+    </p>
+
+    <h3>b. The checks start RED for the right reason</h3>
+    <p>
+      There is no agent-free "baseline only" run mode, so verify directly: run
+      each evaluator's command yourself in the target workspace and confirm it
+      <strong>fails because the requirement isn't met yet</strong> — not because
+      a binary is missing, the working directory is wrong, or the command is
+      bogus.
+    </p>
+<pre><code><span class="c"># in the target repo, on an untouched checkout:</span>
+npm test              <span class="c"># should FAIL (the new behavior isn't implemented yet)</span>
+npx tsc --noEmit      <span class="c"># should pass or fail per the real baseline</span></code></pre>
+    <p>
+      If a check passes on the untouched workspace, it doesn't test the
+      requirement — fix the check before continuing. This is the same contract
+      <code>limits.baseline: strict</code> enforces at runtime; you're
+      confirming it up front so a run doesn't waste budget discovering it.
+    </p>
+
+    <h2 id="run">6. Run it</h2>
+    <p>Once lint is clean and the checks start RED, you're ready:</p>
+<pre><code>loopgen run ./loops/add-retry.loop.yaml --strict-baseline --report run.json</code></pre>
+    <p>
+      A real run spends agent budget and needs the driver's credentials
+      (<code>ANTHROPIC_API_KEY</code> for <code>claude-agent-sdk</code>,
+      <code>XAI_API_KEY</code> for <code>grok</code>, and so on). The
+      <code>--report run.json</code> file is the richest input to the
+      <a href="debugging.html">debugging workflow</a> if the run doesn't go
+      green.
+    </p>
+
+    <h2 id="guardrails">Guardrails</h2>
+    <ul>
+      <li><strong>Don't fabricate the test command.</strong> Read it from the
+        repo. If there isn't one, say so and consider adding a test as part of
+        the loop.</li>
+      <li><strong>Don't ship a vacuous loop.</strong> If you can't make a check
+        that's RED before the work, the loop isn't ready — that's a signal the
+        task may be a poor fit, not a spec to force through.</li>
+      <li><strong>Keep the spec out of the target repo</strong> unless you have
+        a reason not to; if it lives inside, set <code>specGuard: error</code>.</li>
+      <li><strong>Re-lint after every edit.</strong> It takes milliseconds and
+        catches compounded relative paths and missing binaries before a run
+        does.</li>
+    </ul>
+
+    <h2 id="reference">Reference</h2>
+    <p>
+      For exact field names, defaults, the per-language default commands,
+      evaluator options, success-criteria forms, and the full lint-rule → fix
+      table, see the in-repo <code>author-loop</code> skill's
+      <code>reference.md</code>
+      (<code>.claude/skills/author-loop/reference.md</code>) and the
+      <a href="getting-started.html#spec">spec section</a>. The source of truth
+      is the code: <code>src/core/spec.ts</code> (schema),
+      <code>src/tasks/</code> (task types and default commands), and
+      <code>src/lint/rules.ts</code> (lint rules).
+    </p>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="inner">
+    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>
+      <a href="../index.html">Home</a> ·
+      <a href="roadmap.html">Roadmap</a> ·
+      <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

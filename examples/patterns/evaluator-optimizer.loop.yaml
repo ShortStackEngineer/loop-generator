@@ -21,8 +21,8 @@
 # (see the driver block below) — and a ./target repo with `npm test` and an
 # `npm run bench` that prints ONLY JSON like {"p95_ms": 210} on stdout (the
 # experiment evaluator parses the whole stdout, so keep it free of other output)):
-#   loopgen lint examples/evaluator-optimizer.loop.yaml
-#   loopgen run  examples/evaluator-optimizer.loop.yaml
+#   npm run loopgen -- lint examples/patterns/evaluator-optimizer.loop.yaml
+#   npm run loopgen -- run  examples/patterns/evaluator-optimizer.loop.yaml
 version: 1
 name: evaluator-optimizer-fetch
 description: Implement fetchWithRetry until a separate, deterministic checker is satisfied.

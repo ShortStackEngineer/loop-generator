@@ -1,0 +1,10 @@
+{
+  "name": "eval-prompt-target",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Prompt-optimization eval target for loop-generator (needs a live OpenAI-compatible model).",
+  "scripts": {
+    "eval": "node eval/run.mjs"
+  }
+}

@@ -34,6 +34,7 @@ export type { SuccessCriteria, CriteriaVerdict } from "./core/criteria";
 
 // Feedback
 export { buildFeedback } from "./core/feedback";
+export type { FeedbackDiff } from "./core/feedback";
 
 // Plug-in contracts
 export type {
@@ -57,6 +58,7 @@ export { mockDriver } from "./drivers/mock";
 export { claudeAgentSdkDriver } from "./drivers/claude-agent-sdk";
 export { grokDriver } from "./drivers/grok";
 export { githubCopilotDriver } from "./drivers/github-copilot";
+export { opencodeDriver } from "./drivers/opencode";
 export { cursorDriver } from "./drivers/cursor";
 export { commandEvaluator } from "./evaluators/command";
 export { experimentEvaluator } from "./evaluators/experiment";
@@ -85,7 +87,15 @@ export type { Logger, LogLevel } from "./core/logger";
 export { preflightOk, preflightFail, mergePreflight } from "./core/preflight";
 export type { PreflightResult } from "./core/preflight";
 export { runCommand } from "./core/exec";
-export { isGitRepo, isIgnored, changeDetectionAvailable, snapshotTree, diffTrees } from "./core/workspace";
+export {
+  isGitRepo,
+  isIgnored,
+  changeDetectionAvailable,
+  snapshotTree,
+  diffTrees,
+  diffPatch,
+  DEFAULT_MAX_PATCH_CHARS,
+} from "./core/workspace";
 export type { TreeDiff } from "./core/workspace";
 export { resolveGuardedFiles, isTestLikePath } from "./core/evaluator-guard";
 

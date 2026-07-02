@@ -39,11 +39,12 @@ function dedupe(items: string[]): string[] {
   return [...new Set(items)];
 }
 
-/** Terse one-line agent status: stop reason + turns/cost, never the raw log dump. */
-function shortAgent(it: IterationReport): string {
+/** Terse one-line agent status: stop reason + tokens/turns/cost, never the raw log dump. */
+export function shortAgent(it: IterationReport): string {
   const a = it.agent;
   const u = a.usage;
   const meta: string[] = [];
+  if (u?.inputTokens || u?.outputTokens) meta.push(`${u?.inputTokens ?? 0} in / ${u?.outputTokens ?? 0} out tok`);
   if (u?.turns) meta.push(`${u.turns}t`);
   if (typeof u?.costUsd === "number") meta.push(`$${u.costUsd.toFixed(2)}`);
   const metaStr = meta.length ? ` (${meta.join(", ")})` : "";

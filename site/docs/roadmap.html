@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap — loop-generator</title>
+<meta name="description" content="Where loop-generator is headed: protecting the verifiable-outcomes differentiator first, then feedback quality, usability, and ecosystem.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
+    <nav class="site-nav">
+      <a href="getting-started.html">Getting started</a>
+      <a href="authoring.html">Authoring</a>
+      <a href="debugging.html">Debugging</a>
+      <a href="trust.html">Lint &amp; trust</a>
+      <a class="active" href="roadmap.html">Roadmap</a>
+      <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap docs-body">
+  <aside class="docs-toc">
+    <div class="toc-title">On this page</div>
+    <a href="#tier1">Tier 1 — near-term</a>
+    <a href="#tier2">Tier 2 — needs design</a>
+    <a href="#deferred">Deferred</a>
+    <a href="#not-solving">Not trying to solve</a>
+  </aside>
+
+  <main class="docs-content">
+    <h1>Roadmap</h1>
+    <p class="lead">
+      The through-line: loop-generator's differentiator is <strong>verifiable
+      outcomes</strong> — the checks are the spec, backed by layered
+      false-positive defenses. The roadmap protects and extends that
+      differentiator first, then improves the loop's feedback quality,
+      usability, and ecosystem.
+    </p>
+    <p>
+      Status legend: <span class="pill green">planned</span> (agreed, not
+      started) · <span class="pill amber">exploring</span> (needs design) ·
+      <span class="pill red">deferred</span> (revisit later). Items already
+      shipped move off this page and into the docs.
+    </p>
+
+    <h2 id="tier1">Tier 1 — near-term, high leverage, low cost</h2>
+
+    <h3>Filesystem-walk change detection for non-git workspaces <span class="pill amber">exploring</span></h3>
+    <p>
+      Change detection is git-based today; off-git it falls back to the driver's
+      self-reported file list (honestly labeled with a persistent warning). An
+      independent mtime/hash snapshot before and after each iteration would
+      extend <em>real</em> change detection — and the vacuous-success guard — to
+      workspaces where git is unavailable, removing the weakest link in the
+      trust story.
+    </p>
+
+    <h2 id="tier2">Tier 2 — medium-term, needs design</h2>
+
+    <h3>Human-in-the-loop controls <span class="pill amber">exploring</span></h3>
+    <p>
+      The <code>onIteration</code> hook can't currently pause or abort; the only
+      cancellation path is an external <code>AbortSignal</code> that stops
+      <em>after</em> the current iteration. Planned: a review/step mode (show
+      the diff + evaluations, wait for continue/abort/edit) and an iteration
+      hook that can signal continue vs. abort. The biggest usability gap for
+      higher-stakes or expensive runs.
+    </p>
+
+    <h3>Resolve the structured-feedback dead affordance <span class="pill amber">exploring</span></h3>
+    <p>
+      <code>FeedbackSummary.evaluations</code> is passed to
+      <code>driver.run</code> via <code>invocation.feedback</code>, but no
+      built-in driver reads it — every driver consumes only the rendered
+      <code>feedback.text</code> already embedded in the prompt. Either wire at
+      least one driver to consume the structured channel or remove the field: a
+      dead affordance in a public contract erodes trust in the contract.
+    </p>
+
+    <h3>Transcript persistence + a native coverage evaluator <span class="pill amber">exploring</span></h3>
+    <ul>
+      <li>Transcripts persist only when <code>--report &lt;file&gt;</code> is
+        passed, and the CLI drivers store only truncated stdout/stderr tails —
+        not full conversations. Add optional, first-class transcript capture for
+        better run diagnosis.</li>
+      <li>Only two evaluators ship today (<code>command</code>,
+        <code>experiment</code>). Ship a native coverage evaluator
+        <strong>plus a documented custom-evaluator recipe</strong> — the recipe
+        matters more than any single built-in primitive.</li>
+    </ul>
+
+    <h2 id="deferred">Deferred / not planned</h2>
+    <ul>
+      <li><strong>AST-query and log/event-assertion evaluators</strong> —
+        speculative and large; the <code>command</code> evaluator plus the
+        custom-evaluator plugin path already cover most cases. Let the
+        documented recipe prove demand first.</li>
+      <li><strong>"Replay last iteration with an edited prompt"</strong> —
+        niche; the pause/step control delivers most of the same value.</li>
+      <li><strong>Full third-party driver ecosystem</strong> (external-package
+        driver loading, plugin discovery, a "publish your driver" guide) — the
+        conformance harness is already exported
+        (<code>loop-generator/testing</code>) and documented for extenders.
+        A growth play, not a correctness one; revisit after Tiers 1–2 land.</li>
+    </ul>
+
+    <h2 id="not-solving">What we are explicitly <em>not</em> trying to solve</h2>
+    <p>
+      These are fundamental to the agentic-loop approach, not implementation
+      gaps. The roadmap makes their failure modes <em>more visible</em>; it does
+      not eliminate them.
+    </p>
+    <ul>
+      <li>Mis-specified or insufficient checks (the checks are the contract —
+        bad checks, bad contract).</li>
+      <li>Agents that game metrics or ship minimal patches that pass surface
+        checks.</li>
+      <li>Context degradation over many iterations (feedback diffs and
+        human-in-the-loop controls mitigate; they don't cure).</li>
+      <li>Tasks whose success is inherently subjective or requires human
+        judgment.</li>
+      <li>The underlying unreliability of LLM agents on large, novel
+        refactors.</li>
+    </ul>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="inner">
+    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>
+      <a href="../index.html">Home</a> ·
+      <a href="getting-started.html">Docs</a> ·
+      <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

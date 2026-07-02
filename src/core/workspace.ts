@@ -126,3 +126,33 @@ export function diffTrees(
   const stat = files.length ? git(dir, ["diff", "--stat", before, after, "--", ...pathspec]).stdout.trim() : "";
   return { changed: files.length > 0, files, stat };
 }
+
+/** Default hard cap on the patch fed back to the agent — keeps prompts bounded. */
+export const DEFAULT_MAX_PATCH_CHARS = 8000;
+
+/**
+ * Produce a bounded unified-diff patch between two tree snapshots, respecting
+ * the same ignore globs as change detection. Feeds the agent "here's what you
+ * changed last turn" so it stops re-deriving state it already touched.
+ *
+ * Returns null when there's nothing useful to show (missing snapshots,
+ * identical trees, git failure, or an empty diff). Caps output at `maxChars`:
+ * an over-cap patch is truncated to its head with a marker rather than dropped,
+ * so a huge diff degrades gracefully instead of blowing up the prompt.
+ */
+export function diffPatch(
+  dir: string,
+  before: string | null,
+  after: string | null,
+  ignore: string[] = DEFAULT_IGNORE_GLOBS,
+  maxChars: number = DEFAULT_MAX_PATCH_CHARS,
+): string | null {
+  if (!before || !after || before === after) return null;
+  const res = git(dir, ["diff", before, after, "--", ...diffPathspec(ignore)]);
+  if (!res.ok) return null;
+  const patch = res.stdout.trim();
+  if (!patch) return null;
+  if (patch.length <= maxChars) return patch;
+  const omitted = patch.length - maxChars;
+  return `${patch.slice(0, maxChars)}\n…[patch truncated: ${omitted} more char(s) omitted; inspect the workspace for the full diff]…`;
+}

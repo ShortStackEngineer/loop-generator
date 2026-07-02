@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debugging a run — loop-generator</title>
+<meta name="description" content="Diagnose a failed, stalled, errored, or suspiciously-green loop run by its outcome — and reproduce the root cause without re-spending agent budget.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
+    <nav class="site-nav">
+      <a href="getting-started.html">Getting started</a>
+      <a href="authoring.html">Authoring</a>
+      <a class="active" href="debugging.html">Debugging</a>
+      <a href="trust.html">Lint &amp; trust</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap docs-body">
+  <aside class="docs-toc">
+    <div class="toc-title">On this page</div>
+    <a href="#mindset">The mindset</a>
+    <a href="#evidence">1. Gather evidence</a>
+    <a href="#classify">2. Classify by outcome</a>
+    <a href="#max-iterations">3. Max-iterations</a>
+    <a href="#suspicious">4. Suspicious success</a>
+    <a href="#reproduce">5. Reproduce cheaply</a>
+    <a href="#fix">6. Map to a fix</a>
+    <a href="#preflight">Preflight failures</a>
+    <a href="#guardrails">Guardrails</a>
+  </aside>
+
+  <main class="docs-content">
+    <h1>Debugging a run</h1>
+    <p class="lead">
+      When a loop run goes wrong — it fails, stalls at the iteration budget,
+      errors out, or comes back green but suspicious — the fault is almost
+      always in the <strong>spec or the workspace</strong>, not the agent. The
+      engine already names the failure precisely (the <code>outcome</code>
+      field) and attaches honest warnings even to green runs. This page turns
+      that vocabulary into a diagnosis and a concrete fix, confirming the root
+      cause <strong>without re-spending agent budget</strong> wherever possible.
+      (If you use Claude Code, the in-repo <code>debug-loop</code> skill runs
+      this diagnosis for you.)
+    </p>
+
+    <h2 id="mindset">The mindset</h2>
+    <ul>
+      <li><strong>The checks are the contract.</strong> A run "passes" only if
+        its checks actually exercise the requirement <em>and</em> the agent did
+        work. A <code>success</code> outcome that carries warnings is a finding,
+        not a pass — treat it as suspect.</li>
+      <li><strong>Reproduce cheaply.</strong> Most root causes (a wrong test
+        command, a missing binary, a vacuous check, a bad working directory)
+        are confirmable with <code>loopgen lint</code> plus running the check by
+        hand — zero agent turns. Do that before any re-run.</li>
+      <li><strong>Don't re-run blindly.</strong> A full <code>loopgen run</code>
+        spends real budget and needs credentials. Earn the re-run with static
+        and manual evidence first.</li>
+    </ul>
+
+    <h2 id="evidence">1. Gather the evidence</h2>
+    <ul>
+      <li><strong>Best: the <code>--report &lt;file&gt;</code> JSON.</strong> If
+        the run was launched with <code>--report run.json</code>, read that file
+        — it has every iteration, each evaluator's
+        <code>feedback</code>/<code>error</code>, the agent's
+        <code>stopReason</code>/<code>summary</code>/<code>error</code>,
+        <code>changedFiles</code>, the diff stat, and the run-level
+        <code>warnings</code>.</li>
+      <li><strong>Otherwise: the terminal output.</strong> The lines that matter
+        are <code>outcome: &lt;outcome&gt; — &lt;reason&gt;</code>, the
+        <code>baseline:</code> line, each <code>iter N:</code> line, and the
+        trailing <code>⚠ warnings:</code> block (which prints even on
+        success).</li>
+      <li>If there's no report and the failure is <strong>cheap to
+        reproduce</strong> — a preflight failure, an <code>error</code>, or a
+        <code>baseline-vacuous</code>, none of which invoke the agent — re-run
+        with <code>--report</code>. If it's a <code>max-iterations</code>
+        failure, prefer reading what you already have over paying the budget
+        again.</li>
+    </ul>
+    <p>
+      Also note the <strong>resolved workspace</strong> the engine printed
+      (<code>workspace: &lt;path&gt;</code>): several failures are simply a
+      wrong path.
+    </p>
+
+    <h2 id="classify">2. Classify by outcome</h2>
+    <p>The <code>outcome</code> field is the spine of the diagnosis:</p>
+    <table>
+      <thead><tr><th>Outcome</th><th>Means</th><th>Likely cause / where to go</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>success</code> <em>(no warnings)</em></td>
+          <td>Criteria met, work detected, agent completed</td>
+          <td>Trustworthy green; nothing to do.</td>
+        </tr>
+        <tr>
+          <td><code>success</code> <em>(with warnings)</em></td>
+          <td>Criteria met <strong>but</strong> a guard fired — possible false positive</td>
+          <td>Green-no-diff, or green while the agent didn't finish → <a href="#suspicious">step 4</a>.</td>
+        </tr>
+        <tr>
+          <td><code>max-iterations</code></td>
+          <td>Budget exhausted without satisfying the criteria</td>
+          <td>A check never went green → <a href="#max-iterations">step 3</a>.</td>
+        </tr>
+        <tr>
+          <td><code>preflight-failed</code></td>
+          <td>A pre-run check failed before any agent work</td>
+          <td>Bad workdir, missing binary, driver not ready → <a href="#preflight">preflight fixes</a>.</td>
+        </tr>
+        <tr>
+          <td><code>error</code></td>
+          <td>The engine couldn't run at all</td>
+          <td>Typo in <code>driver.uses</code> or an evaluator's <code>uses</code>
+            (<code>loopgen list</code> shows valid names), or a task
+            <code>validate()</code> message.</td>
+        </tr>
+        <tr>
+          <td><code>baseline-vacuous</code></td>
+          <td>Checks already passed before the agent ran (strict baseline)</td>
+          <td>The checks don't test the requirement — repair them so they're RED
+            until it's met; see <a href="authoring.html">Authoring</a>.</td>
+        </tr>
+        <tr>
+          <td><code>spec-tampered</code></td>
+          <td>The agent edited its own spec mid-run (<code>specGuard: error</code>)</td>
+          <td>The spec lives inside <code>workspace.dir</code> — move it outside;
+            re-verify the on-disk spec.</td>
+        </tr>
+        <tr>
+          <td><code>evaluator-tampered</code></td>
+          <td>The agent edited a test file a check runs (<code>evaluatorGuard: error</code>)</td>
+          <td>The agent faked a green by weakening the checks — restore the test
+            files; keep them under <code>evaluatorGuard: error</code>.</td>
+        </tr>
+        <tr>
+          <td><code>budget-exceeded</code></td>
+          <td>Cumulative cost/tokens passed <code>maxCostUsd</code> / <code>maxTokens</code></td>
+          <td>The loop wasn't converging within budget — read the last iteration
+            like a <code>max-iterations</code> failure before raising the cap.</td>
+        </tr>
+        <tr>
+          <td><code>aborted</code></td>
+          <td>Cancelled (Ctrl-C) or a per-iteration timeout</td>
+          <td>Manual interrupt, or <code>limits.iterationTimeoutMs</code> set too
+            low — raise/remove the timeout; otherwise expected.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 id="max-iterations">3. Drill into a max-iterations failure</h2>
+    <p>This is the real debugging case. Open the <strong>last</strong> iteration and read three things:</p>
+    <ol>
+      <li><strong>Which evaluator never passed</strong>, and its
+        <code>feedback</code>/<code>error</code>. That's the check that blocked
+        the loop.</li>
+      <li><strong>The agent's <code>stopReason</code>:</strong>
+        <ul>
+          <li><code>completed</code> — the agent decided it was done, but a check
+            still fails. The <em>check or the requirement</em> is wrong, not the
+            budget. Run the check by hand (step 5); fix the command, loosen the
+            criterion, or sharpen <code>requirements</code>.</li>
+          <li><code>max_turns</code> — the agent ran out of turns before
+            finishing. Raise <code>driver.options.maxTurns</code>, and set
+            <code>driver.options.resume: true</code> so it continues the same
+            session.</li>
+          <li><code>error</code> (with <code>agent.error</code> set) — a backend
+            or credential failure, not a code problem. Read
+            <code>agent.error</code> and fix the environment.</li>
+        </ul>
+      </li>
+      <li><strong>Did the agent change files?</strong> If
+        <code>changed</code>/<code>changedFiles</code> shows edits but the
+        <em>wrong</em> check fails, the agent may be regressing one thing to fix
+        another — tighten <code>requirements</code> ("don't break X").</li>
+    </ol>
+    <div class="callout warn">
+      A check that fails every iteration with "command not found" / exit 127 is
+      a wrong bare command or a wrong working directory. Lint and preflight only
+      catch <em>project-local</em> binary paths (<code>./script.sh</code>,
+      <code>bin/foo</code>), not bare PATH commands like <code>npm</code> or a
+      typo'd tool — so those slip through to runtime. Confirm by hand in step 5.
+    </div>
+
+    <h2 id="suspicious">4. Investigate a suspicious success</h2>
+    <p>
+      If <code>success: true</code> but <code>warnings[]</code> is non-empty, do
+      not declare victory. The two warnings that matter most:
+    </p>
+    <ul>
+      <li><strong>"changed no files"</strong> — the loop went green on an
+        untouched workspace, so the checks are almost certainly vacuous. Confirm
+        by running the check by hand on a clean checkout (step 5); it should
+        <strong>fail</strong> before any work. If generated artifacts masked a
+        real diff, add their globs to <code>workspace.ignore</code>.</li>
+      <li><strong>"the agent did not complete"</strong> — the green rests
+        entirely on the checks while the agent ran out of turns or errored.
+        Verify the checks are actually sufficient; consider raising
+        <code>maxTurns</code>.</li>
+    </ul>
+
+    <h2 id="reproduce">5. Reproduce the root cause (no agent budget)</h2>
+    <p>
+      Confirm the diagnosis with cheap, deterministic signals. This is what
+      separates a guess from a diagnosis — a missing binary, a wrong working
+      directory, a flaky test, or a check that passes on untouched code all show
+      up here in seconds.
+    </p>
+<pre><code><span class="c"># 1. Static config the run may have only warned on:</span>
+loopgen lint &lt;spec&gt; --strict
+
+<span class="c"># 2. The actual failure of a check, in the resolved workspace:</span>
+cd &lt;resolved workspace&gt; &amp;&amp; &lt;the evaluator's command&gt;   <span class="c"># read the exit code + output</span></code></pre>
+
+    <h2 id="fix">6. Map the root cause to a fix, then re-verify</h2>
+    <table>
+      <thead><tr><th>Root cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>Wrong / placeholder test command</td>
+          <td>Set the repo's real command in the evaluator's <code>options.command</code>.</td></tr>
+        <tr><td>Binary missing / wrong working directory</td>
+          <td>Install it, or fix <code>options.command</code> / <code>options.cwd</code>.</td></tr>
+        <tr><td>Workdir wrong (<code>SPEC-WORKDIR-NOT-PROJECT</code>)</td>
+          <td>Fix <code>workspace.dir</code> (watch for compounded relative paths —
+            <code>../..</code> applied twice lands in <code>$HOME</code>).</td></tr>
+        <tr><td>Check passes before any work (vacuous)</td>
+          <td>Make the check RED until the requirement is met — see
+            <a href="authoring.html">Authoring</a>.</td></tr>
+        <tr><td>Agent out of turns</td>
+          <td>Raise <code>driver.options.maxTurns</code>; set <code>resume: true</code>.</td></tr>
+        <tr><td>Credential / backend error</td>
+          <td>Set <code>ANTHROPIC_API_KEY</code> / <code>XAI_API_KEY</code> (or use
+            the driver's login). An environment problem, not a spec bug.</td></tr>
+        <tr><td>Spec tampering</td>
+          <td>Move the spec outside <code>workspace.dir</code>; keep
+            <code>specGuard: error</code>.</td></tr>
+        <tr><td>Evaluator (test-file) tampering</td>
+          <td>Restore the test files; keep <code>evaluatorGuard: error</code>.</td></tr>
+        <tr><td>Green with no diff from build artifacts</td>
+          <td>Add the artifact globs to <code>workspace.ignore</code>.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Then re-verify in the same cheap order — <strong>re-lint → re-run the
+      check by hand →</strong> and only then a full run:
+    </p>
+<pre><code>loopgen run &lt;spec&gt; --strict-baseline --report run.json</code></pre>
+    <p>
+      That last step costs budget and needs credentials; don't launch it until
+      the static and manual checks look right.
+    </p>
+
+    <h2 id="preflight">Preflight failures</h2>
+    <p>
+      Preflight runs the error-severity workspace checks before any agent turn
+      (the same rules <code>loopgen lint</code> reports). Map each bullet in the
+      <code>reason</code> / <code>preflight.errors</code> to its fix:
+    </p>
+    <table>
+      <thead><tr><th>Bullet</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td>workspace not a git repo / no stack markers
+          (<code>SPEC-WORKDIR-NOT-PROJECT</code>)</td>
+          <td>Fix <code>workspace.dir</code>; watch compounded relative paths.</td></tr>
+        <tr><td>project-local binary missing (<code>SPEC-EVAL-BINARY-MISSING</code>)</td>
+          <td>A command whose leading binary is a local path
+            (<code>./script.sh</code>, <code>bin/foo</code>) doesn't exist. Fix the
+            path/cwd. Bare PATH commands are <em>not</em> preflight-checked.</td></tr>
+        <tr><td>referenced script/file missing (<code>SPEC-EVAL-FILE-MISSING</code>)</td>
+          <td>Create the file or fix the path.</td></tr>
+        <tr><td>driver preflight (SDK not installed / API key missing)</td>
+          <td>Install the optional dependency; set the driver's credentials.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="guardrails">Guardrails</h2>
+    <ul>
+      <li><strong>Diagnose from evidence, not vibes.</strong> If you haven't
+        read a failing check's output, you haven't found the cause yet.</li>
+      <li><strong>Distinguish backend failures from spec bugs.</strong>
+        <code>agent.ok === false</code> / <code>stopReason: error</code> is an
+        environment problem; don't "fix" the spec for it.</li>
+      <li><strong>A warning on a green run is a finding.</strong> Surface it;
+        don't report the run as clean.</li>
+      <li><strong>Prefer the cheapest reproduction.</strong> Lint and a manual
+        check command beat a budget-spending re-run every time.</li>
+    </ul>
+    <p>
+      For the full <code>LoopReport</code> field map, every
+      <code>stopReason</code>, and the complete warning glossary, see the
+      in-repo <code>debug-loop</code> skill's <code>reference.md</code>. The
+      source of truth is the code: <code>src/core/engine.ts</code> (outcomes,
+      warnings, report shape), <code>src/cli/run.ts</code> (terminal
+      formatting), and <code>src/drivers/types.ts</code> (stop reasons).
+    </p>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="inner">
+    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>
+      <a href="../index.html">Home</a> ·
+      <a href="roadmap.html">Roadmap</a> ·
+      <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

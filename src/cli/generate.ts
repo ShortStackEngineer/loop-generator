@@ -2,8 +2,10 @@ import { writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import type { Command } from "commander";
 import { input, select, confirm } from "@inquirer/prompts";
-import { generateSpec, specToYaml, type GenerateInput } from "../generate";
+import { generateSpec, specToYaml, verifySpec, type GenerateInput, type VerifyResult } from "../generate";
 import { createTaskRegistry, createDriverRegistry } from "../registry";
+import { resolveWorkspaceDir, type LoopSpec } from "../core/spec";
+import type { LintFinding } from "../lint";
 
 interface GenerateFlags {
   task?: string;
@@ -16,6 +18,52 @@ interface GenerateFlags {
   out?: string;
   interactive?: boolean;
   force?: boolean;
+  verify?: boolean;
+  strict?: boolean;
+}
+
+const LINT_ICON: Record<LintFinding["severity"], string> = { error: "✗", warn: "⚠", info: "ℹ" };
+
+function formatLintFinding(f: LintFinding): string {
+  const lines = [`    ${LINT_ICON[f.severity]} ${f.ruleId} — ${f.message}`];
+  if (f.hint) lines.push(`        hint: ${f.hint}`);
+  return lines.join("\n");
+}
+
+/**
+ * Print the lint + RED-check summary and return the process exit code (0 pass,
+ * 1 soft failure — vacuous/GREEN checks or strict warnings, 2 lint errors),
+ * aligned with `loopgen lint`'s exit-code scheme.
+ */
+function reportVerify(spec: LoopSpec, workdir: string, result: VerifyResult): number {
+  console.log(`\nverify (${workdir}):`);
+
+  console.log("\n  lint:");
+  if (!result.lint.length) console.log("    ✓ no issues found");
+  else for (const f of result.lint) console.log(formatLintFinding(f));
+
+  console.log("\n  RED check (evaluators run once, no agent):");
+  if (result.red.noEvaluators) {
+    console.log("    ✗ no evaluators to run — cannot prove the checks start RED");
+  } else {
+    for (const e of result.red.evaluations) {
+      const status = e.passed ? "✓ pass" : e.ok ? "✗ fail" : "✗ could not run";
+      console.log(`    ${status}: ${e.name}`);
+    }
+    if (result.red.startsRed) {
+      console.log("    ✓ checks start RED as expected — at least one fails before any agent work");
+    } else {
+      console.log(
+        "    ⚠ ALL checks already PASS before any agent work — they probably do not test the requirement (vacuous baseline)",
+      );
+    }
+  }
+
+  const exitCode = result.lintErrors > 0 ? 2 : result.ok ? 0 : 1;
+  console.log(
+    `\n${result.lintErrors} lint error(s), ${result.lintWarnings} lint warning(s) — ${result.ok ? "verify PASSED" : "verify FAILED"}`,
+  );
+  return exitCode;
 }
 
 export function registerGenerate(program: Command): void {
@@ -33,6 +81,8 @@ export function registerGenerate(program: Command): void {
     .option("-o, --out <file>", "output file (default: <name>.loop.yaml)")
     .option("-i, --interactive", "prompt for any missing fields")
     .option("--force", "overwrite the output file if it exists")
+    .option("--verify", "after writing, lint the spec and prove its checks start RED (no agent turns)")
+    .option("--strict", "with --verify, treat lint warnings as failures too")
     .action(async (flags: GenerateFlags) => {
       const tasks = createTaskRegistry();
       const drivers = createDriverRegistry();
@@ -105,6 +155,14 @@ export function registerGenerate(program: Command): void {
 
       writeFileSync(outPath, yaml);
       console.log(`Wrote ${outPath}`);
+
+      if (flags.verify) {
+        const workdir = resolveWorkspaceDir(spec, path.dirname(outPath));
+        const result = await verifySpec(spec, { workdir, file: outPath, strict: flags.strict });
+        const exitCode = reportVerify(spec, workdir, result);
+        if (exitCode !== 0) process.exit(exitCode);
+      }
+
       console.log(`\nNext: review the evaluators/success criteria, then run:\n  loopgen run ${path.relative(process.cwd(), outPath)}`);
     });
 }
