@@ -1,8 +1,9 @@
 # eval-classifier — optimize a classifier to a macro-F1 bar (offline)
 
-A fully self-contained, **zero-dependency** eval target plus the loop that drives
-it. The task: improve the sentiment classifier in `project/src/classify.mjs` until
-**macro-F1 ≥ 0.80** on a held-out split, without touching the eval or the labels.
+A self-contained, **zero-dependency** eval target and the loop that optimizes it.
+An agent improves the sentiment classifier in `project/src/classify.mjs` until it
+reaches **macro-F1 ≥ 0.80** on a held-out split, without editing the eval or the
+labels.
 
 ```
 project/
@@ -28,10 +29,10 @@ node eval/score.mjs data/holdout.jsonl   # baseline: macro_f1 ≈ 0.33
 node --test                              # contract test (passes on the stub)
 ```
 
-Why it's more than a metric loop: the scorer and both datasets are **guarded**
-(`evaluatorGuard: error`), so the agent's only lever is the classifier — it can't
-edit the labels or the scoring to move the number. `baseline: strict` proves the
-eval starts RED, and the metric is scored on a **held-out** split the agent is
-told not to train on. That's the anti-gaming story that makes "optimize until the
-number passes" trustworthy. See the header of
-[`sentiment-f1.loop.yaml`](./sentiment-f1.loop.yaml) for the full walkthrough.
+The guards are what keep the metric honest. The scorer and both datasets are
+**guarded** (`evaluatorGuard: error`), so the classifier is the only lever an
+agent has — editing the labels or the scoring to move the number aborts the run
+as tampering. `baseline: strict` requires the eval to start RED, and the pass
+metric is scored on a **held-out** split the agent is told not to train on. That
+is what keeps "optimize until the number passes" from being gamed. The header of
+[`sentiment-f1.loop.yaml`](./sentiment-f1.loop.yaml) documents the full setup.

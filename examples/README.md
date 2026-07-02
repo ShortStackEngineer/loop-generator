@@ -71,13 +71,13 @@ loopgen batch examples/punch-list.batch.yaml
 
 ## Optimizing an eval to a metric
 
-Two loops that drive an eval project until a **commonly reported metric** clears a
-bar — the `experiment` evaluator's home turf. Both ship a self-contained,
-zero-dependency target you can run, and both turn on the guards that make "optimize
-until the number passes" trustworthy instead of gameable: the scorer and the
-labeled data are guarded (`evaluatorGuard: error`), so the agent's only lever is
-the model/prompt — it can't edit the labels or the scoring, and the metric is read
-on data it's told not to train on.
+Two loops that drive an eval project until a metric clears a bar — the kind of
+task the `experiment` evaluator is built for. Each ships a self-contained target
+you can run on its own, and each turns on the guards that keep "optimize until the
+number passes" from being gamed: the scorer and the labeled data are guarded
+(`evaluatorGuard: error`), so an agent can only move the metric by changing the
+model or the prompt, and the metric is read on data the agent is told not to train
+on.
 
 | Example | Metric | Model under test | Offline |
 | --- | --- | --- | --- |
