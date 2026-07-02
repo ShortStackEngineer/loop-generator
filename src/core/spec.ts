@@ -80,6 +80,19 @@ export const loopSpecSchema = z
         maxIterations: z.number().int().positive().default(5),
         iterationTimeoutMs: z.number().int().positive().optional(),
         /**
+         * Hard cost ceiling for the whole run, in USD. When cumulative
+         * driver-reported cost exceeds this, the loop stops with outcome
+         * `budget-exceeded` instead of starting another iteration. Only
+         * enforceable when the driver reports `usage.costUsd`.
+         */
+        maxCostUsd: z.number().positive().optional(),
+        /**
+         * Hard token ceiling for the whole run, counted as cumulative input +
+         * output tokens. When exceeded, the loop stops with outcome
+         * `budget-exceeded`. Only enforceable when the driver reports token usage.
+         */
+        maxTokens: z.number().int().positive().optional(),
+        /**
          * Run the evaluators once before any agent work. If they already pass,
          * the checks probably don't verify the requirement. Off by default
          * because checks with side effects (db migrate/seed) would run twice.

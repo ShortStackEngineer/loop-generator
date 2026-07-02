@@ -111,6 +111,31 @@ describe("buildFeedback", () => {
     expect(fb.text).toContain("- cov [command]");
     expect(fb.text).toContain("score 0.95");
   });
+
+  it("appends a labeled diff of last iteration's changes when supplied", () => {
+    const fb = buildFeedback([evalResult("tests", false, 1)], { satisfied: false, reason: "r" }, {
+      diff: { files: ["src/a.ts", "src/b.ts"], patch: "diff --git a/src/a.ts b/src/a.ts\n+added line" },
+    });
+    expect(fb.text).toContain("## Changes you made last iteration (2 file(s))");
+    expect(fb.text).toContain("- src/a.ts");
+    expect(fb.text).toContain("- src/b.ts");
+    expect(fb.text).toContain("```diff");
+    expect(fb.text).toContain("+added line");
+  });
+
+  it("shows the changed-file list even when no patch text is available", () => {
+    const fb = buildFeedback([evalResult("tests", false, 1)], { satisfied: false, reason: "r" }, {
+      diff: { files: ["src/a.ts"], patch: null },
+    });
+    expect(fb.text).toContain("## Changes you made last iteration (1 file(s))");
+    expect(fb.text).toContain("- src/a.ts");
+    expect(fb.text).not.toContain("```diff");
+  });
+
+  it("omits the diff section entirely when no diff is supplied", () => {
+    const fb = buildFeedback([evalResult("tests", false, 1)], { satisfied: false, reason: "r" });
+    expect(fb.text).not.toContain("Changes you made last iteration");
+  });
 });
 
 describe("describeCriteria", () => {
