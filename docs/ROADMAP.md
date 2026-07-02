@@ -149,6 +149,36 @@ resolve it one way or the other.
 **Why:** better observability for diagnosing runs, and a clearer path to
 powerful verification without bloating the core.
 
+### 10. Recursive self-improvement loops — *exploring*
+
+Loops whose job is to strengthen other loops, evaluators, and the code they
+grade — then re-run on the same areas so quality compounds. Three shapes already
+ship as examples (`evaluator-optimizer.loop.yaml`, `ralph-loop.loop.yaml`,
+`osmani-harness.batch.yaml`) and library mode already exposes everything a
+dynamic-batch orchestrator needs (`LoopEngine`, `runBatch`, `generateSpec` /
+`specToYaml`, `BatchReport` / `LoopReport` at `src/index.ts`). So this is
+composition + discipline, not a new subsystem.
+
+The governing constraint is **maker ≠ checker**: a loop that edits its own
+success criteria is Goodhart's law with a shell, so no loop may be graded by the
+measure it edits. The existing guards (`baseline: strict`, `specGuard`,
+`evaluatorGuard`, change detection, `maxCostUsd`/`maxTokens`) enforce this once
+the architecture keeps editor and grader apart.
+
+**Do:** (1) ship a meta-orchestrator recipe under `examples/patterns/` — a
+library-mode script that reads a `BatchReport`, dispatches on `LoopReport.outcome`,
+and generates + runs a follow-up batch; (2) land native metric evaluators
+(memory, coverage) — this is the strongest unlock and folds into item 9; (3)
+document a "self-improvement" guard preset for loops whose workspace overlaps the
+repo that owns them, later graduating to a `loopgen lint` advisory.
+
+**Why:** it is the highest-leverage use of the project's own differentiator —
+verifiable, false-positive-defended outcomes are the *enabling condition* for
+safe self-modification, not incidental to it.
+
+Full design: [Proposal — recursive self-improvement
+loops](./proposal-self-improvement-loops.md).
+
 ---
 
 ## Deferred / not planned
