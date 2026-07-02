@@ -1,0 +1,96 @@
+# ── Optimizing an eval to a metric: offline classifier → macro-F1 ────────────
+# The everyday ML-eval loop: you have a labeled dataset and a scoring harness,
+# and you want an agent to improve the model until a reported metric clears a bar
+# — here macro-F1 ≥ 0.80 on a held-out split. This is loopgen's `experiment`
+# evaluator in its native habitat: a command prints a metric as JSON, the loop
+# reads it, and keeps going until the number is good enough AND the code is sound.
+#
+# Everything needed to RUN this ships in ./project (zero dependencies, pure Node):
+#   src/classify.mjs   the model the agent edits (starts as an empty lexicon → RED)
+#   eval/score.mjs     the scorer; prints {"macro_f1": ...} — the CHECKER
+#   data/train.jsonl   the dev split the agent may study to build its lexicon
+#   data/holdout.jsonl the held-out split the PASS metric is computed on
+#   test/contract.test.mjs  a correctness gate (valid label, never throws)
+#
+#   loopgen lint examples/eval-classifier/sentiment-f1.loop.yaml
+#   loopgen run  examples/eval-classifier/sentiment-f1.loop.yaml
+#
+# Why this is a trust story, not just a metric loop. "Optimize until the number
+# passes" invites the classic eval failure: the agent games the checker — edits
+# the labels, hardcodes the held-out answers, or overfits. loopgen's guards make
+# that mechanically impossible here:
+#   • evaluatorGuard: error — the scorer AND both datasets are guarded; touching
+#     any of them ends the run as `evaluator-tampered`. The agent's only lever is
+#     src/classify.mjs.
+#   • held-out split — the metric reads data/holdout.jsonl, which the agent is
+#     told not to train on and is never shown the labels of in feedback (the
+#     experiment evaluator reports only the score). Overfitting the dev set won't
+#     carry.
+#   • baseline: strict — the checker runs ONCE before any work. The stub scores
+#     macro-F1 ≈ 0.33, so the eval is provably measuring the new behavior; a
+#     checker that's already green would fail fast as `baseline-vacuous`.
+#   • the contract `command` gate is paired with the metric so the loop can't
+#     "win" by breaking the module into something that returns junk.
+version: 1
+name: sentiment-macro-f1
+description: Improve a sentiment classifier until macro-F1 clears 0.80 on a held-out split, without touching the eval.
+task:
+  type: experiment
+stack:
+  language: javascript
+  packageManager: npm
+workspace:
+  dir: ./project
+requirements: |
+  Improve the sentiment classifier in src/classify.mjs so that macro-F1 on the
+  held-out set reaches at least 0.80, while the contract test stays green.
+
+  `classify(text)` must return exactly "positive" or "negative" for any input and
+  must never throw. Study data/train.jsonl (the dev split) to build up the
+  POSITIVE/NEGATIVE lexicons and to handle negation like "not good" or "would not
+  recommend". Measure your progress on the dev split with `npm run eval:dev`.
+
+  Do NOT edit anything under eval/ or data/, and do not train on
+  data/holdout.jsonl — those are the graded checker and the held-out labels. The
+  run guards them; changing them fails as `evaluator-tampered`.
+driver:
+  # Swap to grok (`uses: grok`, `options: { alwaysApprove: true, maxTurns: 30 }`)
+  # or opencode for a keyless local run; see the other examples.
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 30
+evaluators:
+  # Correctness gate — the module must stay well-formed (built-in Node runner,
+  # no deps). Guarding the test dir stops the agent from weakening the contract.
+  - uses: command
+    as: contract
+    options:
+      command: node --test
+    guard: [test]
+  # The metric — read macro-F1 off the scorer's JSON output on the HELD-OUT split.
+  # Guarding eval/ and data/ makes the checker and the labels tamper-evident.
+  - uses: experiment
+    as: f1
+    options:
+      command: node eval/score.mjs data/holdout.jsonl
+      metric: macro_f1
+      direction: increase
+      minValue: 0.8
+    guard: [eval, data]
+success:
+  # Green only when the code is sound AND the reported metric clears the bar.
+  type: all
+  of:
+    - type: pass
+      evaluators: [contract]
+    - type: score
+      evaluator: f1
+      gte: 0.8
+limits:
+  maxIterations: 8
+  # The checker must be measuring the NEW behavior: fail fast if it's already green.
+  baseline: strict
+  # Tamper-evident success criteria: edits to the scorer or datasets end the run.
+  evaluatorGuard: error
+  specGuard: error

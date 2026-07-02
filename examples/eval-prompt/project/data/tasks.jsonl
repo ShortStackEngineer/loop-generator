@@ -1,0 +1,21 @@
+{"input": "I want my money back for the jacket I returned last week.", "gold": "refund"}
+{"input": "How do I reset my password? I'm locked out.", "gold": "password_reset"}
+{"input": "Where is my package? It was supposed to arrive yesterday.", "gold": "track_order"}
+{"input": "Please refund my order, the item was defective.", "gold": "refund"}
+{"input": "I forgot my password and can't sign in.", "gold": "password_reset"}
+{"input": "Can you tell me the status of order 48210?", "gold": "track_order"}
+{"input": "I was charged twice and would like a refund.", "gold": "refund"}
+{"input": "The reset link you sent me expired, I still can't log in.", "gold": "password_reset"}
+{"input": "My shipment hasn't moved in three days, what's going on?", "gold": "track_order"}
+{"input": "I'd like to return this and get my money back.", "gold": "refund"}
+{"input": "How can I change my password to something new?", "gold": "password_reset"}
+{"input": "When will my delivery get here?", "gold": "track_order"}
+{"input": "This product broke immediately, I want a full refund.", "gold": "refund"}
+{"input": "I never received the password reset email.", "gold": "password_reset"}
+{"input": "Give me a tracking number for my recent purchase.", "gold": "track_order"}
+{"input": "Cancel my order and refund the payment please.", "gold": "refund"}
+{"input": "Account is locked after too many login attempts, help me reset.", "gold": "password_reset"}
+{"input": "Has my order shipped yet? I ordered on Monday.", "gold": "track_order"}
+{"input": "I'm not happy with this, I expect my money returned.", "gold": "refund"}
+{"input": "Can't get into my account, need to set a new password.", "gold": "password_reset"}
+{"input": "Show me where my parcel currently is.", "gold": "track_order"}
