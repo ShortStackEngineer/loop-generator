@@ -1,0 +1,77 @@
+# ── Optimizing an eval to a metric: prompt engineering → exact-match accuracy ─
+# The modern "eval" most AI engineers mean: a labeled task set, an LLM under test,
+# and a score you push up by improving the PROMPT (promptfoo / braintrust / OpenAI
+# evals territory). Here the agent optimizes prompt.txt until exact-match accuracy
+# on an intent-classification set clears 0.90.
+#
+# Unlike the sibling classifier example, this one needs a LIVE model — the checker
+# calls an OpenAI-compatible endpoint. It defaults to LM Studio on localhost, so it
+# runs keyless against a locally-served model; point it anywhere with env:
+#   OPENAI_BASE_URL=http://localhost:1234/v1   (default)
+#   OPENAI_API_KEY=not-needed                  (default; local servers ignore it)
+#   EVAL_MODEL=google/gemma-4-26b-a4b-qat      (the loaded model id — set this)
+#
+#   EVAL_MODEL=<your-model> loopgen lint examples/eval-prompt/exact-match.loop.yaml
+#   EVAL_MODEL=<your-model> loopgen run  examples/eval-prompt/exact-match.loop.yaml
+#
+# The optimization is real prompt engineering: the stub prompt is vague and the
+# model free-forms, so exact-match starts low. To move the number the agent has to
+# enumerate the exact label set and pin the output format — the two changes that
+# reliably lift a classification eval.
+#
+# The eval-gaming defense is the same as the classifier example: prompt.txt is the
+# only file the agent may edit; eval/ and data/ (the scorer, the closed label set,
+# and the gold answers) are guarded, so `evaluatorGuard: error` turns any edit into
+# an `evaluator-tampered` stop. The metric is computed over held-back gold labels
+# the agent is never shown.
+version: 1
+name: prompt-exact-match
+description: Optimize prompt.txt until an intent classifier reaches 0.90 exact-match accuracy, without touching the eval.
+task:
+  type: experiment
+stack:
+  language: javascript
+  packageManager: npm
+workspace:
+  dir: ./project
+requirements: |
+  Improve the prompt in prompt.txt so the model classifies each support message
+  into exactly one of: refund, password_reset, track_order — and nothing else.
+
+  The eval scores exact-match against gold labels, so the model's reply must be
+  precisely the label (lowercase, underscores, no punctuation or extra words).
+  The winning moves are to (1) list the allowed labels explicitly and (2) demand
+  the output be only the label. You may add a few worked examples.
+
+  You may ONLY edit prompt.txt. Do not touch eval/ or data/ — those hold the
+  scorer, the label space, and the gold answers, and the run guards them.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-opus-4-8
+    maxTurns: 20
+evaluators:
+  # One pass over the task set against the live model; reads exact-match accuracy.
+  # `valid_label_rate` is also emitted (fraction of replies that are a legal label)
+  # — a useful format-conformance signal to add as a second criterion if you like.
+  - uses: experiment
+    as: accuracy
+    options:
+      command: node eval/run.mjs
+      metric: accuracy
+      direction: increase
+      minValue: 0.9
+      timeoutMs: 600000
+    guard: [eval, data]
+success:
+  type: score
+  evaluator: accuracy
+  gte: 0.9
+limits:
+  maxIterations: 6
+  # A vague prompt should score poorly up front; if the checker is already green,
+  # it isn't measuring the improvement. `true` warns (LLM scores wobble slightly);
+  # switch to "strict" to make a green baseline a hard failure.
+  baseline: true
+  evaluatorGuard: error
+  specGuard: error

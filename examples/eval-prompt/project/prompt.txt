@@ -1,0 +1,1 @@
+You are a helpful customer support assistant. Read the customer's message and figure out what they need.
