@@ -12,7 +12,7 @@ import { mergePreflight } from "./preflight";
 import type { PreflightResult } from "./preflight";
 import { createLogger, type Logger } from "./logger";
 import { resolveWorkspaceDir, type LoopSpec } from "./spec";
-import { isGitRepo, changeDetectionAvailable, snapshotTree, diffTrees, DEFAULT_IGNORE_GLOBS } from "./workspace";
+import { isGitRepo, changeDetectionAvailable, snapshotTree, diffTrees, diffPatch, DEFAULT_IGNORE_GLOBS } from "./workspace";
 import { resolveGuardedFiles } from "./evaluator-guard";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
@@ -54,7 +54,8 @@ export type LoopOutcome =
   | "error"
   | "baseline-vacuous"
   | "spec-tampered"
-  | "evaluator-tampered";
+  | "evaluator-tampered"
+  | "budget-exceeded";
 
 export interface LoopReport {
   spec: string;
@@ -113,6 +114,24 @@ function hashFileSafe(file: string): string | null {
 function firstLine(text: string | undefined): string {
   if (!text) return "(no detail)";
   return text.split("\n").map((l) => l.trim()).find(Boolean) ?? "(no detail)";
+}
+
+/**
+ * If cumulative usage has exceeded a configured budget, return a human-readable
+ * reason; otherwise null. Cost is checked first, then combined input+output
+ * tokens. A missing usage field counts as 0, so an un-instrumented driver
+ * (mock, tests) simply never trips a budget.
+ */
+function budgetExceeded(usage: AgentUsage, limits: LoopSpec["limits"]): string | null {
+  const cost = usage.costUsd ?? 0;
+  if (typeof limits.maxCostUsd === "number" && cost > limits.maxCostUsd) {
+    return `cost budget exceeded: $${cost.toFixed(4)} spent > $${limits.maxCostUsd.toFixed(4)} limit (limits.maxCostUsd)`;
+  }
+  const tokens = (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0);
+  if (typeof limits.maxTokens === "number" && tokens > limits.maxTokens) {
+    return `token budget exceeded: ${tokens} tokens used (input + output) > ${limits.maxTokens} limit (limits.maxTokens)`;
+  }
+  return null;
 }
 
 /**
@@ -295,6 +314,15 @@ export class LoopEngine {
     ];
 
     const runWarnings: string[] = [];
+    // Off-git trust hole: without git change detection we can't independently
+    // verify what the agent did — we trust its self-reported `changedFiles`.
+    // Make that a persistent, report-level caveat (not just a debug log) so a
+    // green run in fallback mode never *looks* as trustworthy as a git-backed one.
+    if (!gitEnabled) {
+      runWarnings.push(
+        "git change detection is unavailable (workspace is not a git repo, or is git-ignored); this run trusts the driver's self-reported file changes, which cannot be independently verified",
+      );
+    }
     let specTampered = false;
     // Re-hash the watched spec and flag tampering. Called on every terminal path
     // that could have seen agent activity (per-iteration success, max-iterations,
@@ -439,15 +467,29 @@ export class LoopEngine {
         log: iterLog.child("eval"),
       });
 
-      // 3) Check criteria and build feedback for the next turn.
+      // 3) Check criteria and build feedback for the next turn. When git change
+      //    detection is on and this iteration actually changed something, hand
+      //    the agent a bounded diff of what it just did — this feedback becomes
+      //    the next iteration's prompt, so it stops re-deriving known state.
       const verdict = evaluateCriteria(spec.success, evaluations);
-      feedback = buildFeedback(evaluations, verdict);
+      feedback = buildFeedback(evaluations, verdict, {
+        diff:
+          gitEnabled && diff.changed
+            ? { files: diff.files, patch: diffPatch(workdir, treeBefore, treeAfter, ignoreGlobs) }
+            : undefined,
+      });
 
       // 4) Honest caveats about this iteration.
       const iterWarnings: string[] = [];
       if (verdict.satisfied && gitEnabled && !changed) {
         iterWarnings.push(
           "criteria satisfied but the agent changed no files — this run may not have done any work (checks may be vacuous)",
+        );
+      } else if (verdict.satisfied && !gitEnabled && !changed) {
+        // Weaker fallback for the vacuous-success signal when git is unavailable:
+        // lean on the driver's self-report (untrusted, hence the softer wording).
+        iterWarnings.push(
+          "criteria satisfied but the driver reported no file changes — this run may not have done any work (checks may be vacuous; change detection is unverified without git)",
         );
       }
       if (verdict.satisfied && (agent.stopReason === "max_turns" || agent.stopReason === "error" || !agent.ok)) {
@@ -501,6 +543,31 @@ export class LoopEngine {
           changedFiles: gitEnabled ? overall.files : undefined,
           diffStat: gitEnabled ? overall.stat : undefined,
           warnings,
+          durationMs: Date.now() - start,
+        };
+      }
+
+      // Budget ceiling: the iteration didn't converge — if cumulative usage has
+      // blown the configured cost/token budget, stop now rather than fund
+      // another turn. A satisfied iteration above already returned success, so
+      // getting the result is never penalized; only further spend is capped.
+      const overBudget = budgetExceeded(totalUsage, spec.limits);
+      if (overBudget) {
+        checkSpecTamper();
+        checkEvaluatorTamper();
+        iterLog.warn(overBudget);
+        const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
+        return {
+          ...base,
+          outcome: "budget-exceeded",
+          success: false,
+          reason: overBudget,
+          iterations,
+          totalUsage,
+          baseline,
+          changedFiles: gitEnabled ? overall.files : undefined,
+          diffStat: gitEnabled ? overall.stat : undefined,
+          warnings: runWarnings,
           durationMs: Date.now() - start,
         };
       }

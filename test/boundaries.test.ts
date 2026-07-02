@@ -8,7 +8,7 @@ import { evaluateCriteria, type SuccessCriteria } from "../src/core/criteria";
 import { buildFeedback } from "../src/core/feedback";
 import { commandEvaluator } from "../src/evaluators/command";
 import { experimentEvaluator } from "../src/evaluators/experiment";
-import { snapshotTree, diffTrees } from "../src/core/workspace";
+import { snapshotTree, diffTrees, diffPatch } from "../src/core/workspace";
 import { parseSpec } from "../src/core/spec";
 import { generateSpec, specToYaml } from "../src/generate";
 import { LoopEngine } from "../src/core/engine";
@@ -157,6 +157,31 @@ describe("workspace snapshot stability", () => {
     expect(diffTrees(workdir, s1, s2, ["skip.me"]).changed).toBe(false);
     expect(diffTrees(workdir, s1, s2, []).changed).toBe(true);
     expect(diffTrees(workdir, s1, s1, []).changed).toBe(false);
+  });
+
+  it("diffPatch returns a bounded, ignore-respecting unified diff or null", () => {
+    const git = (args: string[]) => spawnSync("git", args, { cwd: workdir });
+    git(["init"]);
+    writeFileSync(path.join(workdir, "a.txt"), "one\n");
+    const s1 = snapshotTree(workdir)!;
+
+    // No change → null; identical snapshots → null.
+    expect(diffPatch(workdir, s1, s1)).toBeNull();
+    expect(diffPatch(workdir, null, s1)).toBeNull();
+
+    writeFileSync(path.join(workdir, "a.txt"), "two\n");
+    writeFileSync(path.join(workdir, "noise.log"), "junk\n");
+    const s2 = snapshotTree(workdir)!;
+
+    const patch = diffPatch(workdir, s1, s2, ["*.log"]);
+    expect(patch).toContain("a.txt");
+    expect(patch).toContain("+two");
+    expect(patch).not.toContain("noise.log"); // ignore glob respected
+
+    // Over-cap patch is truncated to its head with a marker, not dropped.
+    const capped = diffPatch(workdir, s1, s2, ["*.log"], 20);
+    expect(capped).toContain("patch truncated");
+    expect(capped!.startsWith(patch!.slice(0, 20))).toBe(true); // bounded head preserved
   });
 });
 
