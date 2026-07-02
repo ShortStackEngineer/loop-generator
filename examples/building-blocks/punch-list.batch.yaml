@@ -1,5 +1,5 @@
 # Offline batch demo — a "punch list" run with the scripted `mock` driver.
-# Try it:  loopgen batch examples/punch-list.batch.yaml
+# Try it:  npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml
 #
 # Shows: bounded concurrency, distinct workspaces running in parallel, and a
 # `needs` dependency. Items usually point at .loop.yaml files via `spec:` and a

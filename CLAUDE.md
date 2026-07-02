@@ -13,7 +13,7 @@ budget runs out. The CLI is `loopgen`; the package also ships as a library.
 ## Commands
 
 ```bash
-npm run dev -- <args>          # run the CLI from source (tsx), e.g. `npm run dev -- run examples/mock-demo.loop.yaml`
+npm run dev -- <args>          # run the CLI from source (tsx), e.g. `npm run dev -- run examples/building-blocks/mock-demo.loop.yaml`
 npm run loopgen -- <args>      # alias for the same thing
 npm run typecheck              # tsc --noEmit (strict)
 npm test                       # vitest run (whole suite)
@@ -32,7 +32,7 @@ npm run test:watch                            # watch mode
 
 `loopgen` subcommands: `generate` (scaffold a spec, `-i` for interactive),
 `run`, `batch`, `lint`, `list`, `verify-driver`. The offline smoke path that
-needs no API key is `npm run dev -- run examples/mock-demo.loop.yaml` (scripted
+needs no API key is `npm run dev -- run examples/building-blocks/mock-demo.loop.yaml` (scripted
 `mock` driver).
 
 ## Architecture

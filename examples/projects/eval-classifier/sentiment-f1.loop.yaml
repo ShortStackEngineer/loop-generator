@@ -12,8 +12,8 @@
 #   data/holdout.jsonl the held-out split the PASS metric is computed on
 #   test/contract.test.mjs  a correctness gate (valid label, never throws)
 #
-#   loopgen lint examples/eval-classifier/sentiment-f1.loop.yaml
-#   loopgen run  examples/eval-classifier/sentiment-f1.loop.yaml
+#   npm run loopgen -- lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
+#   npm run loopgen -- run  examples/projects/eval-classifier/sentiment-f1.loop.yaml
 #
 # Why this is a trust story, not just a metric loop. "Optimize until the number
 # passes" invites the classic eval failure: the agent games the checker — edits

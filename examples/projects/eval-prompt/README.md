@@ -21,12 +21,11 @@ export OPENAI_BASE_URL=http://localhost:1234/v1   # default (LM Studio)
 export OPENAI_API_KEY=not-needed                  # default; local servers ignore it
 export EVAL_MODEL=google/gemma-4-26b-a4b-qat      # the loaded model id — set this
 
-# Run the eval directly, without an agent:
-cd examples/eval-prompt/project
-node eval/run.mjs        # stub prompt: accuracy ≈ 0 (the model free-forms)
+# Score the stub prompt directly, no agent (accuracy ≈ 0 — the model free-forms):
+(cd examples/projects/eval-prompt/project && node eval/run.mjs)
 
-# Or run the full loop (also needs an agent driver to optimize the prompt):
-loopgen run examples/eval-prompt/exact-match.loop.yaml
+# Or run the full optimization loop from the repo root (also needs an agent driver):
+npm run loopgen -- run examples/projects/eval-prompt/exact-match.loop.yaml
 ```
 
 Accuracy improves through ordinary prompt engineering: enumerate the exact

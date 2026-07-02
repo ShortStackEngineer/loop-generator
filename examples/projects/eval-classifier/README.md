@@ -17,14 +17,14 @@ project/
 Run it (needs an agent driver — Claude Agent SDK with `ANTHROPIC_API_KEY`, or grok):
 
 ```bash
-loopgen lint examples/eval-classifier/sentiment-f1.loop.yaml
-loopgen run  examples/eval-classifier/sentiment-f1.loop.yaml
+npm run loopgen -- lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
+npm run loopgen -- run  examples/projects/eval-classifier/sentiment-f1.loop.yaml
 ```
 
 Poke at the target directly, no agent needed:
 
 ```bash
-cd examples/eval-classifier/project
+cd examples/projects/eval-classifier/project
 node eval/score.mjs data/holdout.jsonl   # baseline: macro_f1 ≈ 0.33
 node --test                              # contract test (passes on the stub)
 ```
