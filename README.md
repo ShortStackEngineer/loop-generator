@@ -23,7 +23,7 @@ last turn, so the next prompt reminds it of its own work.
 
 | Piece | What it is | Built-ins |
 |-------|-----------|-----------|
-| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `github-copilot`, `opencode`, `mock` |
+| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `github-copilot`, `opencode`, `cursor`, `mock` |
 | **Evaluator** | A "feedback tool" that measures the workspace and returns pass/fail + actionable feedback | `command`, `experiment` |
 | **Task type** | Category knowledge: how to frame/instruct the agent and which evaluators to scaffold | `function`, `api`, `webapp`, `experiment`, `generic` |
 | **Success criteria** | Declarative rule over evaluator results | `all-pass`, `pass`, `score`, `all`/`any`/`not` |
@@ -93,13 +93,16 @@ sideways.
 
 ```bash
 npm install
-# The Claude Agent SDK, Grok Build CLI, GitHub Copilot CLI, and opencode are optional backends.
+
+# The Claude Agent SDK, Grok Build CLI, GitHub Copilot CLI, opencode, and Cursor CLI are optional backends.
 # For real agent runs, set credentials for the driver you use:
 export ANTHROPIC_API_KEY=...   # for claude-agent-sdk (or Claude login / Bedrock / Vertex)
 export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive login)
 # github-copilot: install the `copilot` CLI and run it once to authenticate
 #                 (or set GH_TOKEN / GITHUB_TOKEN for an unattended run)
 # opencode: install the `opencode` CLI; runs against local models (e.g. LM Studio), no key needed
+# cursor: install the `cursor` CLI and run `cursor agent login` once
+#         (or set CURSOR_API_KEY for an unattended run)
 ```
 
 ## Quick start

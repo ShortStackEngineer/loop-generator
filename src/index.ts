@@ -59,6 +59,7 @@ export { claudeAgentSdkDriver } from "./drivers/claude-agent-sdk";
 export { grokDriver } from "./drivers/grok";
 export { githubCopilotDriver } from "./drivers/github-copilot";
 export { opencodeDriver } from "./drivers/opencode";
+export { cursorDriver } from "./drivers/cursor";
 export { commandEvaluator } from "./evaluators/command";
 export { experimentEvaluator } from "./evaluators/experiment";
 export {
