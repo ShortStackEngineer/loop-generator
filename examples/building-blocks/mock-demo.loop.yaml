@@ -1,5 +1,5 @@
 # Offline demo — runs with no API key using the scripted `mock` driver.
-# Try it:  loopgen run examples/mock-demo.loop.yaml
+# Try it:  loopgen run examples/building-blocks/mock-demo.loop.yaml
 #
 # The mock driver writes "wrong" on the first iteration (check fails), then "42"
 # on the second (check passes) — demonstrating the fail → feedback → fix loop.

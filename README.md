@@ -21,7 +21,7 @@ the success criteria, fold the results into feedback, and repeat.
 
 | Piece | What it is | Built-ins |
 |-------|-----------|-----------|
-| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `github-copilot`, `mock` |
+| **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `github-copilot`, `opencode`, `mock` |
 | **Evaluator** | A "feedback tool" that measures the workspace and returns pass/fail + actionable feedback | `command`, `experiment` |
 | **Task type** | Category knowledge: how to frame/instruct the agent and which evaluators to scaffold | `function`, `api`, `webapp`, `experiment`, `generic` |
 | **Success criteria** | Declarative rule over evaluator results | `all-pass`, `pass`, `score`, `all`/`any`/`not` |
@@ -36,12 +36,13 @@ performance work.
 
 ```bash
 npm install
-# The Claude Agent SDK, Grok Build CLI, and GitHub Copilot CLI are optional backends.
+# The Claude Agent SDK, Grok Build CLI, GitHub Copilot CLI, and opencode are optional backends.
 # For real agent runs, set credentials for the driver you use:
 export ANTHROPIC_API_KEY=...   # for claude-agent-sdk (or Claude login / Bedrock / Vertex)
 export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive login)
 # github-copilot: install the `copilot` CLI and run it once to authenticate
 #                 (or set GH_TOKEN / GITHUB_TOKEN for an unattended run)
+# opencode: install the `opencode` CLI; runs against local models (e.g. LM Studio), no key needed
 ```
 
 ## Quick start
@@ -49,7 +50,7 @@ export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive 
 Run the offline demo (no API key needed; it uses the scripted `mock` driver):
 
 ```bash
-npm run loopgen -- run examples/mock-demo.loop.yaml
+npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 ```
 
 Generate a new loop and run it:
@@ -105,13 +106,25 @@ evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
 
-See [`examples/`](./examples) for the building-block specs (function with the
-Claude SDK, API with grok, experiment/A-B, and offline with mock) and for common
-agent loops built declaratively: the
-[Ralph Wiggum loop](./examples/ralph-loop.loop.yaml),
-Anthropic's [evaluator-optimizer](./examples/evaluator-optimizer.loop.yaml), and
-Osmani's [loop-engineering harness](./examples/osmani-harness.batch.yaml). The
-[examples index](./examples/README.md) maps each pattern to a runnable spec.
+## Examples
+
+The [`examples/`](./examples) directory is a guided tour, ordered from the
+simplest offline loop up to full loop patterns. The
+[examples index](./examples/README.md) is the full map; the short version:
+
+- **[Building blocks](./examples/building-blocks)** — start with the offline
+  `mock-demo` (no API key), then one spec per mechanism: each driver, the
+  `function` / `api` / `experiment` task types, and a batch run.
+- **[Loop patterns](./examples/patterns)** — established patterns written as
+  specs with the trust guards on: the Ralph Wiggum loop, the evaluator-optimizer,
+  and Osmani's discover → implement → verify harness.
+- **[Self-contained projects](./examples/projects)** — examples that run
+  end-to-end without pointing at your own repo.
+
+```bash
+# offline, no API key:
+npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
+```
 
 ## Lint before you run (`lint`)
 
@@ -184,7 +197,7 @@ items:
 
 ```bash
 loopgen batch punch-list.batch.yaml --report batch-report.json
-# offline demo:  loopgen batch examples/punch-list.batch.yaml
+# offline demo:  loopgen batch examples/building-blocks/punch-list.batch.yaml
 ```
 
 The scheduler honors `needs` ordering and the `concurrency` cap, and it
