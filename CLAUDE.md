@@ -54,7 +54,9 @@ LoopSpec (.loop.yaml) → parseSpec → LoopEngine.run() → loop until success/
   `buildFeedback`) → terminal report. Read this first; `LoopReport.outcome` is
   the canonical list of how a run can end (`success | max-iterations |
   preflight-failed | aborted | error | baseline-vacuous | spec-tampered |
-  evaluator-tampered`).
+  evaluator-tampered | budget-exceeded`). Each iteration's `buildFeedback` also
+  carries a bounded, ignore-respecting diff of what the agent changed last turn
+  (git-enabled runs only) so the next prompt reminds the agent of its own work.
 - **`src/core/registry.ts` + `src/registry.ts`** — `Registry<T>` is a typed
   name→plug-in map. `createDefaultRegistries()` wires the built-ins; the engine
   takes the three registries as a constructor arg, so adding a plug-in is
@@ -88,7 +90,9 @@ engine, preserve them:
   throwaway git index (`snapshotTree`/`diffTrees`). A green run that changed no
   files is flagged. Build/runtime artifacts are excluded (`DEFAULT_IGNORE_GLOBS`
   + `workspace.ignore`). Falls back to driver-reported `changedFiles` when the
-  workspace isn't a git repo.
+  workspace isn't a git repo — and when it does, the run carries a persistent
+  `report.warnings` caveat (the change list is unverified) and the vacuous-success
+  flag still fires off the driver's self-report (weaker, honestly labeled).
 - **Baseline eval** (`limits.baseline: true|"strict"`): runs checks before any
   agent work; if already green, the checks probably don't test the requirement.
   `"strict"` makes that a hard `baseline-vacuous` failure.
@@ -106,6 +110,16 @@ engine, preserve them:
   excluded from the work diff, and `error` mode turns a mid-run edit of them into
   an `evaluator-tampered` failure (`warn` just surfaces it; spec-tamper takes
   precedence when both fire).
+
+### Cost/token budget ceiling
+
+`limits.maxCostUsd` / `limits.maxTokens` (both optional) cap a run's cumulative
+driver-reported usage. The engine sums `AgentRunResult.usage` across iterations
+and, when a non-converging iteration pushes the total past a limit, stops with
+outcome `budget-exceeded` rather than funding another turn. A satisfied
+iteration always reports `success` first (getting the result is never penalized;
+only further spend is capped), and an un-instrumented driver that reports no
+usage can never trip a budget. `maxTokens` counts input + output combined.
 
 ### Layer 0: lint (`src/lint/`)
 

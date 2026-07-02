@@ -12,14 +12,27 @@ function truncate(text: string, max: number): string {
 }
 
 /**
+ * What the agent changed last iteration, surfaced back to it so it stops
+ * re-deriving state it already touched. `patch` is an optional, already-bounded
+ * unified diff (see `diffPatch` in workspace.ts); `files` is the changed-file
+ * list. Only supplied when git change detection is available.
+ */
+export interface FeedbackDiff {
+  files: string[];
+  patch?: string | null;
+}
+
+/**
  * Render evaluator results into a single agent-facing feedback block. Failing
  * checks are listed first (and in full) since that's what the agent must fix;
- * passing checks are summarized so the agent knows not to regress them.
+ * passing checks are summarized so the agent knows not to regress them. When a
+ * diff of last iteration's changes is supplied it's appended, clearly labeled,
+ * so the agent has concrete context on what it already did.
  */
 export function buildFeedback(
   results: EvaluationResult[],
   verdict: CriteriaVerdict,
-  opts: { maxCharsPerCheck?: number } = {},
+  opts: { maxCharsPerCheck?: number; diff?: FeedbackDiff } = {},
 ): FeedbackSummary {
   const maxPer = opts.maxCharsPerCheck ?? DEFAULT_MAX_FEEDBACK_CHARS;
   const failing = results.filter((r) => !r.passed);
@@ -27,6 +40,19 @@ export function buildFeedback(
 
   const lines: string[] = [];
   lines.push(`Overall: ${verdict.satisfied ? "PASS" : "NOT YET"} — ${verdict.reason}`);
+
+  if (opts.diff && opts.diff.files.length) {
+    lines.push("");
+    lines.push(`## Changes you made last iteration (${opts.diff.files.length} file(s))`);
+    for (const f of opts.diff.files) lines.push(`- ${f}`);
+    if (opts.diff.patch) {
+      lines.push("");
+      lines.push("Diff of your last changes (truncated if large):");
+      lines.push("```diff");
+      lines.push(opts.diff.patch);
+      lines.push("```");
+    }
+  }
 
   if (failing.length) {
     lines.push("");

@@ -7,5 +7,9 @@ that ties them together. Unlike the specs in
 which you point at your own repo via `workspace.dir` — these run as-is, with no
 external target.
 
-No projects live here yet; this is the designated home for them. Each will ship
-with its own README explaining how to run it.
+| Project | What it optimizes | Offline |
+| --- | --- | --- |
+| [`eval-classifier/`](./eval-classifier) | a sentiment classifier to **macro-F1 ≥ 0.80** | ✅ zero-dep, no model needed |
+| [`eval-prompt/`](./eval-prompt) | a prompt to **exact-match ≥ 0.90** against a live model | ❌ needs an OpenAI-compatible endpoint |
+
+See each project's README for how to run it.

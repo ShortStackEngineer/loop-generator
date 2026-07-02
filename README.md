@@ -15,7 +15,9 @@ LoopSpec (.loop.yaml) ──► LoopEngine ──► loop until success / maxIte
 ```
 
 Each iteration follows the same path: drive the agent, run the evaluators, check
-the success criteria, fold the results into feedback, and repeat.
+the success criteria, fold the results into feedback, and repeat. On git-backed
+workspaces the feedback also includes a bounded diff of what the agent changed
+last turn, so the next prompt reminds it of its own work.
 
 ## Concepts
 
@@ -31,6 +33,61 @@ and benchmarks: anything with a CLI and an exit code. The `experiment`
 evaluator reads a numeric metric (from a command's JSON output or a file) and
 compares it against thresholds or baselines, which suits A/B tests and
 performance work.
+
+## When to use it (and when not)
+
+A loop is only as good as the checks you hand it. loop-generator shines where
+success is mechanically checkable and misleads where it isn't, so it's worth
+knowing which side of that line a task falls on before you spend agent budget.
+
+**Works best when**
+
+- The task is well-scoped and the repo already has (or you can add) real
+  test/metric infrastructure.
+- There's a specific suite to make green while keeping the rest green — e.g. a
+  failing test that encodes the new behavior and turns green only when it's done.
+- The target is a measurable number: keep p95 under X ms, coverage ≥ 90%, bundle
+  under Y KB. (The `experiment` evaluator is built for this.)
+- You're remediating against a concrete check across many call sites — add
+  retries/logging/validation, fix a lint rule repo-wide, drag a flaky suite to
+  green.
+
+**Poor fit**
+
+Tasks where the framework mostly ends up telling you the checks were the wrong
+contract:
+
+- "Improve the architecture," "make the UI delightful," "clean this up" — no
+  exit-zero definition of done.
+- Subjective or judgment-heavy work (API ergonomics, copy, visual polish): a
+  passing check doesn't mean the outcome is good.
+- Large, novel refactors with emergent design — the loop can't hold the whole
+  design in mind across iterations, and the checks rarely capture "is this the
+  right structure."
+
+**What it can't solve**
+
+These are fundamental to the agentic-loop approach, not gaps we plan to close.
+The trust guards ([Trustworthy results](#trustworthy-results)) make them
+*visible*; they don't eliminate them:
+
+- **Mis-specified or insufficient checks.** The checks are the contract — bad
+  checks, bad contract. A green run only ever means "the checks passed."
+- **Agents that game metrics or ship minimal patches.** An agent can satisfy a
+  surface check without doing the real work: hard-code the expected value, weaken
+  an assertion, ship the narrowest patch that passes.
+- **Context degradation over many iterations.** The agent re-derives state and
+  drifts as the loop grows; feeding the last diff back into the next prompt
+  mitigates this — it doesn't cure it.
+- **The underlying unreliability of LLM agents on large, novel work.** More
+  iterations don't turn an unreliable agent into a reliable one on a task it
+  can't hold in its head.
+
+If you can't write a check that's RED before the work and turns GREEN only when
+the requirement is met, the task isn't ready for a loop. See
+[Authoring a loop you can trust](./docs/authoring-loops.md) for how to prove that
+up front, and [Debugging a run](./docs/debugging-loops.md) for when one goes
+sideways.
 
 ## Install
 
@@ -57,8 +114,14 @@ Generate a new loop and run it:
 
 ```bash
 npm run loopgen -- generate -i                 # interactive
+npm run loopgen -- generate -i --verify        # …and prove it's lint-clean + starts RED before you run
 npm run loopgen -- run my-loop.loop.yaml
 ```
+
+`--verify` encodes the authoring contract: after writing the spec it lints it and
+runs the checks once with no agent turns, confirming they start **RED** (a green
+check before any work probably doesn't test the requirement). Exit codes match
+`lint`: `2` on lint errors, `1` on a vacuous/GREEN check set, else `0`.
 
 List what's registered, or verify a driver:
 
@@ -102,6 +165,8 @@ limits:
   baseline: false        # false | true | strict — run checks before the agent; "strict" fails a vacuous (already-green) check set
   specGuard: warn        # off | warn | error — what to do if the agent edits this spec file mid-run
   evaluatorGuard: warn   # off | warn | error — what to do if the agent edits the test files a check runs
+  maxCostUsd: 5.0        # optional — stop with outcome "budget-exceeded" once cumulative driver-reported cost passes this
+  maxTokens: 2000000     # optional — same, on cumulative input+output tokens (only enforced when the driver reports usage)
 evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
 ```
@@ -154,7 +219,9 @@ requirement and the agent actually did something. The runner has layered
 false-positive guards:
 
 - **Change detection (git)** — flags a green run that changed no files (build and
-  runtime artifacts excluded; falls back to driver-reported files off-git).
+  runtime artifacts excluded). Off-git (no repo, or a git-ignored workspace) it
+  falls back to driver-reported files and the run always carries a `report.warnings`
+  caveat that those changes can't be independently verified.
 - **Baseline evaluation** (`limits.baseline`) — catches checks that already pass
   before any agent work; `"strict"` makes it a hard `baseline-vacuous` failure.
 - **Sequential evaluators** (`evaluation.concurrency`, default 1) — checks that
@@ -169,6 +236,23 @@ false-positive guards:
 All caveats are collected in `report.warnings` and printed under `⚠ warnings:`.
 
 → **In depth: [how each guard works](./docs/lint-and-trust.md#trustworthy-results).**
+
+## Workflows: authoring and debugging
+
+Two step-by-step guides cover the disciplines that make loops pay off — the
+judgment a flag can't encode:
+
+- **[Authoring a loop you can trust](./docs/authoring-loops.md)** — interview the
+  goal into something checkable, inspect the repo for the *real* test/build
+  commands, then prove the spec is lint-clean and its checks start RED **before**
+  spending any agent budget.
+- **[Debugging a run](./docs/debugging-loops.md)** — diagnose a run by its
+  `outcome` (a failed, stalled, errored, or suspiciously-green result),
+  reproduce the failing check cheaply (lint + run it by hand, zero agent turns),
+  and map the root cause to a concrete fix.
+
+If you use Claude Code, the in-repo `author-loop` and `debug-loop` skills run
+these workflows for you.
 
 ## Running a punch list (`batch`)
 

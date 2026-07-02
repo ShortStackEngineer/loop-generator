@@ -79,5 +79,18 @@ loopgen lint examples/patterns/osmani-harness.batch.yaml
 
 Unlike the specs above, the examples in [`projects/`](./projects) run end-to-end
 with no external repo: each is a directory with a runnable `project/`, the checks
-that score it, and its own README. See that folder for the current set and how to
-run each one.
+that score it, and its own README. Both optimize an eval until a metric clears a
+bar, with the guards that keep "optimize until the number passes" from being
+gamed — the scorer and labeled data are guarded (`evaluatorGuard: error`), so an
+agent can only move the metric by changing the model or the prompt, and the score
+is read on held-out data.
+
+| Example | Metric | Model under test | Offline |
+| --- | --- | --- | --- |
+| [`projects/eval-classifier/`](./projects/eval-classifier) | **macro-F1** ≥ 0.80 | a rule-based classifier the agent edits | ✅ zero-dep, runs with no model |
+| [`projects/eval-prompt/`](./projects/eval-prompt) | **exact-match accuracy** ≥ 0.90 | a live LLM; the agent optimizes the prompt | ❌ needs an OpenAI-compatible endpoint (LM Studio by default) |
+
+```bash
+loopgen lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
+loopgen run  examples/projects/eval-classifier/sentiment-f1.loop.yaml   # baseline macro-F1 ≈ 0.33 → drive to ≥ 0.80
+```
