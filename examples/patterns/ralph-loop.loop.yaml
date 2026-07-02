@@ -20,8 +20,8 @@
 # Run (needs an agent driver — the Claude Agent SDK + ANTHROPIC_API_KEY, or grok
 # (see the driver block below) — and a ./target repo with `npm test` and a
 # fix_plan.md of `- [ ]` items):
-#   loopgen lint examples/patterns/ralph-loop.loop.yaml
-#   loopgen run  examples/patterns/ralph-loop.loop.yaml
+#   npm run loopgen -- lint examples/patterns/ralph-loop.loop.yaml
+#   npm run loopgen -- run  examples/patterns/ralph-loop.loop.yaml
 version: 1
 name: ralph-punchlist
 description: Grind a fix_plan.md to completion, one item per turn, Ralph-style.

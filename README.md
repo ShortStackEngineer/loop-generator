@@ -130,7 +130,8 @@ npm run loopgen -- list
 npm run loopgen -- verify-driver mock
 ```
 
-(After `npm run build`, the `loopgen` binary is available directly.)
+(After `npm run build && npm link` — or a global install — you can use the
+`loopgen` binary directly instead of `npm run loopgen -- <args>`.)
 
 ## The spec
 
@@ -198,10 +199,10 @@ to do with the agent. `loopgen lint` catches those statically, in milliseconds,
 before any agent turn:
 
 ```bash
-loopgen lint my-feature.loop.yaml
-loopgen lint punch-list.batch.yaml      # lints the manifest + every item's spec
-loopgen lint my.loop.yaml --strict      # exit non-zero on warnings too
-loopgen lint my.loop.yaml --json        # machine-readable findings
+npm run loopgen -- lint my-feature.loop.yaml
+npm run loopgen -- lint punch-list.batch.yaml      # lints the manifest + every item's spec
+npm run loopgen -- lint my.loop.yaml --strict      # exit non-zero on warnings too
+npm run loopgen -- lint my.loop.yaml --json        # machine-readable findings
 ```
 
 It flags misconfigurations like a workspace that isn't the project you expect, a
@@ -280,8 +281,8 @@ items:
 ```
 
 ```bash
-loopgen batch punch-list.batch.yaml --report batch-report.json
-# offline demo:  loopgen batch examples/building-blocks/punch-list.batch.yaml
+npm run loopgen -- batch punch-list.batch.yaml --report batch-report.json
+# offline demo:  npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml
 ```
 
 The scheduler honors `needs` ordering and the `concurrency` cap, and it
@@ -335,7 +336,7 @@ and handles aborts. Prompt-driven drivers (like the Claude SDK) work out of the
 box; scripted drivers supply an `optionsFor` mapping. The CLI exposes it too:
 
 ```bash
-loopgen verify-driver claude-agent-sdk
+npm run loopgen -- verify-driver claude-agent-sdk
 ```
 
 ### Use the engine as a library

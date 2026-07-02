@@ -11,8 +11,8 @@
 #   OPENAI_API_KEY=not-needed                  (default; local servers ignore it)
 #   EVAL_MODEL=google/gemma-4-26b-a4b-qat      (the loaded model id — set this)
 #
-#   EVAL_MODEL=<your-model> loopgen lint examples/projects/eval-prompt/exact-match.loop.yaml
-#   EVAL_MODEL=<your-model> loopgen run  examples/projects/eval-prompt/exact-match.loop.yaml
+#   EVAL_MODEL=<your-model> npm run loopgen -- lint examples/projects/eval-prompt/exact-match.loop.yaml
+#   EVAL_MODEL=<your-model> npm run loopgen -- run  examples/projects/eval-prompt/exact-match.loop.yaml
 #
 # The optimization is real prompt engineering: the stub prompt is vague and the
 # model free-forms, so exact-match starts low. To move the number the agent has to

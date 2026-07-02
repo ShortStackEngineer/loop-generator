@@ -17,8 +17,8 @@ project/
 Run it (needs an agent driver — Claude Agent SDK with `ANTHROPIC_API_KEY`, or grok):
 
 ```bash
-loopgen lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
-loopgen run  examples/projects/eval-classifier/sentiment-f1.loop.yaml
+npm run loopgen -- lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
+npm run loopgen -- run  examples/projects/eval-classifier/sentiment-f1.loop.yaml
 ```
 
 Poke at the target directly, no agent needed:

@@ -24,8 +24,8 @@
 # good demonstration of what the linter notices, not a misconfiguration.
 #
 # Run (needs the Claude Agent SDK + ANTHROPIC_API_KEY and a ./target repo):
-#   loopgen lint  examples/patterns/osmani-harness.batch.yaml
-#   loopgen batch examples/patterns/osmani-harness.batch.yaml
+#   npm run loopgen -- lint  examples/patterns/osmani-harness.batch.yaml
+#   npm run loopgen -- batch examples/patterns/osmani-harness.batch.yaml
 version: 1
 name: osmani-loop-harness
 concurrency: 1 # stages share one workspace, so they serialize regardless

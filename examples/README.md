@@ -15,7 +15,12 @@ Examples come in two shapes:
 
 Every spec parses and lints with zero errors, and each keeps its success criteria
 in a file *outside* the workspace the agent edits, so the agent can't quietly
-rewrite its own contract. Run `loopgen lint <file>` on any of them first.
+rewrite its own contract. Run `npm run loopgen -- lint <file>` on any of them first.
+
+> **Invoking the CLI:** the commands below use `npm run loopgen -- <args>`, which
+> works from the repo root with no build step. If you've installed loop-generator
+> globally — or run `npm run build && npm link` once — you can drop the prefix and
+> use `loopgen <args>` directly.
 
 ## Building blocks
 
@@ -36,8 +41,8 @@ loop turn over.
 
 ```bash
 # offline, no API key:
-loopgen run   examples/building-blocks/mock-demo.loop.yaml
-loopgen batch examples/building-blocks/punch-list.batch.yaml
+npm run loopgen -- run   examples/building-blocks/mock-demo.loop.yaml
+npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml
 ```
 
 ## Loop patterns
@@ -71,8 +76,8 @@ expected — so don't add `--strict`, or that expected warning becomes a non-zer
 exit:
 
 ```bash
-loopgen lint examples/patterns/ralph-loop.loop.yaml
-loopgen lint examples/patterns/osmani-harness.batch.yaml
+npm run loopgen -- lint examples/patterns/ralph-loop.loop.yaml
+npm run loopgen -- lint examples/patterns/osmani-harness.batch.yaml
 ```
 
 ## Self-contained projects
@@ -91,6 +96,6 @@ is read on held-out data.
 | [`projects/eval-prompt/`](./projects/eval-prompt) | **exact-match accuracy** ≥ 0.90 | a live LLM; the agent optimizes the prompt | ❌ needs an OpenAI-compatible endpoint (LM Studio by default) |
 
 ```bash
-loopgen lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
-loopgen run  examples/projects/eval-classifier/sentiment-f1.loop.yaml   # baseline macro-F1 ≈ 0.33 → drive to ≥ 0.80
+npm run loopgen -- lint examples/projects/eval-classifier/sentiment-f1.loop.yaml
+npm run loopgen -- run  examples/projects/eval-classifier/sentiment-f1.loop.yaml   # baseline macro-F1 ≈ 0.33 → drive to ≥ 0.80
 ```
