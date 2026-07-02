@@ -1,0 +1,12 @@
+{
+  "name": "eval-classifier-target",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-contained, zero-dependency sentiment classifier eval target for loop-generator.",
+  "scripts": {
+    "test": "node --test",
+    "eval": "node eval/score.mjs data/holdout.jsonl",
+    "eval:dev": "node eval/score.mjs data/train.jsonl"
+  }
+}

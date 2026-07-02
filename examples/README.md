@@ -68,3 +68,23 @@ over.
 loopgen run   examples/mock-demo.loop.yaml
 loopgen batch examples/punch-list.batch.yaml
 ```
+
+## Optimizing an eval to a metric
+
+Two loops that drive an eval project until a **commonly reported metric** clears a
+bar — the `experiment` evaluator's home turf. Both ship a self-contained,
+zero-dependency target you can run, and both turn on the guards that make "optimize
+until the number passes" trustworthy instead of gameable: the scorer and the
+labeled data are guarded (`evaluatorGuard: error`), so the agent's only lever is
+the model/prompt — it can't edit the labels or the scoring, and the metric is read
+on data it's told not to train on.
+
+| Example | Metric | Model under test | Offline |
+| --- | --- | --- | --- |
+| [`eval-classifier/`](./eval-classifier) | **macro-F1** ≥ 0.80 | a rule-based classifier the agent edits | ✅ zero-dep, runs with no model |
+| [`eval-prompt/`](./eval-prompt) | **exact-match accuracy** ≥ 0.90 | a live LLM; the agent optimizes the prompt | ❌ needs an OpenAI-compatible endpoint (LM Studio by default) |
+
+```bash
+loopgen lint examples/eval-classifier/sentiment-f1.loop.yaml
+loopgen run  examples/eval-classifier/sentiment-f1.loop.yaml   # baseline macro-F1 ≈ 0.33 → drive to ≥ 0.80
+```
