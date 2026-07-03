@@ -43,6 +43,7 @@ export type {
   AgentRunResult,
   AgentUsage,
   AgentStopReason,
+  AgentEvent,
   FeedbackSummary,
 } from "./drivers/types";
 export type {
@@ -78,6 +79,7 @@ export {
   createDriverRegistry,
   createEvaluatorRegistry,
   createTaskRegistry,
+  createObserverRegistry,
 } from "./registry";
 
 // Infra
@@ -119,6 +121,23 @@ export type {
   BatchItemResult,
   BatchItemStatus,
 } from "./batch/runner";
+
+// Observability (Stage-1 trace sink: loop + agent-event stream)
+export { createTraceRecorder, runWithTrace, jsonlFileSink, arraySink } from "./observability/recorder";
+export type {
+  TraceRecord,
+  TraceSink,
+  TraceRecorder,
+  TraceCommon,
+  RecorderOptions,
+  EvaluationTrace,
+} from "./observability/types";
+
+// Observers (the plug-in point: spec-referenceable telemetry consumers)
+export type { Observer, ObserverSession, ObserverRunInfo } from "./observers/types";
+export { jsonlObserver } from "./observers/jsonl";
+export { otlpObserver, toOtlpTracePayload } from "./observers/otlp";
+export type { OtlpTracePayload } from "./observers/otlp";
 
 // Lint (Layer 0: static pre-execution checks)
 export { lintSpec, lintBatch, lintPath, workspacePreflight } from "./lint";

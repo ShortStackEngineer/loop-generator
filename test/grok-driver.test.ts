@@ -100,6 +100,20 @@ describe("grok driver (fake CLI)", () => {
     expect(existsSync(path.join(workdir, "GROK_EDIT.txt"))).toBe(true);
   });
 
+  it("emits a coarse trajectory: the final answer as a model-message", async () => {
+    const events: Array<{ kind: string; text?: string }> = [];
+    const r = await grokDriver.run(invocation("completed", { emit: (e) => events.push(e) }));
+    expect(r.ok).toBe(true);
+    expect(events).toContainEqual({ kind: "model-message", text: "Implemented the feature." });
+  });
+
+  it("emits an error event on a fatal exit", async () => {
+    const events: Array<{ kind: string; message?: string }> = [];
+    const r = await grokDriver.run(invocation("fatal", { emit: (e) => events.push(e) }));
+    expect(r.ok).toBe(false);
+    expect(events.some((e) => e.kind === "error")).toBe(true);
+  });
+
   it("classifies max_turns (non-zero exit) as incomplete, not a crash", async () => {
     const r = await grokDriver.run(invocation("max_turns"));
     expect(r.ok).toBe(true);

@@ -135,12 +135,14 @@ parse reliably) or remove the field.
 **Why:** a dead affordance in a public contract erodes trust in the contract;
 resolve it one way or the other.
 
-### 9. Transcript persistence + a native coverage evaluator — *exploring*
+### 9. Transcript persistence + a native coverage evaluator — *first half shipped*
 
-- Transcripts persist only when `--report <file>` is passed, and the CLI drivers
-  (grok, github-copilot, opencode) store only truncated stdout/stderr tails —
-  not full conversations — which undercuts `debug-loop`. Add optional,
-  first-class transcript capture.
+- ~~Add optional, first-class transcript capture.~~ **Shipped** as the
+  observability stack: the `AgentEvent` driver seam, `loopgen run --trace`,
+  and the Observer plug-in point with `jsonl` + `otlp` built-ins (see
+  [Observing runs](./observing-runs.md)). Remaining nuance: the CLI drivers
+  emit a coarser post-parse trajectory than the SDK driver — deepening their
+  event fidelity is the follow-on.
 - Only two evaluators exist (`command`, `experiment`). Coverage thresholds must
   be hand-rolled via `scoreRegex` + `scoreGte`. Ship a native coverage evaluator
   **plus a documented custom-evaluator recipe** — the recipe matters more than

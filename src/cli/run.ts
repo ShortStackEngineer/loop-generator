@@ -5,11 +5,13 @@ import { loadSpecFile } from "../core/spec";
 import { LoopEngine, type IterationReport, type LoopReport } from "../core/engine";
 import { createDefaultRegistries } from "../registry";
 import { createLogger, type LogLevel } from "../core/logger";
+import { createTraceRecorder, jsonlFileSink } from "../observability/recorder";
 
 interface RunFlags {
   base?: string;
   maxIterations?: string;
   report?: string;
+  trace?: string;
   logLevel?: LogLevel;
   skipPreflight?: boolean;
   baseline?: boolean;
@@ -118,6 +120,7 @@ export function registerRun(program: Command): void {
     .option("-b, --base <dir>", "base dir for the spec's relative paths (default: spec's directory)")
     .option("-m, --max-iterations <n>", "override maxIterations from the spec")
     .option("--report <file>", "write the full JSON report to a file")
+    .option("--trace <file>", "write a JSONL execution trace (loop + agent events) to a file")
     .option("--log-level <level>", "debug|info|warn|error|silent", "info")
     .option("--skip-preflight", "skip driver/evaluator preflight checks")
     .option("--baseline", "run a pre-run baseline evaluation (detects vacuous checks)")
@@ -140,6 +143,10 @@ export function registerRun(program: Command): void {
       };
       process.on("SIGINT", onSigint);
 
+      const tracePath = flags.trace ? path.resolve(flags.trace) : undefined;
+      const tracer = tracePath ? createTraceRecorder(jsonlFileSink(tracePath)) : undefined;
+      tracer?.start(spec);
+
       let report: LoopReport;
       try {
         report = await engine.run(spec, {
@@ -149,12 +156,17 @@ export function registerRun(program: Command): void {
           skipPreflight: flags.skipPreflight,
           baseline,
           maxIterations,
-          onIteration: (it) => console.log(formatIteration(it)),
+          onIteration: (it) => {
+            console.log(formatIteration(it));
+            tracer?.onIteration(it);
+          },
+          onAgentEvent: tracer ? (event, ctx) => tracer.onAgentEvent(event, ctx) : undefined,
           log,
         });
       } finally {
         process.off("SIGINT", onSigint);
       }
+      tracer?.finish(report);
 
       console.log(formatReport(report));
 
@@ -162,6 +174,10 @@ export function registerRun(program: Command): void {
         const out = path.resolve(flags.report);
         writeFileSync(out, JSON.stringify(report, null, 2));
         console.log(`\nFull report: ${out}`);
+      }
+
+      if (tracePath) {
+        console.log(`Trace: ${tracePath}`);
       }
 
       process.exit(report.success ? 0 : 1);

@@ -29,6 +29,14 @@ export const specEvaluatorSchema = z.object({
   guard: z.array(z.string()).optional(),
 });
 
+export const specObserverSchema = z.object({
+  /** Observer to resolve from the observer registry (e.g. `jsonl`, `otlp`). */
+  uses: z.string(),
+  /** Optional instance alias (so two observers of the same type stay distinct). */
+  as: z.string().optional(),
+  options: optionsSchema.default({}),
+});
+
 export const loopSpecSchema = z
   .object({
     version: z.literal(1).default(1),
@@ -128,6 +136,16 @@ export const loopSpecSchema = z
       .object({ concurrency: z.number().int().positive().default(1) })
       .default({ concurrency: 1 }),
 
+    /**
+     * Telemetry consumers attached to the run. Each entry names an observer
+     * (resolved from the observer registry) plus its options — e.g. write a JSONL
+     * or OTLP execution trace. Advisory to the outcome: observers only watch,
+     * never change success/failure, and a broken observer never fails a run.
+     */
+    observability: z
+      .object({ observers: z.array(specObserverSchema).default([]) })
+      .default({ observers: [] }),
+
     /** Optional overrides for the task type's generated prompts. */
     prompts: z
       .object({
@@ -141,6 +159,7 @@ export const loopSpecSchema = z
 
 export type LoopSpec = z.infer<typeof loopSpecSchema>;
 export type SpecEvaluator = z.infer<typeof specEvaluatorSchema>;
+export type SpecObserver = z.infer<typeof specObserverSchema>;
 
 export interface SpecIssue {
   path: PropertyKey[];

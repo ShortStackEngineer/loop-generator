@@ -23,9 +23,17 @@ the root cause **without re-spending agent budget** wherever possible.
 
 ## 1. Gather the evidence
 
-Get the most detailed signal available:
+A run leaves evidence at three depths — outcome, iteration, and the agent's
+inner trajectory. Collect the deepest layer you have before guessing at a
+shallower one:
 
-- **Best: the `--report <file>` JSON.** If the run was launched with
+- **Best: the trace.** If the run was launched with `--trace trace.jsonl` (or a
+  `jsonl`/`otlp` observer in the spec), you have the trajectory layer: every
+  model message, tool call, and tool result per iteration, plus trust-guard
+  warnings as `signal` records. This is the only evidence that shows what the
+  agent *did*, not just what it produced. See
+  [Observing runs](./observing-runs.md).
+- **The `--report <file>` JSON.** If the run was launched with
   `--report run.json`, read that file — it has every iteration, each evaluator's
   `feedback`/`error`, the agent's `stopReason`/`summary`/`error`,
   `changedFiles`, the diff stat, and the run-level `warnings`.
@@ -75,6 +83,13 @@ things:
 3. **Did the agent change files?** If `changed`/`changedFiles` shows edits but
    the *wrong* check fails, the agent may be regressing one thing to fix another
    — tighten `requirements` ("don't break X").
+4. **With a trace: read the blocked iteration's trajectory.** The `agent.event`
+   records distinguish failure shapes the report can't: the same tool call
+   failing every turn is an environment problem; the agent editing the right
+   file while the wrong check fails is a requirements problem; long tool-free
+   stretches of model output are the agent talking itself into a decision the
+   prompt should have made. Re-running with `--trace` costs one iteration
+   budget — often cheaper than another blind spec tweak.
 
 A check that fails every iteration with a "command not found" / exit 127 is a
 wrong bare command or a wrong working directory. Lint and preflight only catch

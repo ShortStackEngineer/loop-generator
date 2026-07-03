@@ -37,15 +37,15 @@ needs no API key is `npm run dev -- run examples/building-blocks/mock-demo.loop.
 
 ## Architecture
 
-The system is a small core with **three plug-in points**. Everything else is
+The system is a small core with **four plug-in points**. Everything else is
 built on them.
 
 ```
 LoopSpec (.loop.yaml) → parseSpec → LoopEngine.run() → loop until success/maxIterations
                                           │
-              ┌───────────────────────────┼────────────────────────────┐
-          AgentDriver                  Evaluator[]                   TaskType
-       (the coding agent)         (the feedback tools)         (prompt scaffolding)
+              ┌────────────────┬──────────┴─────────┬────────────────────┐
+          AgentDriver       Evaluator[]          TaskType            Observer[]
+       (the coding agent) (the feedback tools) (prompt scaffolding) (run telemetry)
 ```
 
 - **`src/core/engine.ts`** — `LoopEngine`. The whole control flow lives here:
@@ -59,14 +59,23 @@ LoopSpec (.loop.yaml) → parseSpec → LoopEngine.run() → loop until success/
   (git-enabled runs only) so the next prompt reminds the agent of its own work.
 - **`src/core/registry.ts` + `src/registry.ts`** — `Registry<T>` is a typed
   name→plug-in map. `createDefaultRegistries()` wires the built-ins; the engine
-  takes the three registries as a constructor arg, so adding a plug-in is
+  takes the registries as a constructor arg, so adding a plug-in is
   register-and-pass, never editing the engine.
 - **Plug-in contracts** are the `types.ts` in each plug-in dir — read these
   before implementing one:
   - `src/drivers/types.ts` — `AgentDriver` (`name`, optional `preflight`, `run`).
-    Built-ins: `mock`, `claude-agent-sdk`, `grok`, `github-copilot`. `run` returns an
-    `AgentRunResult` with a `stopReason` (`completed|max_turns|aborted|error`)
-    that the engine turns into honest warnings on otherwise-green runs.
+    Built-ins: `mock`, `claude-agent-sdk`, `grok`, `github-copilot`, `opencode`.
+    `run` returns an `AgentRunResult` with a `stopReason`
+    (`completed|max_turns|aborted|error`) that the engine turns into honest
+    warnings on otherwise-green runs. Drivers may also emit `AgentEvent`s (the
+    inner trajectory: turn markers, model messages, tool calls/results, usage,
+    errors) via `invocation.emit` — the engine forwards them crash-proofed to
+    `RunOptions.onAgentEvent` and to observers, tagged `{runId, iteration}`.
+    The SDK driver emits fine-grained, turn-stamped events; the CLI drivers
+    (grok/copilot/opencode) emit a coarser post-parse trajectory. New CLI
+    drivers should build on **`src/drivers/cli.ts`** (shared binary resolution,
+    spawn/collect with abort handling, JSON(L) parsing, text shaping) instead of
+    hand-rolling spawn plumbing.
   - `src/evaluators/types.ts` — `Evaluator` (a "feedback tool": measure the
     workspace, return `passed` + actionable `feedback`). Built-ins: `command`
     (anything with a CLI + exit code) and `experiment` (numeric metric vs
@@ -75,6 +84,20 @@ LoopSpec (.loop.yaml) → parseSpec → LoopEngine.run() → loop until success/
     evaluators per category). **Advisory**: an unregistered `task.type` falls
     back to `genericTask`, so it never breaks a run. Built-ins: `function`,
     `api`, `webapp`, `experiment`, `generic`.
+  - `src/observers/types.ts` — `Observer` (`name`, optional `preflight`,
+    `begin(info)` → per-run session with optional `onIteration` /
+    `onAgentEvent` / `onRunEnd`, the last awaited so exports can flush).
+    Referenced from the spec via `observability.observers[].uses`. Built-ins:
+    `jsonl` (JSONL execution trace) and `otlp` (OTLP/JSON span tree —
+    run → iteration → turn → tool, warnings as span events, zero OTel
+    dependency, optional HTTP push via `endpoint` or the standard
+    `OTEL_EXPORTER_OTLP_*` env vars). **Observers never affect outcomes**:
+    every hook is isolated, a broken observer degrades telemetry only.
+    `src/observability/` holds the underlying `TraceRecord` model
+    (`run.start | agent.event | iteration.end | signal | run.end`; warnings
+    become deduped `signal` records) + `createTraceRecorder` / sinks;
+    `loopgen run --trace <file>` is the CLI shortcut, `runWithTrace()` the
+    library one.
 - **`src/core/spec.ts`** — the zod schema, `parseSpec`/`loadSpecFile`, and
   `resolveWorkspaceDir`. The `.loop.yaml` shape is defined here.
 - **`src/core/criteria.ts`** — declarative success rules (`all-pass`, `pass`,

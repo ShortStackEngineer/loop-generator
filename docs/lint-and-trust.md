@@ -87,6 +87,9 @@ false positives:
   or errors but the checks pass anyway, the run still succeeds (checks are the
   source of truth), but the report says so instead of showing a clean green.
 
-All caveats are collected in `report.warnings` and printed under `⚠ warnings:`.
-Drivers that report a session id can also resume after a `max_turns` stop
-(opt-in: `driver.options.resume: true`).
+All caveats are collected in `report.warnings` and printed under `⚠ warnings:`
+— and when the run is traced ([Observing runs](./observing-runs.md)), they also
+become `signal` records in the trace and span events in the OTLP tree, so a
+suspicious green is visible in your tracing UI too. Drivers that report a
+session id can also resume after a `max_turns` stop (opt-in:
+`driver.options.resume: true`).

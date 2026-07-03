@@ -26,6 +26,7 @@ last turn, so the next prompt reminds it of its own work.
 | **Driver** | Wraps a coding agent behind one interface | `claude-agent-sdk`, `grok`, `github-copilot`, `opencode`, `mock` |
 | **Evaluator** | A "feedback tool" that measures the workspace and returns pass/fail + actionable feedback | `command`, `experiment` |
 | **Task type** | Category knowledge: how to frame/instruct the agent and which evaluators to scaffold | `function`, `api`, `webapp`, `experiment`, `generic` |
+| **Observer** | A spec-referenceable consumer of the run's telemetry: loop outcomes + the agent's inner trajectory | `jsonl`, `otlp` |
 | **Success criteria** | Declarative rule over evaluator results | `all-pass`, `pass`, `score`, `all`/`any`/`not` |
 
 The generic `command` evaluator already covers tests, linters, type checkers,
@@ -123,6 +124,14 @@ runs the checks once with no agent turns, confirming they start **RED** (a green
 check before any work probably doesn't test the requirement). Exit codes match
 `lint`: `2` on lint errors, `1` on a vacuous/GREEN check set, else `0`.
 
+Add `--trace <file>` to any run to write a JSONL execution trace — the loop's
+iterations plus the agent's inner tool-call trajectory (see
+[Observing a run](#observing-a-run)):
+
+```bash
+npm run loopgen -- run my-loop.loop.yaml --trace trace.jsonl
+```
+
 List what's registered, or verify a driver:
 
 ```bash
@@ -170,6 +179,11 @@ limits:
   maxTokens: 2000000     # optional — same, on cumulative input+output tokens (only enforced when the driver reports usage)
 evaluation:
   concurrency: 1         # run evaluators sequentially (default; safe for shared DB/state)
+observability:           # optional — stream the run's telemetry (see "Observing a run")
+  observers:
+    - uses: jsonl        # a JSONL execution trace…
+      options: { file: trace.jsonl }
+    - uses: otlp         # …or standard OTLP spans (file + optional HTTP push)
 ```
 
 ## Examples
@@ -234,9 +248,49 @@ false-positive guards:
 - **Honest agent outcomes** — a `max_turns`/error stop is reported even when the
   checks happen to pass.
 
-All caveats are collected in `report.warnings` and printed under `⚠ warnings:`.
+All caveats are collected in `report.warnings` and printed under `⚠ warnings:`
+— and when the run is traced ([Observing a run](#observing-a-run)), they also
+become `signal` records in the trace, so a suspicious green is visible in your
+tracing UI too.
 
 → **In depth: [how each guard works](./docs/lint-and-trust.md#trustworthy-results).**
+
+## Observing a run
+
+Evaluators tell you *what* failed; the trace tells you *why the agent didn't
+fix it*. Every run can stream three layers of evidence — the outcome, each
+iteration, and the agent's inner trajectory (turns, tool calls, model output) —
+without you writing any plumbing:
+
+```bash
+loopgen run my.loop.yaml --trace run-trace.jsonl     # one flag: a JSONL execution trace
+```
+
+Or declare **observers** in the spec — the fourth plug-in point, alongside
+drivers, evaluators, and task types:
+
+```yaml
+observability:
+  observers:
+    - uses: jsonl
+      options: { file: trace.jsonl }
+    - uses: otlp
+      options:
+        endpoint: http://localhost:4318/v1/traces   # optional; file-only when omitted
+```
+
+The `otlp` observer assembles the run into standard OTLP/JSON spans — run →
+iteration → agent turn → tool call, warnings as span events — with zero
+OpenTelemetry dependency, so it lands anywhere OTLP lands (Jaeger, Grafana
+Tempo, an agent debugger like Raindrop Workshop). Observers never change
+success/failure: every hook is isolated, a broken observer degrades telemetry
+but never fails a run, and bad options fail preflight before any agent budget
+is spent. Event fidelity varies honestly by driver — `claude-agent-sdk` emits a
+fine-grained, turn-nested trajectory; the CLI drivers emit a coarser post-parse
+one; `mock` emits loop-level records only.
+
+→ **In depth: [Observing runs](./docs/observing-runs.md) — record kinds,
+observer options, the span tree, and writing your own observer.**
 
 ## Workflows: authoring and debugging
 
@@ -296,7 +350,8 @@ file.
 
 ## Extending it
 
-The whole system is three plug-in points. Register your own and pass them to the
+The whole system is four plug-in points — drivers, evaluators, task types, and
+[observers](./docs/observing-runs.md#writing-an-observer). Register your own and pass them to the
 engine.
 
 ### A new evaluator (feedback tool)
@@ -366,7 +421,9 @@ npm run mutation   # Stryker mutation testing (gate: 60% mutation score)
 
 ## Status
 
-v1 is the full framework skeleton: a working engine, the three extension points,
-the conformance harness, the `mock` + `claude-agent-sdk` drivers, the `command` +
-`experiment` evaluators, and four task types. Task types beyond `function` ship
-with prompt scaffolding and recommended evaluators; deepen them as you go.
+v1 is the full framework skeleton: a working engine, the four extension points,
+the conformance harness, five drivers (`mock`, `claude-agent-sdk`, `grok`,
+`github-copilot`, `opencode`), the `command` + `experiment` evaluators, the
+`jsonl` + `otlp` observers, and four task types.
+Task types beyond `function` ship with prompt scaffolding and recommended
+evaluators; deepen them as you go.

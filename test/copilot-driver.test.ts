@@ -106,6 +106,21 @@ describe("github-copilot driver (fake CLI)", () => {
     expect(readFileSync(path.join(workdir, "OUTPUT.txt"), "utf8")).toBe("hello123");
   });
 
+  it("emits vendor-neutral trajectory events (model-message + turn-end)", async () => {
+    const events: Array<{ kind: string; text?: string; turn?: number }> = [];
+    const r = await githubCopilotDriver.run(invocation({ emit: (e) => events.push(e) }));
+    expect(r.ok).toBe(true);
+    expect(events).toContainEqual({ kind: "model-message", text: "Done.", turn: 1 });
+    expect(events).toContainEqual({ kind: "turn-end", turn: 1 });
+  });
+
+  it("emits an error event on an auth failure", async () => {
+    const events: Array<{ kind: string; message?: string }> = [];
+    const r = await githubCopilotDriver.run(withMode("auth", { emit: (e) => events.push(e) }));
+    expect(r.ok).toBe(false);
+    expect(events.some((e) => e.kind === "error")).toBe(true);
+  });
+
   it("treats auth failures as errors with a clean, actionable message", async () => {
     const r = await githubCopilotDriver.run(withMode("auth"));
     expect(r.ok).toBe(false);

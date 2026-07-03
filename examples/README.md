@@ -32,6 +32,7 @@ loop turn over.
 | File | Driver | Shows |
 | --- | --- | --- |
 | [`mock-demo.loop.yaml`](./building-blocks/mock-demo.loop.yaml) | mock (offline) | **Start here.** The core loop end-to-end: a check fails, feedback, then passes |
+| [`observed-demo.loop.yaml`](./building-blocks/observed-demo.loop.yaml) | mock (offline) | The same loop with `jsonl` + `otlp` observers attached — writes an execution trace and an OTLP span file |
 | [`function-fizzbuzz.loop.yaml`](./building-blocks/function-fizzbuzz.loop.yaml) | Claude Agent SDK | A `function` task: implement + tests + typecheck |
 | [`api-feature-grok.loop.yaml`](./building-blocks/api-feature-grok.loop.yaml) | grok | An `api` task driven by the grok CLI |
 | [`copilot-feature.loop.yaml`](./building-blocks/copilot-feature.loop.yaml) | github-copilot | A `function` task driven by the GitHub Copilot CLI |
@@ -42,8 +43,13 @@ loop turn over.
 ```bash
 # offline, no API key:
 npm run loopgen -- run   examples/building-blocks/mock-demo.loop.yaml
+npm run loopgen -- run   examples/building-blocks/observed-demo.loop.yaml
 npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml
 ```
+
+Any spec can also produce a one-off trace without an observability block:
+`npm run loopgen -- run <spec> --trace trace.jsonl` (see
+[Observing runs](../docs/observing-runs.md)).
 
 ## Loop patterns
 

@@ -56,6 +56,45 @@ describe("LoopEngine", () => {
     expect(readFileSync(path.join(workdir, "answer.txt"), "utf8")).toBe("42");
   });
 
+  it("forwards driver emit() to onAgentEvent (tagged with runId + iteration) and survives a throwing handler", async () => {
+    const emitter: AgentDriver = {
+      name: "emitter",
+      async run(inv) {
+        inv.emit?.({ kind: "model-message", text: "hi", turn: 1 });
+        inv.emit?.({ kind: "tool-call", name: "Write" });
+        writeFileSync(path.join(inv.workdir, "answer.txt"), "42");
+        return { ok: true, stopReason: "completed", changedFiles: ["answer.txt"] };
+      },
+    };
+    const regs = createDefaultRegistries();
+    regs.drivers.register(emitter);
+    const spec = parseSpec({
+      name: "emit",
+      requirements: "write 42",
+      driver: { uses: "emitter" },
+      evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
+      success: { type: "all-pass" },
+      limits: { maxIterations: 1, baseline: false },
+    });
+
+    const seen: Array<{ event: { kind: string }; ctx: { runId: string; iteration: number } }> = [];
+    const report = await new LoopEngine(regs, silentLogger).run(spec, {
+      baseDir: workdir,
+      onAgentEvent: (event, ctx) => {
+        seen.push({ event, ctx });
+        throw new Error("observer blew up"); // must not break the run
+      },
+    });
+
+    expect(report.success).toBe(true); // a throwing observer never fails the run
+    expect(seen.map((s) => s.event)).toEqual([
+      { kind: "model-message", text: "hi", turn: 1 },
+      { kind: "tool-call", name: "Write" },
+    ]);
+    expect(seen[0]!.ctx).toMatchObject({ iteration: 0 });
+    expect(typeof seen[0]!.ctx.runId).toBe("string");
+  });
+
   it("stops at maxIterations when it never converges", async () => {
     const spec = parseSpec({
       name: "never",

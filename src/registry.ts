@@ -3,6 +3,9 @@ import type { EngineRegistries } from "./core/engine";
 import type { AgentDriver } from "./drivers/types";
 import type { Evaluator } from "./evaluators/types";
 import type { TaskType } from "./tasks/types";
+import type { Observer } from "./observers/types";
+import { jsonlObserver } from "./observers/jsonl";
+import { otlpObserver } from "./observers/otlp";
 import { mockDriver } from "./drivers/mock";
 import { claudeAgentSdkDriver } from "./drivers/claude-agent-sdk";
 import { grokDriver } from "./drivers/grok";
@@ -35,11 +38,19 @@ export function createTaskRegistry(): Registry<TaskType> {
   return r;
 }
 
-/** All three registries pre-populated with the built-in plug-ins. */
+export function createObserverRegistry(): Registry<Observer> {
+  const r = new Registry<Observer>("observer", (o) => o.name);
+  r.register(jsonlObserver);
+  r.register(otlpObserver);
+  return r;
+}
+
+/** All registries pre-populated with the built-in plug-ins. */
 export function createDefaultRegistries(): EngineRegistries {
   return {
     drivers: createDriverRegistry(),
     evaluators: createEvaluatorRegistry(),
     tasks: createTaskRegistry(),
+    observers: createObserverRegistry(),
   };
 }

@@ -1,0 +1,54 @@
+# Offline observability demo — runs with no API key using the scripted `mock`
+# driver, and streams the run's telemetry through both built-in observers.
+# Try it:  npm run loopgen -- run examples/building-blocks/observed-demo.loop.yaml
+#
+# It writes two files next to this spec:
+#   observed-demo.trace.jsonl    — the JSONL execution trace (run.start /
+#                                  iteration.end / signal / run.end records)
+#   observed-demo.otlp.json      — the same run as standard OTLP/JSON spans;
+#                                  POST it to any collector, or set
+#                                  `endpoint:` to push it live
+#
+# Note on fidelity: the mock driver emits no inner agent events, so the trace
+# carries the loop-level records only. Run a real driver (claude-agent-sdk is
+# the most detailed) to see `agent.event` records — model messages, tool calls,
+# tool results — and turn-nested OTLP spans. You can also get a one-off JSONL
+# trace on ANY spec, without an observability block, via:
+#   npm run loopgen -- run <spec> --trace trace.jsonl
+version: 1
+name: observed-demo
+description: The mock-demo loop with jsonl + otlp observers attached.
+task:
+  type: function
+stack:
+  language: text
+workspace:
+  dir: ./.workspace
+requirements: |
+  Write the string "42" into answer.txt at the workspace root.
+driver:
+  uses: mock
+  options:
+    steps:
+      - files:
+          answer.txt: wrong
+        summary: first attempt (intentionally wrong)
+      - files:
+          answer.txt: "42"
+        summary: corrected after feedback
+evaluators:
+  - uses: command
+    as: answer-check
+    options:
+      command: test "$(cat answer.txt)" = "42"
+success:
+  type: all-pass
+limits:
+  maxIterations: 5
+observability:
+  observers:
+    - uses: jsonl
+      options: { file: observed-demo.trace.jsonl }
+    - uses: otlp
+      options: { file: observed-demo.otlp.json }
+      # add e.g. `endpoint: http://localhost:4318/v1/traces` to push live

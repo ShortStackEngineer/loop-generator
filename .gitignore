@@ -7,6 +7,9 @@ dist/
 # Loop run artifacts
 .loopgen/
 *.loop.report.json
+*.trace.jsonl
+*.otlp.json
+loopgen-trace.jsonl
 
 # Example run workspaces (created next to whichever spec you run)
 examples/**/.workspace/

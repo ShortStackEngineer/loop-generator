@@ -146,4 +146,58 @@ describe("claude-agent-sdk driver", () => {
     expect(captured!.options.permissionMode).toBe("bypassPermissions");
     expect(captured!.options.model).toBe("claude-opus-4-8");
   });
+
+  it("emits vendor-neutral trajectory events for assistant/tool/user messages", async () => {
+    __setSdkLoaderForTests(async () =>
+      fakeSdk([
+        { type: "system", subtype: "init", session_id: "s" },
+        {
+          type: "assistant",
+          message: {
+            content: [
+              { type: "text", text: "planning" },
+              { type: "tool_use", id: "t1", name: "Write", input: { path: "a.ts" } },
+            ],
+          },
+        },
+        {
+          type: "user",
+          message: { content: [{ type: "tool_result", tool_use_id: "t1", content: "wrote a.ts", is_error: false }] },
+        },
+        {
+          type: "user",
+          message: { content: [{ type: "tool_result", tool_use_id: "t2", content: "boom", is_error: true }] },
+        },
+        { type: "assistant", message: { content: [{ type: "text", text: "done" }] } },
+        { type: "result", subtype: "success", result: "finished" },
+      ]),
+    );
+    const events: unknown[] = [];
+    const inv = invocation({ emit: (e) => events.push(e) });
+    await claudeAgentSdkDriver.run(inv);
+    rmSync(inv.workdir, { recursive: true, force: true });
+
+    // Turn counts by assistant message; tool results come back as user messages
+    // and belong to the same turn (the counter only advances on the next
+    // assistant message); the terminal result message produces no event.
+    expect(events).toEqual([
+      { kind: "model-message", text: "planning", turn: 1 },
+      { kind: "tool-call", name: "Write", id: "t1", turn: 1, input: { path: "a.ts" } },
+      { kind: "tool-result", id: "t1", ok: true, turn: 1, output: "wrote a.ts" },
+      { kind: "tool-result", id: "t2", ok: false, turn: 1, output: "boom" },
+      { kind: "model-message", text: "done", turn: 2 },
+    ]);
+  });
+
+  it("emits an error event when the stream throws unaborted", async () => {
+    __setSdkLoaderForTests(async () => fakeSdk([], { throwError: new Error("stream boom") }));
+    const events: Array<{ kind: string; message?: string }> = [];
+    const inv = invocation({ emit: (e) => events.push(e) });
+    const r = await claudeAgentSdkDriver.run(inv);
+    rmSync(inv.workdir, { recursive: true, force: true });
+
+    expect(r.ok).toBe(false);
+    expect(r.stopReason).toBe("error");
+    expect(events).toContainEqual({ kind: "error", message: "stream boom" });
+  });
 });

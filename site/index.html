@@ -16,6 +16,7 @@
       <a href="docs/getting-started.html">Getting started</a>
       <a href="docs/authoring.html">Authoring</a>
       <a href="docs/debugging.html">Debugging</a>
+      <a href="docs/observing.html">Observing</a>
       <a href="docs/trust.html">Lint &amp; trust</a>
       <a href="docs/roadmap.html">Roadmap</a>
       <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
@@ -70,9 +71,11 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
       Each iteration: drive the agent, snapshot and diff the workspace, run the
       evaluators, check the success criteria, fold the results — including a
       bounded diff of what the agent changed last turn — into the next prompt.
+      And the whole time, <strong>observers</strong> stream every step — iterations,
+      agent turns, tool calls, warnings — to a JSONL trace or OTLP spans.
     </p>
 
-    <div class="grid cols-2" style="margin-top:2.2rem">
+    <div class="grid cols-3" style="margin-top:2.2rem">
       <div class="card">
         <span class="mono-tag">AgentDriver</span>
         <h3>Bring any coding agent</h3>
@@ -105,6 +108,14 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
         <code>score</code>, and composable <code>all</code>/<code>any</code>/<code>not</code>
         rules for thresholds and partial gates. Done is a rule over evaluator
         results — not the agent's opinion.</p>
+      </div>
+      <div class="card">
+        <span class="mono-tag">Observer</span>
+        <h3>Telemetry as a plug-in</h3>
+        <p>A named, spec-referenceable consumer of a run's telemetry — loop
+        outcomes plus the agent's inner trajectory. Built-ins: <code>jsonl</code>
+        (an execution trace file) and <code>otlp</code> (standard spans for any
+        collector). A broken observer degrades telemetry, never a run.</p>
       </div>
     </div>
   </div>
@@ -199,7 +210,11 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
   <span class="k">maxIterations:</span> 6
   <span class="k">baseline:</span> strict      <span class="c"># fail fast if the checks were already green</span>
   <span class="k">evaluatorGuard:</span> error <span class="c"># editing the tests fails the run</span>
-  <span class="k">maxCostUsd:</span> 5.0</code></pre>
+  <span class="k">maxCostUsd:</span> 5.0
+<span class="k">observability:</span>
+  <span class="k">observers:</span>
+    - <span class="k">uses:</span> otlp           <span class="c"># stream the run as spans to any OTLP collector</span>
+      <span class="k">options:</span> { endpoint: http://localhost:4318/v1/traces }</code></pre>
     <p style="color:var(--ink-soft); font-size:0.95rem">
       Need to run many units of work? A <code>.batch.yaml</code> punch list runs
       specs across repos with dependency ordering, a concurrency cap, and
@@ -209,8 +224,48 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
   </div>
 </section>
 
-<!-- ============ HONESTY ============ -->
+<!-- ============ OBSERVABILITY ============ -->
 <section class="alt">
+  <div class="wrap">
+    <div class="kicker">Observability</div>
+    <h2>Verified outside. Observable inside.</h2>
+    <p class="lead narrow" style="margin:0 0 0.6rem">
+      Evaluators tell you <em>what</em> failed. The trace tells you <em>why the
+      agent didn't fix it</em>. Every run can stream three layers of evidence —
+      the outcome, each iteration, and the agent's inner trajectory: turns, tool
+      calls, model output, warnings.
+    </p>
+    <div class="grid cols-2" style="align-items:start">
+      <pre style="margin:1.4rem 0 0"><code><span class="c"># one flag — a JSONL execution trace</span>
+loopgen run my.loop.yaml --trace run-trace.jsonl
+
+<span class="c"># or declare it in the spec (jsonl · otlp)</span>
+<span class="k">observability:</span>
+  <span class="k">observers:</span>
+    - <span class="k">uses:</span> jsonl
+      <span class="k">options:</span> { file: trace.jsonl }
+    - <span class="k">uses:</span> otlp   <span class="c"># file + optional HTTP push</span></code></pre>
+      <div>
+        <p style="margin-top:1.4rem; color:var(--ink-soft); font-size:0.97rem">
+          The <code>otlp</code> observer assembles the run into a standard span
+          tree — run → iteration → agent turn → tool call, with warnings as span
+          events — with <strong>zero OpenTelemetry dependency</strong>. Write it
+          to a file or POST it to any collector: Jaeger, Grafana Tempo, an agent
+          debugger like Raindrop Workshop.
+        </p>
+        <p style="color:var(--ink-soft); font-size:0.97rem">
+          Trust guards apply here too: warnings become <code>signal</code>
+          records in the trace, and a broken observer can degrade telemetry but
+          never fail (or pass) a run.
+        </p>
+        <p><a href="docs/observing.html">Observing runs, in depth →</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HONESTY ============ -->
+<section>
   <div class="wrap">
     <div class="kicker">Straight talk</div>
     <h2>Where loops pay off — and where they don't</h2>
@@ -241,13 +296,13 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
 </section>
 
 <!-- ============ EXTEND / LIBRARY ============ -->
-<section>
+<section class="alt">
   <div class="wrap">
     <div class="kicker">Extending it</div>
-    <h2>Three plug-in points. Zero engine edits.</h2>
+    <h2>Four plug-in points. Zero engine edits.</h2>
     <p class="lead narrow" style="margin:0">
-      Drivers, evaluators, and task types are typed registries — register your
-      own and pass them in. The engine never changes.
+      Drivers, evaluators, task types, and observers are typed registries —
+      register your own and pass them in. The engine never changes.
     </p>
     <div class="grid cols-2" style="align-items:start">
       <pre style="margin:1.8rem 0 0"><code><span class="c">// a custom evaluator, complete</span>
@@ -264,35 +319,39 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
     };
   },
 };</code></pre>
-      <pre style="margin:1.8rem 0 0"><code><span class="c">// or use the engine as a library</span>
-<span class="k">import</span> {
-  LoopEngine,
-  createDefaultRegistries,
-  parseSpec,
-} <span class="k">from</span> <span class="s">"loop-generator"</span>;
+      <pre style="margin:1.8rem 0 0"><code><span class="c">// a custom observer: ship telemetry anywhere</span>
+<span class="k">import</span> { <span class="k">type</span> Observer } <span class="k">from</span> <span class="s">"loop-generator"</span>;
 
-<span class="k">const</span> engine = <span class="k">new</span> LoopEngine(createDefaultRegistries());
-<span class="k">const</span> report = <span class="k">await</span> engine.run(
-  parseSpec(spec),
-  { baseDir: process.cwd() },
-);
-console.log(report.success, report.reason);</code></pre>
+<span class="k">export const</span> slackObserver: Observer = {
+  name: <span class="s">"slack"</span>,
+  begin({ runId, spec }) {
+    <span class="k">return</span> {
+      onRunEnd: (report) =>
+        postToSlack(
+          <span class="s">`${spec.name}: ${report.outcome} `</span> +
+          <span class="s">`in ${report.iterations.length} iterations`</span>,
+        ),
+    };
+  },
+};</code></pre>
     </div>
     <p style="color:var(--ink-soft); font-size:0.95rem; margin-top:1.4rem">
       New driver? <code>loop-generator/testing</code> exports a conformance
       harness that drives it against temp workspaces and asserts the behavioral
-      contract — reports a name, creates files, applies feedback across
-      iterations, handles aborts.
+      contract. Embedding it? The engine is a library too —
+      <code>new LoopEngine(createDefaultRegistries())</code>, with an
+      <code>onAgentEvent</code> callback for streaming the trajectory yourself.
     </p>
   </div>
 </section>
 
 <!-- ============ FINAL CTA ============ -->
-<section class="alt" style="text-align:center">
+<section style="text-align:center">
   <div class="wrap">
     <h2>Stop babysitting green checkmarks.</h2>
     <p class="lead" style="max-width:46ch; margin-left:auto; margin-right:auto">
-      Write the checks once. Let the loop grind toward them. Trust the report.
+      Write the checks once. Let the loop grind toward them.
+      Trust the report — and when you don't, read the trace.
     </p>
     <div class="cta-row" style="justify-content:center">
       <a class="btn primary" href="docs/getting-started.html">Read the docs</a>

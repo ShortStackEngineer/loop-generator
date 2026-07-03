@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Observing runs — loop-generator</title>
+<meta name="description" content="Stream a loop run's three layers of evidence — outcome, iterations, and the agent's inner trajectory — to a JSONL trace, OTLP spans, or your own observer.">
+<link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
+    <nav class="site-nav">
+      <a href="getting-started.html">Getting started</a>
+      <a href="authoring.html">Authoring</a>
+      <a href="debugging.html">Debugging</a>
+      <a class="active" href="observing.html">Observing</a>
+      <a href="trust.html">Lint &amp; trust</a>
+      <a href="roadmap.html">Roadmap</a>
+      <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap docs-body">
+  <aside class="docs-toc">
+    <div class="toc-title">On this page</div>
+    <a href="#layers">Three layers of evidence</a>
+    <a href="#trace">The --trace flag</a>
+    <a href="#observers">Observers in the spec</a>
+    <a href="#jsonl">The jsonl observer</a>
+    <a href="#otlp">The otlp observer</a>
+    <a href="#fidelity">Driver event fidelity</a>
+    <a href="#custom">Writing an observer</a>
+    <a href="#library">Library seams</a>
+  </aside>
+
+  <main class="docs-content">
+    <h1>Observing runs</h1>
+    <p class="lead">
+      Evaluators tell you <em>what</em> failed; the trace tells you <em>why the
+      agent didn't fix it</em>. Every run can stream its telemetry — loop
+      outcomes plus the agent's inner trajectory — to a JSONL file, to standard
+      OTLP spans, or to an observer you write yourself.
+    </p>
+
+    <h2 id="layers">Three layers of evidence</h2>
+    <p>A run produces evidence at three depths. Each answers a different question:</p>
+    <table>
+      <thead><tr><th>Layer</th><th>What it holds</th><th>Question it answers</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Outcome</strong></td>
+          <td><code>LoopReport</code>: outcome, reason, warnings, total usage, overall diff</td>
+          <td>Did it work, and can I trust the green?</td>
+        </tr>
+        <tr>
+          <td><strong>Iteration</strong></td>
+          <td>Per-iteration evaluations, changed files, diff stat, stop reason, usage</td>
+          <td>Which check blocked the loop, and when?</td>
+        </tr>
+        <tr>
+          <td><strong>Trajectory</strong></td>
+          <td><code>AgentEvent</code> stream: turns, model messages, tool calls/results, errors</td>
+          <td>What was the agent actually <em>doing</em> in there?</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      The first two layers have always been in the report
+      (<code>--report run.json</code>). Observability adds the third — drivers
+      emit a vendor-neutral event stream from inside each
+      <code>driver.run()</code>, and the engine forwards it tagged with the run
+      id and iteration. The forwarding is crash-proof: a throwing sink can never
+      fail an iteration.
+    </p>
+
+    <h2 id="trace">The quickest path: <code>--trace</code></h2>
+<pre><code>loopgen run my.loop.yaml --trace run-trace.jsonl</code></pre>
+    <p>
+      Writes a JSONL execution trace — one JSON object per line, in five record
+      kinds: <code>run.start</code>, <code>agent.event</code>,
+      <code>iteration.end</code>, <code>signal</code>, <code>run.end</code>.
+      Trust-guard warnings become <code>signal</code> records (deduplicated,
+      iteration scope preferred over run scope), so a suspicious green is
+      visible in the trace, not just the terminal. Works offline:
+    </p>
+<pre><code>npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml --trace trace.jsonl</code></pre>
+
+    <h2 id="observers">Observers in the spec</h2>
+    <p>
+      For anything beyond a one-off file, declare observers in the spec. An
+      <strong>Observer</strong> is the fourth plug-in point, alongside drivers,
+      evaluators, and task types: a named, spec-referenceable consumer of a
+      run's telemetry. Resolution mirrors the other plug-ins
+      (<code>uses</code> / <code>as</code> / <code>options</code>):
+    </p>
+<pre><code><span class="k">observability:</span>
+  <span class="k">observers:</span>
+    - <span class="k">uses:</span> jsonl
+      <span class="k">options:</span> { file: trace.jsonl }
+    - <span class="k">uses:</span> otlp
+      <span class="k">options:</span>
+        <span class="k">file:</span> trace.otlp.json
+        <span class="k">endpoint:</span> http://localhost:4318/v1/traces</code></pre>
+    <p>Observer guarantees, in the same spirit as the trust guards:</p>
+    <ul>
+      <li>Observers <strong>never change success or failure</strong> — every
+        hook is isolated, so a broken observer degrades telemetry but never
+        fails a run.</li>
+      <li>Observers are <strong>preflighted</strong> — bad options fail before
+        any agent budget is spent.</li>
+      <li><code>onRunEnd</code> may be async and is awaited, so a network export
+        can flush before the run resolves — and it fires on <em>every</em>
+        terminal outcome, not just success.</li>
+      <li>The block is optional and non-strict: existing specs are
+        unaffected.</li>
+    </ul>
+
+    <h2 id="jsonl">The <code>jsonl</code> observer</h2>
+    <p>
+      The offline default: writes the same execution trace as
+      <code>--trace</code>, using the engine's run id as the trace id so the
+      file correlates with the report.
+    </p>
+    <table>
+      <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>file</code></td><td><code>loopgen-trace.jsonl</code></td>
+          <td>Trace file path; relative paths resolve against the run's base dir.</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="otlp">The <code>otlp</code> observer</h2>
+    <p>
+      Assembles the run into standard OTLP/JSON spans with
+      <strong>zero OpenTelemetry dependency</strong>. The tree nests four
+      levels — a run root span, an iteration span per loop iteration, a turn
+      span per agent turn, and a child span per tool call beneath its turn —
+      with model output on the turn span and warnings as span events. Drivers
+      that emit no turn detail simply produce a flatter tree (tools hang
+      directly off the iteration).
+    </p>
+    <table>
+      <thead><tr><th>Option</th><th>Default</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>file</code></td><td><code>loopgen-trace.otlp.json</code></td>
+          <td>Output file; relative paths resolve against the run's base dir.</td></tr>
+        <tr><td><code>serviceName</code></td><td><code>loop-generator</code></td>
+          <td><code>service.name</code> resource attribute on the emitted spans.</td></tr>
+        <tr><td><code>endpoint</code></td><td>—</td>
+          <td>OTLP/HTTP traces URL to POST the spans to, used verbatim (e.g.
+          <code>http://localhost:4318/v1/traces</code>). When omitted, falls back
+          to the standard <code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code> /
+          <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> env vars; no endpoint means
+          file-only.</td></tr>
+        <tr><td><code>headers</code></td><td>—</td>
+          <td>Extra HTTP headers for the export (e.g. an auth token / write key).</td></tr>
+        <tr><td><code>timeoutMs</code></td><td><code>10000</code></td>
+          <td>Abort the export POST after this many ms.</td></tr>
+      </tbody>
+    </table>
+    <p>
+      Because the output is plain OTLP, it lands anywhere OTLP lands: Jaeger,
+      Grafana Tempo, Honeycomb, an agent-trace debugger like Raindrop Workshop,
+      or your own collector. The tool is vendor-neutral by design — bring your
+      own tracing.
+    </p>
+
+    <h2 id="fidelity">Driver event fidelity</h2>
+    <p>
+      Drivers emit whatever their backend exposes and skip what they can't
+      observe — honesty over uniformity. What you'll see per driver today:
+    </p>
+    <table>
+      <thead><tr><th>Driver</th><th>Trajectory detail</th></tr></thead>
+      <tbody>
+        <tr><td><code>claude-agent-sdk</code></td>
+          <td><strong>Fine-grained, live.</strong> Model messages, tool calls and
+          results — each stamped with its agent turn, so the OTLP tree nests
+          run → iteration → turn → tool.</td></tr>
+        <tr><td><code>github-copilot</code></td>
+          <td>Coarser post-parse trajectory; model output is turn-tagged, so it
+          gets turn spans.</td></tr>
+        <tr><td><code>grok</code></td>
+          <td>Coarse post-parse trajectory + errors; no turn detail, so its
+          spans stay flat on the iteration.</td></tr>
+        <tr><td><code>opencode</code></td>
+          <td>Coarse post-parse trajectory + errors.</td></tr>
+        <tr><td><code>mock</code></td>
+          <td>No agent events — traces carry the loop-level records only
+          (which is why the offline demo's trace has no tool calls).</td></tr>
+      </tbody>
+    </table>
+
+    <h2 id="custom">Writing an observer</h2>
+    <p>
+      Implement <code>Observer</code>: <code>begin(info)</code> returns a
+      per-run session with any of three optional hooks. Register it like any
+      other plug-in.
+    </p>
+<pre><code><span class="k">import</span> { <span class="k">type</span> Observer, createDefaultRegistries, LoopEngine } <span class="k">from</span> <span class="s">"loop-generator"</span>;
+
+<span class="k">const</span> slack: Observer = {
+  name: <span class="s">"slack"</span>,
+  begin({ runId, spec, log }) {
+    <span class="k">return</span> {
+      onIteration(report) { <span class="c">/* per-iteration report */</span> },
+      onAgentEvent(event, { iteration }) { <span class="c">/* live trajectory */</span> },
+      <span class="k">async</span> onRunEnd(report) {
+        <span class="c">// awaited by the engine — safe to flush a network export</span>
+        <span class="k">await</span> postToSlack(<span class="s">`${spec.name}: ${report.outcome}`</span>);
+      },
+    };
+  },
+};
+
+<span class="k">const</span> registries = createDefaultRegistries();
+registries.observers!.register(slack); <span class="c">// always present from createDefaultRegistries; the field is optional on the type</span>
+<span class="k">const</span> engine = <span class="k">new</span> LoopEngine(registries);</code></pre>
+    <p>
+      Hooks must be side-effect-only and non-throwing; the engine isolates every
+      call regardless. An optional <code>preflight</code> validates options
+      before the run spends anything.
+    </p>
+
+    <h2 id="library">Library seams</h2>
+    <p>Embedding the engine instead of running the CLI? Two lower-level seams:</p>
+    <ul>
+      <li><strong><code>RunOptions.onAgentEvent</code></strong> — a direct
+        callback for every driver event, tagged
+        <code>{ runId, iteration }</code>. This is what observers are built
+        on.</li>
+      <li><strong><code>runWithTrace()</code></strong> /
+        <strong><code>createTraceRecorder()</code></strong> — the Stage-1
+        recorder behind <code>--trace</code>, exported with
+        <code>jsonlFileSink</code> and <code>arraySink</code>. It composes with
+        any callbacks you already pass.</li>
+    </ul>
+    <p>
+      The source of truth is the code: <code>src/observers/types.ts</code> (the
+      contract), <code>src/observability/</code> (the trace model),
+      <code>src/drivers/types.ts</code> (<code>AgentEvent</code>).
+    </p>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="inner">
+    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>
+      <a href="../index.html">Home</a> ·
+      <a href="roadmap.html">Roadmap</a> ·
+      <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

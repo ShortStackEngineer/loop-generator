@@ -16,6 +16,7 @@
       <a href="getting-started.html">Getting started</a>
       <a href="authoring.html">Authoring</a>
       <a class="active" href="debugging.html">Debugging</a>
+      <a href="observing.html">Observing</a>
       <a href="trust.html">Lint &amp; trust</a>
       <a href="roadmap.html">Roadmap</a>
       <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
@@ -67,8 +68,20 @@
     </ul>
 
     <h2 id="evidence">1. Gather the evidence</h2>
+    <p>
+      A run leaves evidence at three depths — outcome, iteration, and the
+      agent's inner trajectory. Collect the deepest layer you have before
+      guessing at a shallower one:
+    </p>
     <ul>
-      <li><strong>Best: the <code>--report &lt;file&gt;</code> JSON.</strong> If
+      <li><strong>Best: the trace.</strong> If the run was launched with
+        <code>--trace trace.jsonl</code> (or a <code>jsonl</code>/<code>otlp</code>
+        observer in the spec), you have the trajectory layer: every model
+        message, tool call, and tool result per iteration, plus trust-guard
+        warnings as <code>signal</code> records. This is the only evidence that
+        shows what the agent <em>did</em>, not just what it produced. See
+        <a href="observing.html">Observing runs</a>.</li>
+      <li><strong>The <code>--report &lt;file&gt;</code> JSON.</strong> If
         the run was launched with <code>--report run.json</code>, read that file
         — it has every iteration, each evaluator's
         <code>feedback</code>/<code>error</code>, the agent's
@@ -183,6 +196,14 @@
         <code>changed</code>/<code>changedFiles</code> shows edits but the
         <em>wrong</em> check fails, the agent may be regressing one thing to fix
         another — tighten <code>requirements</code> ("don't break X").</li>
+      <li><strong>With a trace: read the blocked iteration's trajectory.</strong>
+        The <code>agent.event</code> records distinguish failure shapes the
+        report can't: the same tool call failing every turn is an environment
+        problem; the agent editing the right file while the wrong check fails is
+        a requirements problem; long tool-free stretches of model output are the
+        agent talking itself into a decision the prompt should have made.
+        Re-running with <code>--trace</code> costs one iteration budget — often
+        cheaper than another blind spec tweak.</li>
     </ol>
     <div class="callout warn">
       A check that fails every iteration with "command not found" / exit 127 is

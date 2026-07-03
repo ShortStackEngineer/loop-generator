@@ -1,9 +1,24 @@
-import { spawn } from "node:child_process";
 import path from "node:path";
 import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import type { PreflightResult } from "../core/preflight";
-import type { AgentDriver, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import {
+  asString,
+  cleanSummary,
+  foldPrompt,
+  isObject,
+  lastMeaningfulLine,
+  parseJsonl,
+  probeVersion,
+  resolveBinary,
+  spawnCollect,
+  tail,
+} from "./cli";
+import type { JsonObject, ResolvedBin } from "./cli";
+
+// Re-export the shared helpers the copilot tests import from this module.
+export { cleanSummary, parseJsonl, lastMeaningfulLine };
 
 const optionsSchema = z.object({
   /** Model id passed via --model (e.g. "claude-sonnet-4.5", "gpt-5", "auto"). Omit for the CLI default. */
@@ -38,7 +53,8 @@ const optionsSchema = z.object({
  *
  * The `copilot` CLI must be installed (e.g. `brew install copilot` or
  * `npm i -g @github/copilot`) and authenticated (run `copilot` once, or
- * `gh auth login`). It is symmetric to the grok driver (thin agentic CLI).
+ * `gh auth login`). It is symmetric to the grok driver (thin agentic CLI);
+ * shared plumbing lives in `./cli`.
  */
 export const githubCopilotDriver: AgentDriver = {
   name: "github-copilot",
@@ -71,7 +87,7 @@ export const githubCopilotDriver: AgentDriver = {
     }
 
     // Quick probe that the binary responds.
-    const probe = await runCopilotOnce(bin, ["--version"], { timeoutMs: 8000 });
+    const probe = await probeVersion(bin, ["--version"], { timeoutMs: 8000 });
     if (!probe.ok) {
       warnings.push(`"copilot --version" check had issues: ${probe.error ?? "unknown"}`);
     }
@@ -97,9 +113,7 @@ export const githubCopilotDriver: AgentDriver = {
 
     // Fold systemPrompt (if any) in front of the concrete ask. Copilot also picks
     // up AGENTS.md / custom instructions from the workspace on its own.
-    const effectivePrompt = invocation.systemPrompt
-      ? `${invocation.systemPrompt}\n\n${invocation.prompt}`
-      : invocation.prompt;
+    const effectivePrompt = foldPrompt(invocation.systemPrompt, invocation.prompt);
 
     const args: string[] = [
       "-p",
@@ -139,60 +153,24 @@ export const githubCopilotDriver: AgentDriver = {
       ...opts.env,
     };
 
-    let stdout = "";
-    let stderr = "";
-    let exitCode: number | null = null;
-    let killed = false;
-
-    try {
-      const child = spawn(bin.command, [...bin.argsPrefix, ...args], {
-        cwd: invocation.workdir,
-        env: childEnv,
-        stdio: ["ignore", "pipe", "pipe"],
-        signal: invocation.signal,
-      });
-
-      child.stdout?.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-
-      if (invocation.signal) {
-        invocation.signal.addEventListener(
-          "abort",
-          () => {
-            if (!child.killed) {
-              killed = true;
-              child.kill("SIGKILL");
-            }
-          },
-          { once: true },
-        );
-        if (invocation.signal.aborted) {
-          killed = true;
-          child.kill("SIGKILL");
-        }
-      }
-
-      await new Promise<void>((resolve) => {
-        child.on("error", () => resolve());
-        child.on("close", (code) => {
-          exitCode = code;
-          resolve();
-        });
-      });
-    } catch (err) {
-      return { ok: false, stopReason: "error", error: (err as Error).message };
-    }
-
-    if (killed || invocation.signal?.aborted) {
+    const res = await spawnCollect(bin, args, {
+      cwd: invocation.workdir,
+      env: childEnv,
+      signal: invocation.signal,
+    });
+    // Abort wins over an incidental spawn error (an already-aborted signal makes
+    // `spawn({ signal })` emit an immediate AbortError).
+    if (res.killed || invocation.signal?.aborted) {
       return { ok: false, stopReason: "aborted", error: "aborted" };
     }
+    if (res.spawnError) {
+      return { ok: false, stopReason: "error", error: res.spawnError };
+    }
+    const { stdout, stderr, exitCode } = res;
 
     // Copilot emits JSONL: a stream of events, ending in a `result` event.
     const objs = parseJsonl(stdout);
+    if (invocation.emit) emitCopilotEvents(objs, invocation.emit);
     const result = findResult(objs);
     const finalText = finalAssistantText(objs);
     const usage = extractUsage(objs);
@@ -219,6 +197,7 @@ export const githubCopilotDriver: AgentDriver = {
         lastMeaningfulLine(stderr) ||
         (finalText ? cleanSummary(finalText) : undefined) ||
         `copilot CLI failed (exit ${effectiveExit ?? "unknown"})`;
+      invocation.emit?.({ kind: "error", message: errMsg });
       return {
         ok: false,
         stopReason: "error",
@@ -244,30 +223,24 @@ export const githubCopilotDriver: AgentDriver = {
   },
 };
 
-type JsonObject = Record<string, unknown>;
-
-function isObject(v: unknown): v is JsonObject {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function asString(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() ? v : undefined;
-}
-
-/** Copilot emits JSONL (one JSON object per line). Tolerate interleaved non-JSON log lines. */
-export function parseJsonl(stdout: string): JsonObject[] {
-  const objs: JsonObject[] = [];
-  for (const line of stdout.split(/\r?\n/)) {
-    const l = line.trim();
-    if (!l || l[0] !== "{") continue;
-    try {
-      const parsed: unknown = JSON.parse(l);
-      if (isObject(parsed)) objs.push(parsed);
-    } catch {
-      // skip non-JSON log lines
+/**
+ * Emit vendor-neutral {@link AgentEvent}s from Copilot's parsed JSONL. Copilot
+ * emits discrete `assistant.message` events (each a complete message, not a
+ * growing snapshot) and `assistant.turn_end` boundaries, so a per-message stream
+ * maps cleanly. Post-parse; mapping Copilot's tool events is a follow-up once
+ * their shape is sampled against a real stream.
+ */
+function emitCopilotEvents(objs: JsonObject[], emit: (e: AgentEvent) => void): void {
+  let turn = 0;
+  for (const o of objs) {
+    if (o.type === "assistant.message" && isObject(o.data)) {
+      const text = asString(o.data.content);
+      if (text) emit({ kind: "model-message", text, turn: turn + 1 });
+    } else if (o.type === "assistant.turn_end") {
+      turn += 1;
+      emit({ kind: "turn-end", turn });
     }
   }
-  return objs;
 }
 
 /** The terminal `result` event (carries sessionId, exitCode, usage), if present. */
@@ -322,101 +295,13 @@ export function extractChangedFiles(result: JsonObject | undefined, workdir: str
   return rel.length ? rel : undefined;
 }
 
-/** Collapse whitespace and cap length so a summary can't blow up the output. */
-export function cleanSummary(text: string, max = 280): string {
-  const collapsed = text.replace(/\s+/g, " ").trim();
-  return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
-}
-
-/** Last non-empty, non-timestamped-log line of stderr — usually the real error. */
-export function lastMeaningfulLine(stderr: string): string {
-  const lines = stderr
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .filter((l) => !/^\d{4}-\d{2}-\d{2}T.*\b(ERROR|WARN|INFO|DEBUG|TRACE)\b/.test(l));
-  return lines.length ? lines[lines.length - 1]! : "";
-}
-
-function tail(text: string, max = 2000): string {
-  if (text.length <= max) return text;
-  return "…" + text.slice(-max);
-}
-
-interface ResolvedBin {
-  command: string;
-  argsPrefix: string[];
-  resolved: string; // for notes/logging
-}
-
 // Stryker disable all: binary resolution shells out to a real `copilot` CLI and
 // cannot be exercised in unit tests (it would require the external tool / auth).
 // Covered indirectly via the COPILOT_BIN override in the driver tests.
 async function resolveCopilotBinary(): Promise<ResolvedBin | null> {
-  // 1) Explicit override (also the unit-test seam).
-  const explicit = process.env.COPILOT_BIN;
-  if (explicit) {
-    return { command: explicit, argsPrefix: [], resolved: explicit };
-  }
-  // 2) "copilot" in PATH (after brew / npm global install).
-  if (await canRun(["copilot", "--version"])) {
-    return { command: "copilot", argsPrefix: [], resolved: "copilot (PATH)" };
-  }
-  return null;
-}
-
-async function canRun(cmdAndArgs: string[]): Promise<boolean> {
-  try {
-    const [cmd, ...args] = cmdAndArgs;
-    const child = spawn(cmd!, args, { stdio: "ignore" });
-    const code = await new Promise<number | null>((resolve) => {
-      child.on("error", () => resolve(1));
-      child.on("close", (c) => resolve(c));
-      setTimeout(() => {
-        try {
-          child.kill("SIGKILL");
-        } catch {}
-        resolve(1);
-      }, 4000);
-    });
-    return code === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function runCopilotOnce(
-  bin: ResolvedBin,
-  extraArgs: string[],
-  opts: { timeoutMs?: number } = {},
-): Promise<{ ok: boolean; error?: string }> {
-  return new Promise((resolve) => {
-    const child = spawn(bin.command, [...bin.argsPrefix, ...extraArgs], { stdio: "pipe" });
-
-    let err = "";
-    child.stderr?.on("data", (c: Buffer) => (err += c));
-
-    let done = false;
-    const finish = (ok: boolean, error?: string): void => {
-      if (done) return;
-      done = true;
-      try {
-        child.kill("SIGKILL");
-      } catch {}
-      resolve({ ok, error });
-    };
-
-    const t = opts.timeoutMs ? setTimeout(() => finish(false, "timeout"), opts.timeoutMs) : undefined;
-
-    child.on("error", (e) => {
-      if (t) clearTimeout(t);
-      finish(false, e.message);
-    });
-    child.on("close", (code) => {
-      if (t) clearTimeout(t);
-      if (code === 0) finish(true);
-      else finish(false, err || `exit ${code}`);
-    });
-  });
+  return resolveBinary("COPILOT_BIN", [
+    // "copilot" in PATH (after brew / npm global install).
+    { command: "copilot", resolved: "copilot (PATH)" },
+  ]);
 }
 // Stryker restore all

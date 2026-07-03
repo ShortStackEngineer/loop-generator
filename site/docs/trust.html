@@ -16,6 +16,7 @@
       <a href="getting-started.html">Getting started</a>
       <a href="authoring.html">Authoring</a>
       <a href="debugging.html">Debugging</a>
+      <a href="observing.html">Observing</a>
       <a class="active" href="trust.html">Lint &amp; trust</a>
       <a href="roadmap.html">Roadmap</a>
       <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
@@ -180,12 +181,18 @@ loopgen lint my.loop.yaml --json        <span class="c"># machine-readable findi
       (<code>completed | max_turns | aborted | error</code>). When the agent
       runs out of turns or errors but the checks pass anyway, the run still
       succeeds (checks are the source of truth), but the report says so instead
-      of showing a clean green.
+      of showing a clean green. The same honesty applies at the process level:
+      a CLI driver whose binary fails to spawn surfaces as an <code>error</code>
+      rather than a vacuous success, and a user abort takes precedence over the
+      incidental spawn error it causes.
     </p>
     <div class="callout">
       All caveats are collected in <code>report.warnings</code> and printed
-      under <code>⚠ warnings:</code>. Drivers that report a session id can also
-      resume after a <code>max_turns</code> stop (opt-in:
+      under <code>⚠ warnings:</code> — and when the run is
+      <a href="observing.html">traced</a>, they also become <code>signal</code>
+      records in the trace and span events in the OTLP tree, so a suspicious
+      green is visible in your tracing UI too. Drivers that report a session id
+      can also resume after a <code>max_turns</code> stop (opt-in:
       <code>driver.options.resume: true</code>).
     </div>
 
