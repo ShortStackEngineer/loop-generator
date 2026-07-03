@@ -24,6 +24,23 @@ export interface AgentUsage {
  */
 export type AgentStopReason = "completed" | "max_turns" | "aborted" | "error" | "unknown";
 
+/**
+ * A single, vendor-neutral event from inside one `driver.run()` — the agent's
+ * per-turn trajectory (model output, tool calls, results). Drivers emit whatever
+ * their backend exposes and simply skip variants they can't observe; a sink
+ * (OTLP, a JSONL trace, Raindrop) turns these into spans. Correlation and timing
+ * (runId, iteration, timestamp) are added by the engine when it forwards them,
+ * so the event stays minimal and drivers stay pure.
+ */
+export type AgentEvent =
+  | { kind: "turn-start"; turn: number }
+  | { kind: "turn-end"; turn: number }
+  | { kind: "model-message"; text: string; turn?: number }
+  | { kind: "tool-call"; name: string; id?: string; input?: unknown }
+  | { kind: "tool-result"; id?: string; ok?: boolean; output?: unknown }
+  | { kind: "usage"; usage: AgentUsage }
+  | { kind: "error"; message: string };
+
 /** Consolidated feedback from the previous iteration, handed to the agent. */
 export interface FeedbackSummary {
   /** Whether the previous iteration satisfied the success criteria. */
@@ -59,6 +76,12 @@ export interface AgentInvocation {
   options: Record<string, unknown>;
   /** Aborts on iteration timeout or run cancellation. */
   signal?: AbortSignal;
+  /**
+   * Optional sink for inner-trajectory events. Fire-and-forget; the engine
+   * supplies an implementation that can't throw. Drivers that can't surface
+   * per-turn detail simply never call it — a sparse stream is fine.
+   */
+  emit?(event: AgentEvent): void;
   log: Logger;
 }
 

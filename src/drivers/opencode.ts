@@ -1,8 +1,24 @@
-import { spawn } from "node:child_process";
 import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import type { PreflightResult } from "../core/preflight";
-import type { AgentDriver, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import {
+  asString,
+  cleanSummary,
+  foldPrompt,
+  isObject,
+  lastMeaningfulLine,
+  numberOr,
+  parseJsonl,
+  probeVersion,
+  resolveBinary,
+  spawnCollect,
+  tail,
+} from "./cli";
+import type { JsonObject, ResolvedBin } from "./cli";
+
+// Re-export the shared helpers the opencode tests import from this module.
+export { cleanSummary, parseJsonl, lastMeaningfulLine };
 
 const optionsSchema = z.object({
   /**
@@ -48,7 +64,7 @@ const optionsSchema = z.object({
  * files and runs tools itself — so this driver just spawns it scoped to the
  * workspace (`--dir`) and parses its JSONL event stream for the final text,
  * session id, and token usage. Symmetric to the grok and github-copilot drivers
- * (thin agentic CLI).
+ * (thin agentic CLI); shared plumbing lives in `./cli`.
  *
  * The `opencode` CLI must be installed (e.g. `brew install sst/tap/opencode`,
  * `npm i -g opencode-ai`, or `curl -fsSL https://opencode.ai/install | bash`)
@@ -82,7 +98,7 @@ export const opencodeDriver: AgentDriver = {
     }
 
     // Quick probe that the binary responds.
-    const probe = await runOpencodeOnce(bin, ["--version"], { timeoutMs: 8000 });
+    const probe = await probeVersion(bin, ["--version"], { timeoutMs: 8000 });
     if (!probe.ok) {
       warnings.push(`"opencode --version" check had issues: ${probe.error ?? "unknown"}`);
     }
@@ -109,9 +125,7 @@ export const opencodeDriver: AgentDriver = {
     // Fold systemPrompt (if any) in front of the concrete ask. OpenCode also
     // picks up AGENTS.md / project rules from the workspace on its own. The
     // prompt is passed as the positional `message` to `opencode run`.
-    const effectivePrompt = invocation.systemPrompt
-      ? `${invocation.systemPrompt}\n\n${invocation.prompt}`
-      : invocation.prompt;
+    const effectivePrompt = foldPrompt(invocation.systemPrompt, invocation.prompt);
 
     const args: string[] = [
       "run",
@@ -152,61 +166,25 @@ export const opencodeDriver: AgentDriver = {
       ...opts.env,
     };
 
-    let stdout = "";
-    let stderr = "";
-    let exitCode: number | null = null;
-    let killed = false;
-
-    try {
-      const child = spawn(bin.command, [...bin.argsPrefix, ...args], {
-        cwd: invocation.workdir,
-        env: childEnv,
-        stdio: ["ignore", "pipe", "pipe"],
-        signal: invocation.signal,
-      });
-
-      child.stdout?.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-
-      if (invocation.signal) {
-        invocation.signal.addEventListener(
-          "abort",
-          () => {
-            if (!child.killed) {
-              killed = true;
-              child.kill("SIGKILL");
-            }
-          },
-          { once: true },
-        );
-        if (invocation.signal.aborted) {
-          killed = true;
-          child.kill("SIGKILL");
-        }
-      }
-
-      await new Promise<void>((resolve) => {
-        child.on("error", () => resolve());
-        child.on("close", (code) => {
-          exitCode = code;
-          resolve();
-        });
-      });
-    } catch (err) {
-      return { ok: false, stopReason: "error", error: (err as Error).message };
-    }
-
-    if (killed || invocation.signal?.aborted) {
+    const res = await spawnCollect(bin, args, {
+      cwd: invocation.workdir,
+      env: childEnv,
+      signal: invocation.signal,
+    });
+    // Abort wins over an incidental spawn error (an already-aborted signal makes
+    // `spawn({ signal })` emit an immediate AbortError).
+    if (res.killed || invocation.signal?.aborted) {
       return { ok: false, stopReason: "aborted", error: "aborted" };
     }
+    if (res.spawnError) {
+      return { ok: false, stopReason: "error", error: res.spawnError };
+    }
+    const { stdout, stderr, exitCode } = res;
 
     // OpenCode emits JSONL: a stream of step_start / text / tool / step_finish
     // events, plus an `error` event for a backend/provider failure.
     const objs = parseJsonl(stdout);
+    if (invocation.emit) emitOpencodeEvents(objs, invocation.emit);
     const finalText = finalAssistantText(objs);
     const usage = extractUsage(objs);
     const sessionId = extractSessionId(objs);
@@ -245,37 +223,6 @@ export const opencodeDriver: AgentDriver = {
   },
 };
 
-type JsonObject = Record<string, unknown>;
-
-function isObject(v: unknown): v is JsonObject {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function asString(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() ? v : undefined;
-}
-
-function numberOr(...vals: unknown[]): number | undefined {
-  for (const v of vals) if (typeof v === "number" && !Number.isNaN(v)) return v;
-  return undefined;
-}
-
-/** OpenCode emits JSONL (one JSON object per line). Tolerate interleaved log lines. */
-export function parseJsonl(stdout: string): JsonObject[] {
-  const objs: JsonObject[] = [];
-  for (const line of stdout.split(/\r?\n/)) {
-    const l = line.trim();
-    if (!l || l[0] !== "{") continue;
-    try {
-      const parsed: unknown = JSON.parse(l);
-      if (isObject(parsed)) objs.push(parsed);
-    } catch {
-      // skip non-JSON log lines
-    }
-  }
-  return objs;
-}
-
 /** The `part` object of an event, if the event carries one. */
 function partOf(o: JsonObject): JsonObject | undefined {
   return isObject(o.part) ? o.part : undefined;
@@ -293,6 +240,31 @@ function isStepFinish(o: JsonObject): boolean {
   if (o.type === "step_finish") return true;
   const part = partOf(o);
   return part?.type === "step-finish";
+}
+
+/**
+ * Emit vendor-neutral {@link AgentEvent}s from OpenCode's parsed JSONL. Post-parse
+ * (events arrive in a burst after the process exits) — to stream live you'd move
+ * this onto `spawnCollect`'s `onStdout` line-by-line. Text parts re-emit a growing
+ * snapshot of the same part, so per-part `model-message` streaming would duplicate;
+ * we surface turn boundaries + usage here and let the driver's assembled final text
+ * be the model output. Mapping `tool` parts (state: running → completed) to
+ * tool-call/tool-result is a follow-up once sampled against a real stream.
+ */
+function emitOpencodeEvents(objs: JsonObject[], emit: (e: AgentEvent) => void): void {
+  let turn = 0;
+  for (const o of objs) {
+    if (!isStepFinish(o)) continue;
+    turn += 1;
+    emit({ kind: "turn-end", turn });
+    const tokens = isObject(partOf(o)?.tokens) ? (partOf(o)!.tokens as JsonObject) : undefined;
+    const usage: AgentUsage = {};
+    const inTok = numberOr(tokens?.input);
+    const outTok = numberOr(tokens?.output);
+    if (inTok != null) usage.inputTokens = inTok;
+    if (outTok != null) usage.outputTokens = outTok;
+    if (Object.keys(usage).length) emit({ kind: "usage", usage });
+  }
 }
 
 /**
@@ -392,101 +364,13 @@ export function formatErrorEvent(err: OpencodeError | undefined): string | undef
   return msg ?? err.name;
 }
 
-/** Collapse whitespace and cap length so a summary can't blow up the output. */
-export function cleanSummary(text: string, max = 280): string {
-  const collapsed = text.replace(/\s+/g, " ").trim();
-  return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
-}
-
-/** Last non-empty, non-timestamped-log line of stderr — usually the real error. */
-export function lastMeaningfulLine(stderr: string): string {
-  const lines = stderr
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .filter((l) => !/^\d{4}-\d{2}-\d{2}T.*\b(ERROR|WARN|INFO|DEBUG|TRACE)\b/.test(l));
-  return lines.length ? lines[lines.length - 1]! : "";
-}
-
-function tail(text: string, max = 2000): string {
-  if (text.length <= max) return text;
-  return "…" + text.slice(-max);
-}
-
-interface ResolvedBin {
-  command: string;
-  argsPrefix: string[];
-  resolved: string; // for notes/logging
-}
-
 // Stryker disable all: binary resolution shells out to a real `opencode` CLI and
 // cannot be exercised in unit tests (it would require the external tool /
 // provider). Covered indirectly via the OPENCODE_BIN override in the driver tests.
 async function resolveOpencodeBinary(): Promise<ResolvedBin | null> {
-  // 1) Explicit override (also the unit-test seam).
-  const explicit = process.env.OPENCODE_BIN;
-  if (explicit) {
-    return { command: explicit, argsPrefix: [], resolved: explicit };
-  }
-  // 2) "opencode" in PATH (after brew / npm global install / install script).
-  if (await canRun(["opencode", "--version"])) {
-    return { command: "opencode", argsPrefix: [], resolved: "opencode (PATH)" };
-  }
-  return null;
-}
-
-async function canRun(cmdAndArgs: string[]): Promise<boolean> {
-  try {
-    const [cmd, ...args] = cmdAndArgs;
-    const child = spawn(cmd!, args, { stdio: "ignore" });
-    const code = await new Promise<number | null>((resolve) => {
-      child.on("error", () => resolve(1));
-      child.on("close", (c) => resolve(c));
-      setTimeout(() => {
-        try {
-          child.kill("SIGKILL");
-        } catch {}
-        resolve(1);
-      }, 4000);
-    });
-    return code === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function runOpencodeOnce(
-  bin: ResolvedBin,
-  extraArgs: string[],
-  opts: { timeoutMs?: number } = {},
-): Promise<{ ok: boolean; error?: string }> {
-  return new Promise((resolve) => {
-    const child = spawn(bin.command, [...bin.argsPrefix, ...extraArgs], { stdio: "pipe" });
-
-    let err = "";
-    child.stderr?.on("data", (c: Buffer) => (err += c));
-
-    let done = false;
-    const finish = (ok: boolean, error?: string): void => {
-      if (done) return;
-      done = true;
-      try {
-        child.kill("SIGKILL");
-      } catch {}
-      resolve({ ok, error });
-    };
-
-    const t = opts.timeoutMs ? setTimeout(() => finish(false, "timeout"), opts.timeoutMs) : undefined;
-
-    child.on("error", (e) => {
-      if (t) clearTimeout(t);
-      finish(false, e.message);
-    });
-    child.on("close", (code) => {
-      if (t) clearTimeout(t);
-      if (code === 0) finish(true);
-      else finish(false, err || `exit ${code}`);
-    });
-  });
+  return resolveBinary("OPENCODE_BIN", [
+    // "opencode" in PATH (after brew / npm global install / install script).
+    { command: "opencode", resolved: "opencode (PATH)" },
+  ]);
 }
 // Stryker restore all

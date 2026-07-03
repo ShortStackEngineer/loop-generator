@@ -2,7 +2,7 @@ import { mkdirSync, existsSync, readFileSync } from "node:fs";
 import { randomUUID, createHash } from "node:crypto";
 import path from "node:path";
 import type { Registry } from "./registry";
-import type { AgentDriver, AgentRunResult, AgentUsage, FeedbackSummary } from "../drivers/types";
+import type { AgentDriver, AgentEvent, AgentRunResult, AgentUsage, FeedbackSummary } from "../drivers/types";
 import type { Evaluator, EvaluationResult } from "../evaluators/types";
 import type { TaskType } from "../tasks/types";
 import { genericTask } from "../tasks/builtin";
@@ -84,6 +84,13 @@ export interface RunOptions {
   signal?: AbortSignal;
   /** Called after every iteration (for live progress). */
   onIteration?: (report: IterationReport) => void;
+  /**
+   * Called for each inner-trajectory event a driver emits during an iteration
+   * (model output, tool calls, results). Live; tagged with the run id and the
+   * 0-based iteration. A throwing handler can never break the run. This is the
+   * minimal seam an observability sink (OTLP, a JSONL trace, Raindrop) hooks.
+   */
+  onAgentEvent?: (event: AgentEvent, ctx: { runId: string; iteration: number }) => void;
   /** Skip preflight checks (not recommended). */
   skipPreflight?: boolean;
   /**
@@ -441,6 +448,17 @@ export class LoopEngine {
           resumeSessionId: lastSessionId,
           options: spec.driver.options,
           signal,
+          emit: opts.onAgentEvent
+            ? (event) => {
+                // An observability sink must never break a run; swallow anything
+                // it throws (or does badly) rather than fail the iteration.
+                try {
+                  opts.onAgentEvent!(event, { runId, iteration: i });
+                } catch {
+                  /* ignore */
+                }
+              }
+            : undefined,
           log: iterLog.child("driver"),
         });
       } catch (err) {

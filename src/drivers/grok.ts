@@ -1,8 +1,24 @@
-import { spawn } from "node:child_process";
 import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import type { PreflightResult } from "../core/preflight";
 import type { AgentDriver, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import {
+  asString,
+  cleanSummary,
+  foldPrompt,
+  isObject,
+  lastMeaningfulLine as cliLastMeaningfulLine,
+  numberOr,
+  parseJsonObjects,
+  probeVersion,
+  resolveBinary,
+  spawnCollect,
+  tail,
+} from "./cli";
+import type { JsonObject, ResolvedBin } from "./cli";
+
+// Re-export the shared parsers the grok tests import from this module.
+export { cleanSummary, parseJsonObjects };
 
 const optionsSchema = z.object({
   /** Model id to pass via -m / --model. If omitted, the grok CLI uses its configured default. */
@@ -26,8 +42,6 @@ const optionsSchema = z.object({
   extraArgs: z.array(z.string()).optional(),
 });
 
-type GrokOptions = z.infer<typeof optionsSchema>;
-
 /**
  * Drives Grok Build (xAI) via the official `grok` CLI in headless mode (`-p`).
  *
@@ -36,7 +50,8 @@ type GrokOptions = z.infer<typeof optionsSchema>;
  * login (browser) stored under the user's Grok config.
  *
  * This is the reference driver for the Grok coding agent, symmetric to
- * claude-agent-sdk.
+ * claude-agent-sdk. Shared CLI plumbing (binary resolution, spawn/collect, JSON
+ * parsing, text shaping) lives in `./cli`.
  */
 export const grokDriver: AgentDriver = {
   name: "grok",
@@ -64,7 +79,7 @@ export const grokDriver: AgentDriver = {
     }
 
     // Quick probe that the binary responds.
-    const probe = await runGrokOnce(bin, ["--version"], { timeoutMs: 8000 });
+    const probe = await probeVersion(bin, ["--version"], { timeoutMs: 8000 });
     if (!probe.ok) {
       warnings.push(`"grok --version" check had issues: ${probe.error ?? "unknown"}`);
     }
@@ -84,11 +99,9 @@ export const grokDriver: AgentDriver = {
       };
     }
 
-    // Build the effective user prompt. Fold systemPrompt (if any) at the front so the
-    // agent receives role framing + the concrete ask. Grok Build also picks up AGENTS.md etc.
-    const effectivePrompt = invocation.systemPrompt
-      ? `${invocation.systemPrompt}\n\n${invocation.prompt}`
-      : invocation.prompt;
+    // Fold systemPrompt (if any) at the front so the agent receives role framing
+    // + the concrete ask. Grok Build also picks up AGENTS.md etc.
+    const effectivePrompt = foldPrompt(invocation.systemPrompt, invocation.prompt);
 
     const args: string[] = [
       "-p",
@@ -122,65 +135,21 @@ export const grokDriver: AgentDriver = {
       ...opts.env,
     };
 
-    const start = Date.now();
-    let stdout = "";
-    let stderr = "";
-    let exitCode: number | null = null;
-    let killed = false;
-
-    try {
-      const child = spawn(bin.command, [...bin.argsPrefix, ...args], {
-        cwd: invocation.workdir,
-        env: childEnv,
-        stdio: ["ignore", "pipe", "pipe"],
-        signal: invocation.signal,
-      });
-
-      child.stdout?.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr?.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-
-      if (invocation.signal) {
-        invocation.signal.addEventListener(
-          "abort",
-          () => {
-            if (!child.killed) {
-              killed = true;
-              child.kill("SIGKILL");
-            }
-          },
-          { once: true },
-        );
-        if (invocation.signal.aborted) {
-          killed = true;
-          child.kill("SIGKILL");
-        }
-      }
-
-      await new Promise<void>((resolve) => {
-        child.on("error", () => resolve());
-        child.on("close", (code) => {
-          exitCode = code;
-          resolve();
-        });
-      });
-    } catch (err) {
-      return {
-        ok: false,
-        error: (err as Error).message,
-      };
+    const res = await spawnCollect(bin, args, {
+      cwd: invocation.workdir,
+      env: childEnv,
+      signal: invocation.signal,
+    });
+    // Abort wins over an incidental spawn error: an already-aborted signal makes
+    // `spawn({ signal })` emit an immediate AbortError, which must still read as
+    // "aborted", not as a spawn failure.
+    if (res.killed || invocation.signal?.aborted) {
+      return { ok: false, stopReason: "aborted", error: "aborted" };
     }
-
-    if (killed || invocation.signal?.aborted) {
-      return {
-        ok: false,
-        stopReason: "aborted",
-        error: "aborted",
-      };
+    if (res.spawnError) {
+      return { ok: false, error: res.spawnError };
     }
+    const { stdout, stderr, exitCode } = res;
 
     // Parse --output-format json. grok may emit a single object or JSONL (one
     // event per line); collect every object so we can pull the FINAL answer
@@ -212,6 +181,7 @@ export const grokDriver: AgentDriver = {
         extractError(objs) ||
         lastMeaningfulLine(stderr) ||
         `grok CLI failed (exit ${exitCode ?? "unknown"})`;
+      invocation.emit?.({ kind: "error", message: errMsg });
       return {
         ok: false,
         stopReason: "error",
@@ -221,6 +191,11 @@ export const grokDriver: AgentDriver = {
         raw: { stdout: tail(stdout), stderr: tail(stderr), objects: objs.length, exitCode },
       };
     }
+
+    // Coarse trajectory: grok's stream shape is loosely structured, so surface
+    // the final answer as a single model-message (both max_turns and completed
+    // reach here). Per-turn/tool events would need grok's event schema sampled.
+    if (invocation.emit && finalText) invocation.emit({ kind: "model-message", text: finalText });
 
     // max_turns: the agent did real work but didn't self-terminate. Report it as
     // a successful-but-incomplete run so the engine can warn / resume rather than
@@ -246,41 +221,6 @@ export const grokDriver: AgentDriver = {
     };
   },
 };
-
-type JsonObject = Record<string, unknown>;
-
-/** Parse stdout as a single JSON object or as JSONL (one object per line). */
-export function parseJsonObjects(stdout: string): JsonObject[] {
-  const trimmed = stdout.trim();
-  if (!trimmed) return [];
-  try {
-    const whole = JSON.parse(trimmed);
-    return Array.isArray(whole) ? whole.filter(isObject) : isObject(whole) ? [whole] : [];
-  } catch {
-    // fall through to line-by-line
-  }
-  const objs: JsonObject[] = [];
-  for (const line of trimmed.split(/\r?\n/)) {
-    const l = line.trim();
-    if (!l || (l[0] !== "{" && l[0] !== "[")) continue;
-    try {
-      const parsed = JSON.parse(l);
-      if (Array.isArray(parsed)) objs.push(...parsed.filter(isObject));
-      else if (isObject(parsed)) objs.push(parsed);
-    } catch {
-      // skip non-JSON lines (logs)
-    }
-  }
-  return objs;
-}
-
-function isObject(v: unknown): v is JsonObject {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
-function asString(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() ? v : undefined;
-}
 
 /** Pull the agent's final answer, preferring an explicit result event. */
 export function extractFinalText(objs: JsonObject[]): string | undefined {
@@ -342,127 +282,23 @@ export function extractError(objs: JsonObject[]): string | undefined {
   return undefined;
 }
 
-function numberOr(...vals: unknown[]): number | undefined {
-  for (const v of vals) if (typeof v === "number" && !Number.isNaN(v)) return v;
-  return undefined;
-}
-
-/** Collapse whitespace and cap length so a summary can't blow up the output. */
-export function cleanSummary(text: string, max = 280): string {
-  const collapsed = text.replace(/\s+/g, " ").trim();
-  return collapsed.length > max ? `${collapsed.slice(0, max - 1)}…` : collapsed;
-}
-
-/** Last non-empty, non-pure-log line of stderr — usually the real error. */
+/**
+ * Last meaningful stderr line, additionally dropping grok's MCP tool chatter
+ * (the `mcp-search____IMPORTANT` collision noise) on top of the shared filters.
+ */
 export function lastMeaningfulLine(stderr: string): string {
-  const lines = stderr
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    // Drop structured log lines (timestamped ERROR/WARN/INFO traces and MCP noise).
-    .filter((l) => !/^\d{4}-\d{2}-\d{2}T.*\b(ERROR|WARN|INFO|DEBUG|TRACE)\b/.test(l))
-    .filter((l) => !/skipping mcp tool|tool_output_error|tool_error/i.test(l));
-  return lines.length ? lines[lines.length - 1]! : "";
-}
-
-interface ResolvedBin {
-  command: string;
-  argsPrefix: string[];
-  resolved: string; // for notes/logging
+  return cliLastMeaningfulLine(stderr, [/skipping mcp tool|tool_output_error|tool_error/i]);
 }
 
 // Stryker disable all: binary resolution shells out to a real `grok`/`npx` CLI
 // and cannot be exercised in unit tests (it would require the external tool /
 // network). Covered indirectly via the GROK_BIN override in the driver tests.
 async function resolveGrokBinary(): Promise<ResolvedBin | null> {
-  // 1) Explicit override
-  const explicit = process.env.GROK_BIN;
-  if (explicit) {
-    return { command: explicit, argsPrefix: [], resolved: explicit };
-  }
-
-  // 2) "grok" in PATH (preferred — after global npm install or official installer)
-  if (await canRun(["grok", "--version"])) {
-    return { command: "grok", argsPrefix: [], resolved: "grok (PATH)" };
-  }
-
-  // 3) Fallback via npx (downloads on first use if not cached)
-  // npx will invoke the package's bin entry.
-  if (await canRun(["npx", "--yes", "@xai-official/grok", "--version"])) {
-    return {
-      command: "npx",
-      argsPrefix: ["--yes", "@xai-official/grok"],
-      resolved: "npx --yes @xai-official/grok",
-    };
-  }
-
-  return null;
+  return resolveBinary("GROK_BIN", [
+    // "grok" in PATH (preferred — after global npm install or official installer).
+    { command: "grok", resolved: "grok (PATH)" },
+    // Fallback via npx (downloads on first use if not cached).
+    { command: "npx", argsPrefix: ["--yes", "@xai-official/grok"], resolved: "npx --yes @xai-official/grok" },
+  ]);
 }
-
-async function canRun(cmdAndArgs: string[]): Promise<boolean> {
-  try {
-    const [cmd, ...args] = cmdAndArgs;
-    const child = spawn(cmd!, args, { stdio: "ignore" });
-    const code = await new Promise<number | null>((resolve) => {
-      child.on("error", () => resolve(1));
-      child.on("close", (c) => resolve(c));
-      // hard safety timeout
-      setTimeout(() => {
-        try {
-          child.kill("SIGKILL");
-        } catch {}
-        resolve(1);
-      }, 4000);
-    });
-    return code === 0;
-  } catch {
-    return false;
-  }
-}
-
-async function runGrokOnce(
-  bin: ResolvedBin,
-  extraArgs: string[],
-  opts: { timeoutMs?: number } = {},
-): Promise<{ ok: boolean; error?: string }> {
-  return new Promise((resolve) => {
-    const child = spawn(bin.command, [...bin.argsPrefix, ...extraArgs], {
-      stdio: "pipe",
-    });
-
-    let out = "";
-    let err = "";
-    child.stdout?.on("data", (c: Buffer) => (out += c));
-    child.stderr?.on("data", (c: Buffer) => (err += c));
-
-    let done = false;
-    const finish = (ok: boolean, error?: string) => {
-      if (done) return;
-      done = true;
-      try {
-        child.kill("SIGKILL");
-      } catch {}
-      resolve({ ok, error });
-    };
-
-    const t = opts.timeoutMs
-      ? setTimeout(() => finish(false, "timeout"), opts.timeoutMs)
-      : undefined;
-
-    child.on("error", (e) => {
-      if (t) clearTimeout(t);
-      finish(false, e.message);
-    });
-    child.on("close", (code) => {
-      if (t) clearTimeout(t);
-      if (code === 0) finish(true);
-      else finish(false, err || `exit ${code}`);
-    });
-  });
-}
-
 // Stryker restore all
-function tail(text: string, max = 2000): string {
-  if (text.length <= max) return text;
-  return "…" + text.slice(-max);
-}

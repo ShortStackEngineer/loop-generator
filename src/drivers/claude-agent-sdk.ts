@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import type { PreflightResult } from "../core/preflight";
-import type { AgentDriver, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
 const DEFAULT_MODEL = "claude-opus-4-8";
@@ -129,10 +129,12 @@ export const claudeAgentSdkDriver: AgentDriver = {
     let usage: AgentUsage | undefined;
     let stopReason: AgentRunResult["stopReason"] = "completed";
     const transcript: SdkMessage[] = [];
+    const turnState = { turn: 0 };
 
     try {
       for await (const message of sdk.query({ prompt: invocation.prompt, options: queryOptions })) {
         transcript.push(message);
+        if (invocation.emit) emitSdkEvents(message, invocation.emit, turnState);
         if (message.type === "system" && message.subtype === "init" && message.session_id) {
           sessionId = message.session_id;
         }
@@ -152,6 +154,7 @@ export const claudeAgentSdkDriver: AgentDriver = {
       }
     } catch (err) {
       const aborted = invocation.signal?.aborted || /abort/i.test((err as Error).message);
+      if (!aborted) invocation.emit?.({ kind: "error", message: (err as Error).message });
       return {
         ok: false,
         stopReason: aborted ? "aborted" : "error",
@@ -177,4 +180,48 @@ function signalToController(signal: AbortSignal): AbortController {
   if (signal.aborted) controller.abort();
   else signal.addEventListener("abort", () => controller.abort(), { once: true });
   return controller;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Translate one Agent SDK message into vendor-neutral {@link AgentEvent}s. The
+ * driver already walks every message for the final result; this reads the same
+ * message with no extra iteration. Assistant messages carry text + `tool_use`
+ * blocks (each assistant message counts as a turn); tool results come back as
+ * `user` messages. Structured `input`/`output` pass through untouched — bounding
+ * them is the sink's job, not the driver's.
+ */
+function emitSdkEvents(message: SdkMessage, emit: (e: AgentEvent) => void, turnState: { turn: number }): void {
+  const inner = isRecord(message.message) ? message.message : undefined;
+  const content: unknown[] = inner && Array.isArray(inner.content) ? inner.content : [];
+
+  if (message.type === "assistant") {
+    turnState.turn += 1;
+    for (const block of content) {
+      if (!isRecord(block)) continue;
+      if (block.type === "text" && typeof block.text === "string") {
+        emit({ kind: "model-message", text: block.text, turn: turnState.turn });
+      } else if (block.type === "tool_use") {
+        emit({
+          kind: "tool-call",
+          name: typeof block.name === "string" ? block.name : "unknown",
+          id: typeof block.id === "string" ? block.id : undefined,
+          input: block.input,
+        });
+      }
+    }
+  } else if (message.type === "user") {
+    for (const block of content) {
+      if (!isRecord(block) || block.type !== "tool_result") continue;
+      emit({
+        kind: "tool-result",
+        id: typeof block.tool_use_id === "string" ? block.tool_use_id : undefined,
+        ok: block.is_error !== true,
+        output: block.content,
+      });
+    }
+  }
 }

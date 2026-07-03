@@ -106,6 +106,14 @@ describe("opencode driver (fake CLI)", () => {
     expect(readFileSync(path.join(workdir, "OUTPUT.txt"), "utf8")).toBe("hello123");
   });
 
+  it("emits turn-end and usage trajectory events", async () => {
+    const events: Array<{ kind: string; turn?: number; usage?: unknown }> = [];
+    const r = await opencodeDriver.run(invocation({ emit: (e) => events.push(e) }));
+    expect(r.ok).toBe(true);
+    expect(events).toContainEqual({ kind: "turn-end", turn: 1 });
+    expect(events).toContainEqual({ kind: "usage", usage: { inputTokens: 671, outputTokens: 8 } });
+  });
+
   it("treats a provider/model error event as a failure with an actionable message", async () => {
     const r = await opencodeDriver.run(withMode("model-error"));
     expect(r.ok).toBe(false);

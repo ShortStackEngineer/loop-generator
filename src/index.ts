@@ -43,6 +43,7 @@ export type {
   AgentRunResult,
   AgentUsage,
   AgentStopReason,
+  AgentEvent,
   FeedbackSummary,
 } from "./drivers/types";
 export type {
