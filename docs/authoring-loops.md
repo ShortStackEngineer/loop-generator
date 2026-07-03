@@ -82,6 +82,10 @@ Map what you found to fields. (The full schema and every knob live in
   green by editing them.
 - **`limits.maxIterations`** — a budget, not a target. 5–8 is typical; small,
   well-checked tasks need fewer.
+- **`observability.observers`** — optional, but cheap insurance on a real run:
+  a `jsonl` observer (or `--trace` at run time) captures the agent's inner
+  trajectory, which is the evidence [debugging](./debugging-loops.md) wants
+  when a run stalls. See [Observing runs](./observing-runs.md).
 
 ## 4. Generate the skeleton, then edit
 

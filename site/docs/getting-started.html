@@ -16,6 +16,7 @@
       <a class="active" href="getting-started.html">Getting started</a>
       <a href="authoring.html">Authoring</a>
       <a href="debugging.html">Debugging</a>
+      <a href="observing.html">Observing</a>
       <a href="trust.html">Lint &amp; trust</a>
       <a href="roadmap.html">Roadmap</a>
       <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
@@ -79,6 +80,12 @@ npm run loopgen -- run my-loop.loop.yaml</code></pre>
       <code>lint</code>: <code>2</code> on lint errors, <code>1</code> on a
       vacuous/GREEN check set, else <code>0</code>.
     </p>
+    <p>
+      Add <code>--trace &lt;file&gt;</code> to any run to write a JSONL
+      execution trace — the loop's iterations plus the agent's inner tool-call
+      trajectory (see <a href="observing.html">Observing runs</a>):
+    </p>
+<pre><code>npm run loopgen -- run my-loop.loop.yaml --trace trace.jsonl</code></pre>
     <p>List what's registered, or verify a driver:</p>
 <pre><code>npm run loopgen -- list
 npm run loopgen -- verify-driver mock</code></pre>
@@ -106,6 +113,11 @@ npm run loopgen -- verify-driver mock</code></pre>
           <td><strong>Task type</strong></td>
           <td>Category knowledge: how to frame the agent and which evaluators to scaffold</td>
           <td><code>function</code>, <code>api</code>, <code>webapp</code>, <code>experiment</code>, <code>generic</code></td>
+        </tr>
+        <tr>
+          <td><strong>Observer</strong></td>
+          <td>A spec-referenceable consumer of the run's telemetry (loop outcomes + agent trajectory)</td>
+          <td><code>jsonl</code>, <code>otlp</code></td>
         </tr>
         <tr>
           <td><strong>Success criteria</strong></td>
@@ -156,10 +168,16 @@ npm run loopgen -- verify-driver mock</code></pre>
   <span class="k">maxCostUsd:</span> 5.0        <span class="c"># optional — stop with "budget-exceeded" past this cumulative cost</span>
   <span class="k">maxTokens:</span> 2000000     <span class="c"># optional — same, on cumulative input+output tokens</span>
 <span class="k">evaluation:</span>
-  <span class="k">concurrency:</span> 1         <span class="c"># run evaluators sequentially (default; safe for shared DB/state)</span></code></pre>
+  <span class="k">concurrency:</span> 1         <span class="c"># run evaluators sequentially (default; safe for shared DB/state)</span>
+<span class="k">observability:</span>          <span class="c"># optional — stream the run's telemetry</span>
+  <span class="k">observers:</span>
+    - <span class="k">uses:</span> jsonl        <span class="c"># or otlp; see Observing runs</span>
+      <span class="k">options:</span> { file: trace.jsonl }</code></pre>
     <p>
       Field-by-field guidance — including which trust settings to pick and why —
-      lives in <a href="authoring.html">Authoring a loop you can trust</a>.
+      lives in <a href="authoring.html">Authoring a loop you can trust</a>;
+      the observability block is covered in
+      <a href="observing.html">Observing runs</a>.
     </p>
 
     <h2 id="examples">Examples</h2>
@@ -218,8 +236,10 @@ npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml</code></
 
     <h2 id="extending">Extending it</h2>
     <p>
-      The whole system is three plug-in points. Register your own and pass them
-      to the engine — adding a plug-in never means editing the engine.
+      The whole system is four plug-in points — drivers, evaluators, task types,
+      and observers. Register your own and pass them to the engine — adding a
+      plug-in never means editing the engine. (Custom observers are covered in
+      <a href="observing.html#custom">Observing runs</a>.)
     </p>
 
     <h3>A new evaluator (feedback tool)</h3>

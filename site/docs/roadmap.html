@@ -16,6 +16,7 @@
       <a href="getting-started.html">Getting started</a>
       <a href="authoring.html">Authoring</a>
       <a href="debugging.html">Debugging</a>
+      <a href="observing.html">Observing</a>
       <a href="trust.html">Lint &amp; trust</a>
       <a class="active" href="roadmap.html">Roadmap</a>
       <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
@@ -82,17 +83,17 @@
       dead affordance in a public contract erodes trust in the contract.
     </p>
 
-    <h3>Transcript persistence + a native coverage evaluator <span class="pill amber">exploring</span></h3>
-    <ul>
-      <li>Transcripts persist only when <code>--report &lt;file&gt;</code> is
-        passed, and the CLI drivers store only truncated stdout/stderr tails —
-        not full conversations. Add optional, first-class transcript capture for
-        better run diagnosis.</li>
-      <li>Only two evaluators ship today (<code>command</code>,
-        <code>experiment</code>). Ship a native coverage evaluator
-        <strong>plus a documented custom-evaluator recipe</strong> — the recipe
-        matters more than any single built-in primitive.</li>
-    </ul>
+    <h3>A native coverage evaluator <span class="pill amber">exploring</span></h3>
+    <p>
+      Only two evaluators ship today (<code>command</code>,
+      <code>experiment</code>). Ship a native coverage evaluator
+      <strong>plus a documented custom-evaluator recipe</strong> — the recipe
+      matters more than any single built-in primitive. (The other half of this
+      item — first-class capture of what happens inside a run — shipped as the
+      <a href="observing.html">observer plug-in point</a>: <code>--trace</code>,
+      the <code>jsonl</code>/<code>otlp</code> built-ins, and the
+      <code>AgentEvent</code> driver seam.)
+    </p>
 
     <h2 id="deferred">Deferred / not planned</h2>
     <ul>
