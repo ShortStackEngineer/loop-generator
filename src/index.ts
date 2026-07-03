@@ -121,6 +121,17 @@ export type {
   BatchItemStatus,
 } from "./batch/runner";
 
+// Observability (Stage-1 trace sink: loop + agent-event stream)
+export { createTraceRecorder, runWithTrace, jsonlFileSink, arraySink } from "./observability/recorder";
+export type {
+  TraceRecord,
+  TraceSink,
+  TraceRecorder,
+  TraceCommon,
+  RecorderOptions,
+  EvaluationTrace,
+} from "./observability/types";
+
 // Lint (Layer 0: static pre-execution checks)
 export { lintSpec, lintBatch, lintPath, workspacePreflight } from "./lint";
 export type { LintResult } from "./lint";
