@@ -5,6 +5,7 @@ import type { Registry } from "./registry";
 import type { AgentDriver, AgentEvent, AgentRunResult, AgentUsage, FeedbackSummary } from "../drivers/types";
 import type { Evaluator, EvaluationResult } from "../evaluators/types";
 import type { TaskType } from "../tasks/types";
+import type { Observer, ObserverSession } from "../observers/types";
 import { genericTask } from "../tasks/builtin";
 import { evaluateCriteria } from "./criteria";
 import { buildFeedback } from "./feedback";
@@ -21,6 +22,9 @@ export interface EngineRegistries {
   drivers: Registry<AgentDriver>;
   evaluators: Registry<Evaluator>;
   tasks: Registry<TaskType>;
+  /** Telemetry consumers referenced by `observability.observers[].uses`. Optional
+   * so existing hand-built registries keep working; absent means "no observers". */
+  observers?: Registry<Observer>;
 }
 
 export interface IterationReport {
@@ -216,6 +220,7 @@ export class LoopEngine {
     let driver: AgentDriver;
     let taskType: TaskType;
     let evaluators: { name: string; type: string; evaluator: Evaluator; options: Record<string, unknown> }[];
+    let observers: { observer: Observer; options: Record<string, unknown> }[];
     try {
       driver = this.registries.drivers.get(spec.driver.uses);
       taskType = this.registries.tasks.tryGet(spec.task.type) ?? genericTask;
@@ -225,6 +230,13 @@ export class LoopEngine {
         evaluator: this.registries.evaluators.get(e.uses),
         options: e.options,
       }));
+      const observerRegistry = this.registries.observers;
+      observers = (spec.observability?.observers ?? []).map((o) => {
+        if (!observerRegistry) {
+          throw new Error(`No observer registry is configured, but the spec declares observer "${o.uses}".`);
+        }
+        return { observer: observerRegistry.get(o.uses), options: o.options };
+      });
     } catch (err) {
       return { ...base, reason: (err as Error).message, error: (err as Error).message };
     }
@@ -243,6 +255,9 @@ export class LoopEngine {
       if (driver.preflight) checks.push(await driver.preflight({ workdir, options: spec.driver.options }));
       for (const e of evaluators) {
         if (e.evaluator.preflight) checks.push(await e.evaluator.preflight({ workdir, options: e.options }));
+      }
+      for (const o of observers) {
+        if (o.observer.preflight) checks.push(await o.observer.preflight({ workdir, options: o.options }));
       }
       const merged = mergePreflight(checks);
       for (const w of merged.warnings ?? []) log.warn(w);
@@ -369,6 +384,11 @@ export class LoopEngine {
     let lastSessionId: string | undefined;
     let lastTree = baselineTree;
 
+    // Observers: begin one session per resolved observer now that the run is
+    // committed (past preflight). They see iteration + agent events live and the
+    // terminal report; a failing observer is isolated, never breaking the run.
+    const observerSessions = this.beginObservers(observers, { runId, workdir, baseDir, spec }, log);
+
     // Baseline evaluation: run the checks once before any agent work. If they
     // already pass, the checks probably don't test the requirement.
     const baselineSetting = opts.baseline ?? spec.limits.baseline;
@@ -393,14 +413,14 @@ export class LoopEngine {
         log.warn(w);
         // Strict baseline: a vacuous check set is a hard failure, not a caveat.
         if (strictBaseline) {
-          return {
+          return this.finishObservers(observerSessions, {
             ...base,
             outcome: "baseline-vacuous",
             reason: `strict baseline: ${w}`,
             baseline,
             warnings: runWarnings,
             durationMs: Date.now() - start,
-          };
+          });
         }
       }
     }
@@ -410,7 +430,7 @@ export class LoopEngine {
       if (opts.signal?.aborted) {
         checkSpecTamper();
         checkEvaluatorTamper();
-        return {
+        return this.finishObservers(observerSessions, {
           ...base,
           outcome: "aborted",
           reason: "run aborted",
@@ -419,7 +439,7 @@ export class LoopEngine {
           warnings: runWarnings,
           baseline,
           durationMs: Date.now() - start,
-        };
+        });
       }
 
       const iterStart = Date.now();
@@ -448,17 +468,27 @@ export class LoopEngine {
           resumeSessionId: lastSessionId,
           options: spec.driver.options,
           signal,
-          emit: opts.onAgentEvent
-            ? (event) => {
-                // An observability sink must never break a run; swallow anything
-                // it throws (or does badly) rather than fail the iteration.
-                try {
-                  opts.onAgentEvent!(event, { runId, iteration: i });
-                } catch {
-                  /* ignore */
+          emit:
+            opts.onAgentEvent || observerSessions.length
+              ? (event) => {
+                  // An observability sink must never break a run; each consumer
+                  // is isolated so a throw can't fail the iteration.
+                  if (opts.onAgentEvent) {
+                    try {
+                      opts.onAgentEvent(event, { runId, iteration: i });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                  for (const s of observerSessions) {
+                    try {
+                      s.onAgentEvent?.(event, { iteration: i });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
                 }
-              }
-            : undefined,
+              : undefined,
           log: iterLog.child("driver"),
         });
       } catch (err) {
@@ -531,6 +561,13 @@ export class LoopEngine {
       };
       iterations.push(report);
       opts.onIteration?.(report);
+      for (const s of observerSessions) {
+        try {
+          s.onIteration?.(report);
+        } catch {
+          /* an observer must never break a run */
+        }
+      }
       iterLog.info(`result: ${verdict.satisfied ? "PASS" : "not yet"} — ${verdict.reason}`);
 
       if (verdict.satisfied) {
@@ -546,7 +583,7 @@ export class LoopEngine {
         const evalTamperFails = evaluatorTampered && evaluatorGuard === "error";
         const tamperFails = specTamperFails || evalTamperFails;
         const tamperOutcome: LoopOutcome = specTamperFails ? "spec-tampered" : "evaluator-tampered";
-        return {
+        return this.finishObservers(observerSessions, {
           ...base,
           outcome: tamperFails ? tamperOutcome : "success",
           success: !tamperFails,
@@ -562,7 +599,7 @@ export class LoopEngine {
           diffStat: gitEnabled ? overall.stat : undefined,
           warnings,
           durationMs: Date.now() - start,
-        };
+        });
       }
 
       // Budget ceiling: the iteration didn't converge — if cumulative usage has
@@ -575,7 +612,7 @@ export class LoopEngine {
         checkEvaluatorTamper();
         iterLog.warn(overBudget);
         const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
-        return {
+        return this.finishObservers(observerSessions, {
           ...base,
           outcome: "budget-exceeded",
           success: false,
@@ -587,14 +624,14 @@ export class LoopEngine {
           diffStat: gitEnabled ? overall.stat : undefined,
           warnings: runWarnings,
           durationMs: Date.now() - start,
-        };
+        });
       }
     }
 
     checkSpecTamper();
     checkEvaluatorTamper();
     const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
-    return {
+    return this.finishObservers(observerSessions, {
       ...base,
       outcome: "max-iterations",
       success: false,
@@ -606,7 +643,39 @@ export class LoopEngine {
       diffStat: gitEnabled ? overall.stat : undefined,
       warnings: runWarnings,
       durationMs: Date.now() - start,
-    };
+    });
+  }
+
+  /**
+   * Begin a session for each resolved observer. A throwing `begin` is isolated
+   * and logged — that observer is simply dropped, never failing the run.
+   */
+  private beginObservers(
+    observers: { observer: Observer; options: Record<string, unknown> }[],
+    info: { runId: string; workdir: string; baseDir: string; spec: LoopSpec },
+    log: Logger,
+  ): ObserverSession[] {
+    const sessions: ObserverSession[] = [];
+    for (const o of observers) {
+      try {
+        sessions.push(o.observer.begin({ ...info, options: o.options }));
+      } catch (err) {
+        log.warn(`observer "${o.observer.name}" failed to start: ${(err as Error).message}`);
+      }
+    }
+    return sessions;
+  }
+
+  /** Fire `onRunEnd` on each session (isolated) and return the report unchanged. */
+  private finishObservers(sessions: ObserverSession[], report: LoopReport): LoopReport {
+    for (const s of sessions) {
+      try {
+        s.onRunEnd?.(report);
+      } catch {
+        /* an observer must never break a run */
+      }
+    }
+    return report;
   }
 
   private async runEvaluators(

@@ -79,6 +79,7 @@ export {
   createDriverRegistry,
   createEvaluatorRegistry,
   createTaskRegistry,
+  createObserverRegistry,
 } from "./registry";
 
 // Infra
@@ -131,6 +132,12 @@ export type {
   RecorderOptions,
   EvaluationTrace,
 } from "./observability/types";
+
+// Observers (the plug-in point: spec-referenceable telemetry consumers)
+export type { Observer, ObserverSession, ObserverRunInfo } from "./observers/types";
+export { jsonlObserver } from "./observers/jsonl";
+export { otlpObserver, toOtlpTracePayload } from "./observers/otlp";
+export type { OtlpTracePayload } from "./observers/otlp";
 
 // Lint (Layer 0: static pre-execution checks)
 export { lintSpec, lintBatch, lintPath, workspacePreflight } from "./lint";
