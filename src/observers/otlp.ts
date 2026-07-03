@@ -219,7 +219,51 @@ const optionsSchema = z.object({
   file: z.string().default("loopgen-trace.otlp.json"),
   /** `service.name` resource attribute on the emitted spans. */
   serviceName: z.string().default("loop-generator"),
+  /**
+   * OTLP/HTTP traces endpoint to POST the spans to, used verbatim (e.g.
+   * "http://localhost:4318/v1/traces"). When omitted, falls back to the standard
+   * `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` / `OTEL_EXPORTER_OTLP_ENDPOINT` env vars.
+   */
+  endpoint: z.string().optional(),
+  /** Extra HTTP headers for the export (e.g. an auth token / write key). */
+  headers: z.record(z.string(), z.string()).optional(),
+  /** Abort the export POST after this many ms. */
+  timeoutMs: z.number().int().positive().default(10000),
 });
+
+/**
+ * Resolve the OTLP/HTTP traces URL: an explicit `endpoint` wins, else the
+ * standard env vars — `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` verbatim, or
+ * `OTEL_EXPORTER_OTLP_ENDPOINT` with `/v1/traces` appended. Undefined = no push.
+ */
+export function tracesUrl(endpoint?: string): string | undefined {
+  if (endpoint) return endpoint;
+  const full = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+  if (full) return full;
+  const base = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  if (base) return `${base.replace(/\/+$/, "")}/v1/traces`;
+  return undefined;
+}
+
+async function postOtlp(
+  url: string,
+  payload: OtlpTracePayload,
+  opts: { headers?: Record<string, string>; timeoutMs: number },
+): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...opts.headers },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`endpoint responded ${res.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Built-in observer that writes the run as an OTLP/JSON trace file. Collects
@@ -238,19 +282,28 @@ export const otlpObserver: Observer = {
     return preflightOk([`otlp file: ${parsed.data.file}`]);
   },
 
-  begin({ runId, baseDir, spec, options }) {
+  begin({ runId, baseDir, spec, log, options }) {
     const opts = optionsSchema.parse(options);
     const file = path.isAbsolute(opts.file) ? opts.file : path.resolve(baseDir, opts.file);
+    const url = tracesUrl(opts.endpoint);
     const { records, sink } = arraySink();
     const recorder = createTraceRecorder(sink, { traceId: runId });
     recorder.start(spec);
     return {
       onIteration: (report) => recorder.onIteration(report),
       onAgentEvent: (event, ctx) => recorder.onAgentEvent(event, { runId, iteration: ctx.iteration }),
-      onRunEnd: (report) => {
+      onRunEnd: async (report) => {
         recorder.finish(report);
         const payload = toOtlpTracePayload(records, { serviceName: opts.serviceName });
         writeFileSync(file, JSON.stringify(payload, null, 2));
+        if (!url) return;
+        // Best-effort push: a failed export is surfaced but never fails the run.
+        try {
+          await postOtlp(url, payload, { headers: opts.headers, timeoutMs: opts.timeoutMs });
+          log.debug(`OTLP trace exported to ${url}`);
+        } catch (err) {
+          log.warn(`OTLP export to ${url} failed: ${(err as Error).message}`);
+        }
       },
     };
   },

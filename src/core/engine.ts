@@ -658,7 +658,7 @@ export class LoopEngine {
     const sessions: ObserverSession[] = [];
     for (const o of observers) {
       try {
-        sessions.push(o.observer.begin({ ...info, options: o.options }));
+        sessions.push(o.observer.begin({ ...info, log, options: o.options }));
       } catch (err) {
         log.warn(`observer "${o.observer.name}" failed to start: ${(err as Error).message}`);
       }
@@ -666,11 +666,15 @@ export class LoopEngine {
     return sessions;
   }
 
-  /** Fire `onRunEnd` on each session (isolated) and return the report unchanged. */
-  private finishObservers(sessions: ObserverSession[], report: LoopReport): LoopReport {
+  /**
+   * Fire `onRunEnd` on each session (awaited, isolated) and return the report
+   * unchanged. Awaiting lets an observer flush a network export before the run
+   * resolves; isolation keeps a failed flush from ever failing the run.
+   */
+  private async finishObservers(sessions: ObserverSession[], report: LoopReport): Promise<LoopReport> {
     for (const s of sessions) {
       try {
-        s.onRunEnd?.(report);
+        await s.onRunEnd?.(report);
       } catch {
         /* an observer must never break a run */
       }

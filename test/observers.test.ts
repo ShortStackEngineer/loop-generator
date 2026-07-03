@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { LoopEngine } from "../src/core/engine";
 import { createDefaultRegistries } from "../src/registry";
 import { parseSpec } from "../src/core/spec";
-import { silentLogger } from "../src/core/logger";
+import { silentLogger, type Logger } from "../src/core/logger";
 import { runWithTrace, arraySink } from "../src/observability/recorder";
-import { toOtlpTracePayload, otlpObserver } from "../src/observers/otlp";
+import { toOtlpTracePayload, otlpObserver, tracesUrl } from "../src/observers/otlp";
 import { jsonlObserver } from "../src/observers/jsonl";
 import type { AgentDriver } from "../src/drivers/types";
 import type { Observer } from "../src/observers/types";
@@ -51,7 +51,9 @@ describe("observer plug-in point", () => {
         return {
           onIteration: (r) => seen.push(`iter:${r.iteration}:${r.satisfied}`),
           onAgentEvent: (e, ctx) => seen.push(`event:${ctx.iteration}:${e.kind}`),
-          onRunEnd: (r) => seen.push(`end:${r.outcome}`),
+          onRunEnd: (r) => {
+            seen.push(`end:${r.outcome}`);
+          },
         };
       },
     };
@@ -219,5 +221,94 @@ describe("observer preflight", () => {
     expect((await jsonlObserver.preflight!({ workdir: ".", options: { file: 123 } })).ok).toBe(false);
     expect((await otlpObserver.preflight!({ workdir: ".", options: {} })).ok).toBe(true);
     expect((await otlpObserver.preflight!({ workdir: ".", options: { serviceName: 5 } })).ok).toBe(false);
+  });
+});
+
+describe("otlp live HTTP export", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("POSTs the OTLP payload to the endpoint with headers, and still writes the file", async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit) => {
+        calls.push({ url, init });
+        return { ok: true, status: 200 } as unknown as Response;
+      }),
+    );
+    const file = path.join(workdir, "push.otlp.json");
+    const regs = createDefaultRegistries();
+    regs.drivers.register(emitter);
+    const report = await new LoopEngine(regs, silentLogger).run(
+      specWith([{ uses: "otlp", options: { file, endpoint: "http://collector.test/v1/traces", headers: { authorization: "Bearer k" } } }]),
+      { baseDir: workdir, skipPreflight: true },
+    );
+
+    expect(report.success).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("http://collector.test/v1/traces");
+    expect(calls[0]!.init.method).toBe("POST");
+    const headers = calls[0]!.init.headers as Record<string, string>;
+    expect(headers["content-type"]).toBe("application/json");
+    expect(headers.authorization).toBe("Bearer k");
+    // Body is the OTLP payload; the file mirrors it.
+    expect(JSON.parse(String(calls[0]!.init.body)).resourceSpans).toBeTruthy();
+    expect(JSON.parse(readFileSync(file, "utf8")).resourceSpans).toBeTruthy();
+  });
+
+  it("surfaces a failed export as a warning without failing the run", async () => {
+    const warnings: string[] = [];
+    const noisy: Logger = {
+      level: "warn",
+      debug: () => {},
+      info: () => {},
+      warn: (m: string) => {
+        warnings.push(m);
+      },
+      error: () => {},
+      child: () => noisy,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503 }) as unknown as Response));
+    const file = path.join(workdir, "fail.otlp.json");
+    const regs = createDefaultRegistries();
+    regs.drivers.register(emitter);
+    const report = await new LoopEngine(regs, noisy).run(
+      specWith([{ uses: "otlp", options: { file, endpoint: "http://down.test/v1/traces" } }]),
+      { baseDir: workdir, skipPreflight: true },
+    );
+
+    expect(report.success).toBe(true); // a failed export never fails the run
+    expect(readFileSync(file, "utf8")).toContain("resourceSpans"); // file still written
+    expect(warnings.some((w) => /OTLP export .* failed: .*503/.test(w))).toBe(true);
+  });
+});
+
+describe("tracesUrl", () => {
+  const savedTraces = process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+  const savedBase = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  afterEach(() => {
+    if (savedTraces === undefined) delete process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+    else process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = savedTraces;
+    if (savedBase === undefined) delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    else process.env.OTEL_EXPORTER_OTLP_ENDPOINT = savedBase;
+  });
+
+  it("prefers an explicit endpoint", () => {
+    expect(tracesUrl("http://x/v1/traces")).toBe("http://x/v1/traces");
+  });
+  it("falls back to OTEL_EXPORTER_OTLP_TRACES_ENDPOINT verbatim", () => {
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = "http://collector/v1/traces";
+    expect(tracesUrl()).toBe("http://collector/v1/traces");
+  });
+  it("appends /v1/traces to OTEL_EXPORTER_OTLP_ENDPOINT, trimming a trailing slash", () => {
+    delete process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://base:4318/";
+    expect(tracesUrl()).toBe("http://base:4318/v1/traces");
+  });
+  it("returns undefined with no endpoint and no env", () => {
+    delete process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+    delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    expect(tracesUrl()).toBeUndefined();
   });
 });

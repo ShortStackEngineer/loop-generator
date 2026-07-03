@@ -2,6 +2,7 @@ import type { AgentEvent } from "../drivers/types";
 import type { IterationReport, LoopReport } from "../core/engine";
 import type { LoopSpec } from "../core/spec";
 import type { PreflightResult } from "../core/preflight";
+import type { Logger } from "../core/logger";
 
 /**
  * An Observer is the fourth plug-in point: a named, spec-referenceable consumer
@@ -26,6 +27,8 @@ export interface ObserverRunInfo {
   baseDir: string;
   /** The spec being run. */
   spec: LoopSpec;
+  /** Run logger, so an observer can surface its own issues (e.g. a failed export). */
+  log: Logger;
   /** This observer's options from its `observability.observers[]` entry. */
   options: Record<string, unknown>;
 }
@@ -36,8 +39,12 @@ export interface ObserverSession {
   onIteration?(report: IterationReport): void;
   /** Called for each inner-trajectory event a driver emits during an iteration. */
   onAgentEvent?(event: AgentEvent, ctx: { iteration: number }): void;
-  /** Called once with the terminal report (any outcome reached after the run began). */
-  onRunEnd?(report: LoopReport): void;
+  /**
+   * Called once with the terminal report (any outcome reached after the run
+   * began). May be async — the engine awaits it — so an observer can flush a
+   * network export before the run resolves.
+   */
+  onRunEnd?(report: LoopReport): void | Promise<void>;
 }
 
 export interface Observer {
