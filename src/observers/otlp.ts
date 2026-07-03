@@ -4,6 +4,7 @@ import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import { arraySink, createTraceRecorder } from "../observability/recorder";
 import type { TraceRecord } from "../observability/types";
+import type { AgentEvent } from "../drivers/types";
 import type { Observer } from "./types";
 
 /**
@@ -13,8 +14,11 @@ import type { Observer } from "./types";
  * protocol that Raindrop and any OTLP-aware backend ingest. `curl -X POST
  * --data @<file>` at a collector's `/v1/traces`, or point a forwarder at it.
  *
- * Span tree: one root span per run, an iteration span per iteration, and a child
- * span per tool call. Model output and warnings become span events.
+ * Span tree: one root span per run, an iteration span per iteration, a span per
+ * agent turn within the iteration, and a child span per tool call nested under
+ * its turn. Model output and warnings become span events. Events a driver can't
+ * attribute to a turn stay flat on the iteration span (drivers with no turn
+ * detail keep the pre-turn shape).
  */
 
 // ── OTLP/JSON shapes (minimal — only what we emit) ───────────────────────────
@@ -95,6 +99,20 @@ function attrs(entries: Record<string, unknown>): OtlpKeyValue[] {
 
 type Rec<K extends TraceRecord["kind"]> = Extract<TraceRecord, { kind: K }>;
 
+/** The agentic turn an event belongs to, if the driver attributed one. */
+function turnOf(event: AgentEvent): number | undefined {
+  switch (event.kind) {
+    case "model-message":
+    case "tool-call":
+    case "tool-result":
+    case "turn-start":
+    case "turn-end":
+      return event.turn;
+    default:
+      return undefined;
+  }
+}
+
 /** Assemble a run's flat trace records into an OTLP/JSON span tree. */
 export function toOtlpTracePayload(records: TraceRecord[], opts: { serviceName?: string } = {}): OtlpTracePayload {
   const serviceName = opts.serviceName ?? "loop-generator";
@@ -139,20 +157,72 @@ export function toOtlpTracePayload(records: TraceRecord[], opts: { serviceName?:
     status: runEnd ? { code: runEnd.success ? 1 : 2, message: runEnd.success ? undefined : runEnd.reason } : { code: 0 },
   });
 
-  // One span per iteration, plus a child span per tool call.
+  // Turn a set of agent events into a model-message span event, if it is one.
+  const messageEvent = (e: Rec<"agent.event">): OtlpEvent | undefined =>
+    e.event.kind === "model-message"
+      ? { timeUnixNano: nanos(e.ts), name: "model-message", attributes: attrs({ text: e.event.text }) }
+      : undefined;
+
+  // Pair tool-call → tool-result by id and push a child span per call, parented
+  // to whichever span (turn, or the iteration for un-turned calls) owns them.
+  const emitToolSpans = (evs: Rec<"agent.event">[], parentSpanId: string): void => {
+    const results = new Map<string, Rec<"agent.event">>();
+    for (const e of evs) if (e.event.kind === "tool-result" && e.event.id) results.set(e.event.id, e);
+    for (const e of evs) {
+      if (e.event.kind !== "tool-call") continue;
+      const call = e.event;
+      const resEvent = call.id ? results.get(call.id) : undefined;
+      const result = resEvent && resEvent.event.kind === "tool-result" ? resEvent.event : undefined;
+      const ok = result?.ok ?? true;
+      spans.push({
+        traceId,
+        spanId: spanIdHex(nextSpan++),
+        parentSpanId,
+        name: `tool:${call.name}`,
+        kind: 1,
+        startTimeUnixNano: nanos(e.ts),
+        endTimeUnixNano: nanos(resEvent?.ts ?? e.ts),
+        attributes: attrs({
+          "tool.name": call.name,
+          "tool.id": call.id,
+          "tool.input": call.input === undefined ? undefined : JSON.stringify(call.input),
+          "tool.output": result?.output === undefined ? undefined : JSON.stringify(result.output),
+        }),
+        status: { code: ok ? 1 : 2 },
+      });
+    }
+  };
+
+  // One span per iteration; within it, a span per agent turn, and a tool span per
+  // tool call nested under its turn.
   for (const it of iterEnds) {
     const iterSpanId = spanIdHex(nextSpan++);
     const evs = eventsFor(it.iteration);
     const firstTs = evs.length ? Math.min(...evs.map((e) => e.ts)) : it.ts;
 
-    const spanEvents: OtlpEvent[] = [];
+    // Partition into per-turn groups; events the driver couldn't attribute to a
+    // turn stay flat on the iteration span.
+    const turnGroups = new Map<number, Rec<"agent.event">[]>();
+    const flat: Rec<"agent.event">[] = [];
     for (const e of evs) {
-      if (e.event.kind === "model-message") {
-        spanEvents.push({ timeUnixNano: nanos(e.ts), name: "model-message", attributes: attrs({ text: e.event.text }) });
+      const t = turnOf(e.event);
+      if (t === undefined) {
+        flat.push(e);
+        continue;
       }
+      const group = turnGroups.get(t);
+      if (group) group.push(e);
+      else turnGroups.set(t, [e]);
+    }
+
+    // Iteration span events: model output the driver left un-turned, plus warnings.
+    const iterEvents: OtlpEvent[] = [];
+    for (const e of flat) {
+      const me = messageEvent(e);
+      if (me) iterEvents.push(me);
     }
     for (const s of signals.filter((s) => s.scope === "iteration" && s.iteration === it.iteration)) {
-      spanEvents.push({ timeUnixNano: nanos(s.ts), name: "warning", attributes: attrs({ message: s.message }) });
+      iterEvents.push({ timeUnixNano: nanos(s.ts), name: "warning", attributes: attrs({ message: s.message }) });
     }
 
     spans.push({
@@ -172,36 +242,38 @@ export function toOtlpTracePayload(records: TraceRecord[], opts: { serviceName?:
         "usage.input_tokens": it.usage?.inputTokens,
         "usage.output_tokens": it.usage?.outputTokens,
       }),
-      events: spanEvents.length ? spanEvents : undefined,
+      events: iterEvents.length ? iterEvents : undefined,
       status: { code: it.satisfied ? 1 : 0 },
     });
 
-    // Pair tool-call → tool-result by id into child spans.
-    const results = new Map<string, Rec<"agent.event">>();
-    for (const e of evs) if (e.event.kind === "tool-result" && e.event.id) results.set(e.event.id, e);
-    for (const e of evs) {
-      if (e.event.kind !== "tool-call") continue;
-      const call = e.event;
-      const resEvent = call.id ? results.get(call.id) : undefined;
-      const result = resEvent && resEvent.event.kind === "tool-result" ? resEvent.event : undefined;
-      const ok = result?.ok ?? true;
+    // A span per turn — but only for turns that carry real content (model output
+    // or a tool call), so bare turn-end/usage markers don't spawn empty spans.
+    for (const [turn, tevs] of [...turnGroups.entries()].sort((a, b) => a[0] - b[0])) {
+      const hasContent = tevs.some((e) => e.event.kind === "model-message" || e.event.kind === "tool-call");
+      if (!hasContent) continue;
+      const turnSpanId = spanIdHex(nextSpan++);
+      const turnEvents: OtlpEvent[] = [];
+      for (const e of tevs) {
+        const me = messageEvent(e);
+        if (me) turnEvents.push(me);
+      }
       spans.push({
         traceId,
-        spanId: spanIdHex(nextSpan++),
+        spanId: turnSpanId,
         parentSpanId: iterSpanId,
-        name: `tool:${call.name}`,
+        name: `turn ${turn}`,
         kind: 1,
-        startTimeUnixNano: nanos(e.ts),
-        endTimeUnixNano: nanos(resEvent?.ts ?? e.ts),
-        attributes: attrs({
-          "tool.name": call.name,
-          "tool.id": call.id,
-          "tool.input": call.input === undefined ? undefined : JSON.stringify(call.input),
-          "tool.output": result?.output === undefined ? undefined : JSON.stringify(result.output),
-        }),
-        status: { code: ok ? 1 : 2 },
+        startTimeUnixNano: nanos(Math.min(...tevs.map((e) => e.ts))),
+        endTimeUnixNano: nanos(Math.max(...tevs.map((e) => e.ts))),
+        attributes: attrs({ "turn.index": turn }),
+        events: turnEvents.length ? turnEvents : undefined,
+        status: { code: 0 },
       });
+      emitToolSpans(tevs, turnSpanId);
     }
+
+    // Un-turned tool calls hang directly off the iteration span (back-compat).
+    emitToolSpans(flat, iterSpanId);
   }
 
   return {

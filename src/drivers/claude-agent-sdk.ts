@@ -190,8 +190,11 @@ function isRecord(v: unknown): v is Record<string, unknown> {
  * Translate one Agent SDK message into vendor-neutral {@link AgentEvent}s. The
  * driver already walks every message for the final result; this reads the same
  * message with no extra iteration. Assistant messages carry text + `tool_use`
- * blocks (each assistant message counts as a turn); tool results come back as
- * `user` messages. Structured `input`/`output` pass through untouched — bounding
+ * blocks (each assistant message counts as a turn); the matching tool results
+ * come back in the following `user` message, still within that turn (the counter
+ * only advances on the next assistant message). Every model message, tool call,
+ * and tool result is stamped with its turn so a sink can nest tool calls under
+ * per-turn spans. Structured `input`/`output` pass through untouched — bounding
  * them is the sink's job, not the driver's.
  */
 function emitSdkEvents(message: SdkMessage, emit: (e: AgentEvent) => void, turnState: { turn: number }): void {
@@ -209,6 +212,7 @@ function emitSdkEvents(message: SdkMessage, emit: (e: AgentEvent) => void, turnS
           kind: "tool-call",
           name: typeof block.name === "string" ? block.name : "unknown",
           id: typeof block.id === "string" ? block.id : undefined,
+          turn: turnState.turn,
           input: block.input,
         });
       }
@@ -220,6 +224,7 @@ function emitSdkEvents(message: SdkMessage, emit: (e: AgentEvent) => void, turnS
         kind: "tool-result",
         id: typeof block.tool_use_id === "string" ? block.tool_use_id : undefined,
         ok: block.is_error !== true,
+        turn: turnState.turn,
         output: block.content,
       });
     }

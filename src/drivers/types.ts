@@ -31,13 +31,18 @@ export type AgentStopReason = "completed" | "max_turns" | "aborted" | "error" | 
  * (OTLP, a JSONL trace, Raindrop) turns these into spans. Correlation and timing
  * (runId, iteration, timestamp) are added by the engine when it forwards them,
  * so the event stays minimal and drivers stay pure.
+ *
+ * `turn` (1-based within an iteration) is the driver-internal agentic turn the
+ * event belongs to. Drivers that can attribute output/tool use to a turn stamp
+ * it so a sink can nest tool calls under per-turn spans; drivers that can't leave
+ * it undefined and the event sits flat at the iteration level.
  */
 export type AgentEvent =
   | { kind: "turn-start"; turn: number }
   | { kind: "turn-end"; turn: number }
   | { kind: "model-message"; text: string; turn?: number }
-  | { kind: "tool-call"; name: string; id?: string; input?: unknown }
-  | { kind: "tool-result"; id?: string; ok?: boolean; output?: unknown }
+  | { kind: "tool-call"; name: string; id?: string; turn?: number; input?: unknown }
+  | { kind: "tool-result"; id?: string; ok?: boolean; turn?: number; output?: unknown }
   | { kind: "usage"; usage: AgentUsage }
   | { kind: "error"; message: string };
 

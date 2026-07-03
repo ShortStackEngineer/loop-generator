@@ -17,7 +17,8 @@ const emitter: AgentDriver = {
   name: "emitter",
   async run(inv) {
     inv.emit?.({ kind: "model-message", text: "planning", turn: 1 });
-    inv.emit?.({ kind: "tool-call", name: "Write", id: "t1" });
+    inv.emit?.({ kind: "tool-call", name: "Write", id: "t1", turn: 1 });
+    inv.emit?.({ kind: "tool-result", id: "t1", ok: true, turn: 1 });
     writeFileSync(path.join(inv.workdir, "answer.txt"), "42");
     return { ok: true, stopReason: "completed", changedFiles: ["answer.txt"] };
   },
@@ -71,6 +72,7 @@ describe("observer plug-in point", () => {
       "begin:run:trace-me",
       "event:0:model-message",
       "event:0:tool-call",
+      "event:0:tool-result",
       "iter:0:true",
       "end:success",
     ]);
@@ -156,7 +158,7 @@ describe("observer plug-in point", () => {
 });
 
 describe("toOtlpTracePayload", () => {
-  it("assembles a run→iteration→tool span tree with model output as span events", async () => {
+  it("assembles a run→iteration→turn→tool span tree with model output as span events", async () => {
     const { records, sink } = arraySink();
     const regs = createDefaultRegistries();
     regs.drivers.register(emitter);
@@ -174,10 +176,15 @@ describe("toOtlpTracePayload", () => {
 
     const iter = spans.find((s) => s.name === "iteration 0")!;
     expect(iter.parentSpanId).toBe(root.spanId);
-    expect(iter.events?.some((e) => e.name === "model-message")).toBe(true);
 
+    // The agent's turn nests under the iteration; model output rides on the turn.
+    const turn = spans.find((s) => s.name === "turn 1")!;
+    expect(turn.parentSpanId).toBe(iter.spanId);
+    expect(turn.events?.some((e) => e.name === "model-message")).toBe(true);
+
+    // The tool call nests under its turn, not directly under the iteration.
     const tool = spans.find((s) => s.name === "tool:Write")!;
-    expect(tool.parentSpanId).toBe(iter.spanId);
+    expect(tool.parentSpanId).toBe(turn.spanId);
   });
 
   const rec = <K extends TraceRecord["kind"]>(fields: Extract<TraceRecord, { kind: K }>): TraceRecord => fields;
@@ -205,6 +212,45 @@ describe("toOtlpTracePayload", () => {
 
     const svc = payload.resourceSpans[0]!.resource.attributes.find((a) => a.key === "service.name");
     expect(svc?.value.stringValue).toBe("svc");
+  });
+
+  it("nests each turn's tools under its own turn span and keeps un-turned events flat", () => {
+    const records: TraceRecord[] = [
+      rec({ traceId: "abc", seq: 0, ts: 10, kind: "run.start", spec: "S", driver: "claude-agent-sdk", task: "function" }),
+      // Turn 1: think, then a tool call + result.
+      rec({ traceId: "abc", seq: 1, ts: 11, kind: "agent.event", iteration: 0, event: { kind: "model-message", text: "reading", turn: 1 } }),
+      rec({ traceId: "abc", seq: 2, ts: 12, kind: "agent.event", iteration: 0, event: { kind: "tool-call", name: "Read", id: "a", turn: 1 } }),
+      rec({ traceId: "abc", seq: 3, ts: 13, kind: "agent.event", iteration: 0, event: { kind: "tool-result", id: "a", ok: true, turn: 1 } }),
+      // Turn 2: a different tool.
+      rec({ traceId: "abc", seq: 4, ts: 14, kind: "agent.event", iteration: 0, event: { kind: "tool-call", name: "Write", id: "b", turn: 2 } }),
+      rec({ traceId: "abc", seq: 5, ts: 15, kind: "agent.event", iteration: 0, event: { kind: "tool-result", id: "b", ok: true, turn: 2 } }),
+      // A turn-end marker with no content of its own must NOT spawn an empty span.
+      rec({ traceId: "abc", seq: 6, ts: 16, kind: "agent.event", iteration: 0, event: { kind: "turn-end", turn: 3 } }),
+      // An un-turned tool call falls back to hanging off the iteration span.
+      rec({ traceId: "abc", seq: 7, ts: 17, kind: "agent.event", iteration: 0, event: { kind: "tool-call", name: "Bash", id: "c" } }),
+      rec({ traceId: "abc", seq: 8, ts: 18, kind: "iteration.end", iteration: 0, satisfied: true, reason: "ok", durationMs: 8, evaluations: [] }),
+      rec({ traceId: "abc", seq: 9, ts: 19, kind: "run.end", outcome: "success", success: true, reason: "done", durationMs: 9, totalUsage: {}, iterations: 1 }),
+    ];
+    const spans = toOtlpTracePayload(records).resourceSpans[0]!.scopeSpans[0]!.spans;
+    const iter = spans.find((s) => s.name === "iteration 0")!;
+    const turn1 = spans.find((s) => s.name === "turn 1")!;
+    const turn2 = spans.find((s) => s.name === "turn 2")!;
+
+    expect(turn1.parentSpanId).toBe(iter.spanId);
+    expect(turn2.parentSpanId).toBe(iter.spanId);
+    expect(turn1.events?.some((e) => e.name === "model-message")).toBe(true);
+    expect(turn1.attributes.find((a) => a.key === "turn.index")?.value.intValue).toBe("1");
+    // Turn span bounds span the whole turn, including the tool result.
+    expect(turn1.startTimeUnixNano).toBe("11000000");
+    expect(turn1.endTimeUnixNano).toBe("13000000");
+
+    // Each tool nests under its own turn.
+    expect(spans.find((s) => s.name === "tool:Read")!.parentSpanId).toBe(turn1.spanId);
+    expect(spans.find((s) => s.name === "tool:Write")!.parentSpanId).toBe(turn2.spanId);
+    // The content-free turn 3 (only a turn-end) produced no span.
+    expect(spans.some((s) => s.name === "turn 3")).toBe(false);
+    // The un-turned Bash call falls back to the iteration span.
+    expect(spans.find((s) => s.name === "tool:Bash")!.parentSpanId).toBe(iter.spanId);
   });
 
   it("degrades gracefully on empty records", () => {

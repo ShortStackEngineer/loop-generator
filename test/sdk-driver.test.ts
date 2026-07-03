@@ -177,13 +177,14 @@ describe("claude-agent-sdk driver", () => {
     await claudeAgentSdkDriver.run(inv);
     rmSync(inv.workdir, { recursive: true, force: true });
 
-    // Turn counts by assistant message; tool results come back as user messages;
-    // the terminal result message produces no event.
+    // Turn counts by assistant message; tool results come back as user messages
+    // and belong to the same turn (the counter only advances on the next
+    // assistant message); the terminal result message produces no event.
     expect(events).toEqual([
       { kind: "model-message", text: "planning", turn: 1 },
-      { kind: "tool-call", name: "Write", id: "t1", input: { path: "a.ts" } },
-      { kind: "tool-result", id: "t1", ok: true, output: "wrote a.ts" },
-      { kind: "tool-result", id: "t2", ok: false, output: "boom" },
+      { kind: "tool-call", name: "Write", id: "t1", turn: 1, input: { path: "a.ts" } },
+      { kind: "tool-result", id: "t1", ok: true, turn: 1, output: "wrote a.ts" },
+      { kind: "tool-result", id: "t2", ok: false, turn: 1, output: "boom" },
       { kind: "model-message", text: "done", turn: 2 },
     ]);
   });
