@@ -6,21 +6,6 @@
 <title>loop-generator — the loop runner that doesn't believe the agent</title>
 <meta name="description" content="Any loop can drive a coding agent until the checks go green. loop-generator verifies the green: tamper-watched tests and specs, baseline checks, workspace-diff attestation, budget ceilings — and a report you can treat as evidence.">
 <link rel="stylesheet" href="assets/style.css">
-<style>
-  /* landing-page components: threat cards + the outcome list */
-  .threat { display: grid; gap: 1.1rem; margin-top: 1.8rem; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-  .threat .card { border-left: 4px solid var(--red); }
-  .threat .card .verdict {
-    display: block; margin-top: 0.7rem; padding-top: 0.6rem;
-    border-top: 1px dashed var(--line); font-size: 0.88rem; color: var(--ink);
-  }
-  .threat .card .verdict code { background: var(--green-bg); border-color: transparent; color: var(--green-dark); }
-  .outcome-list { font-family: var(--mono); font-size: 0.85rem; line-height: 2; color: var(--ink-soft); }
-  .outcome-list .oc { white-space: nowrap; }
-  .outcome-list .oc.bad code { background: var(--red-bg); color: var(--red); border-color: transparent; }
-  .outcome-list .oc.good code { background: var(--green-bg); color: var(--green-dark); border-color: transparent; }
-  .outcome-list .oc.warn code { background: var(--amber-bg); color: var(--amber); border-color: transparent; }
-</style>
 </head>
 <body>
 
@@ -67,10 +52,11 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
     <div class="kicker">The threat model</div>
     <h2>Six ways an unattended agent fakes a “done”</h2>
     <p class="lead narrow" style="margin:0 0 0.6rem">
-      Reward hacking isn't hypothetical — frontier coding agents have been
-      caught editing test files, exiting harnesses early, and declaring victory
-      on the first green-looking signal. Most loop runners take the agent's
-      word for it. This one treats every green as a claim to be audited.
+      Reward hacking isn't hypothetical — frontier coding models have been
+      <a href="https://www.anthropic.com/research/emergent-misalignment-reward-hacking">caught
+      special-casing tests, hard-coding expected values, and editing the very
+      test files that grade them</a>. Most loop runners take the agent's word
+      for it. This one treats every green as a claim to be audited.
     </p>
     <div class="threat">
       <div class="card">

@@ -29,10 +29,11 @@ one honest scorecard across `claude-agent-sdk`, `grok`, `github-copilot`, and
 
 ## Why it audits the agent
 
-Reward hacking isn't hypothetical. Frontier coding agents have been caught
-editing the test files, exiting the harness early, and declaring victory on the
-first green-looking signal. Most loop runners take the agent's word for it;
-loop-generator treats every green as a claim to audit.
+Reward hacking isn't hypothetical: [frontier coding models have been caught
+special-casing tests, hard-coding expected values, and editing the very test
+files that grade them](https://www.anthropic.com/research/emergent-misalignment-reward-hacking).
+Most loop runners take the agent's word for it; loop-generator treats every
+green as a claim to audit.
 
 | An unattended agent can… | The guard that catches it | Result |
 |--------------------------|---------------------------|--------|
@@ -218,9 +219,12 @@ success:
   type: all-pass         # all evaluators must pass
 limits:
   maxIterations: 6
-  baseline: strict       # false | true | strict — run checks before the agent; "strict" fails a vacuous (already-green) check set
-  specGuard: error       # off | warn | error — the agent editing this spec mid-run fails the run (spec-tampered)
-  evaluatorGuard: error  # off | warn | error — the agent editing the test files a check runs fails the run (evaluator-tampered)
+  # The three guards below are shown in the recommended "audit" posture. Note they
+  # are NOT the schema defaults yet — those are baseline:false, specGuard:warn,
+  # evaluatorGuard:warn — so set them explicitly to get this posture.
+  baseline: strict       # default false — false | true | strict; "strict" fails a vacuous (already-green) check set
+  specGuard: error       # default warn  — off | warn | error; "error" fails the run if the agent edits this spec (spec-tampered)
+  evaluatorGuard: error  # default warn  — off | warn | error; "error" fails the run if the agent edits a check's test files (evaluator-tampered)
   maxCostUsd: 5.0        # optional — stop with outcome "budget-exceeded" once cumulative driver-reported cost passes this
   maxTokens: 2000000     # optional — same, on cumulative input+output tokens (only enforced when the driver reports usage)
 evaluation:
@@ -231,6 +235,12 @@ observability:           # optional — stream the run's telemetry (see "Observi
       options: { file: trace.jsonl }
     - uses: otlp         # …or standard OTLP spans (file + optional HTTP push)
 ```
+
+> **Heads-up on the guards:** the example turns the tamper and baseline guards
+> *on* — the posture this project argues for — but they ship **off / `warn` by
+> default** today, so existing specs keep their behavior. Set them explicitly
+> (or scaffold with `loopgen generate … --verify`) until the defaults are
+> hardened, which is a planned follow-up.
 
 ## Examples
 
