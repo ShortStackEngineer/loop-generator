@@ -72,6 +72,11 @@ regression surface. All-green-now = nothing new is being verified (in
 loop-generator, `baseline: strict` fails exactly this). All-drivers, no guards =
 a green that can ship a regression unseen.
 
+**Watch the trap:** a *new feature's own safety rails* ("the retry must not
+relaunch a tampered run") read like invariants but are **drivers** — RED now,
+because the rail doesn't exist until you build it. Only behavior that already
+works is a green-now guard.
+
 ## Evidence-type guide
 
 Decide per claim: *who decides pass/fail, how repeatably?*
