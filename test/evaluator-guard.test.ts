@@ -122,9 +122,9 @@ describe("resolveGuardedFiles", () => {
 
 // ---------------------------------------------------------------------------
 describe("evaluator-integrity guard (engine)", () => {
-  it("schema defaults evaluatorGuard=warn and accepts off/error + evaluators[].guard", () => {
+  it("schema defaults evaluatorGuard=error and accepts off/warn + evaluators[].guard", () => {
     const d = parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" } });
-    expect(d.limits.evaluatorGuard).toBe("warn");
+    expect(d.limits.evaluatorGuard).toBe("error");
     const s = parseSpec({
       name: "d",
       requirements: "x",
@@ -158,12 +158,19 @@ describe("evaluator-integrity guard (engine)", () => {
     expect(r.warnings.join("\n")).toMatch(/evaluator depends on/);
   });
 
-  it("warn (default): the edit is surfaced but the run still succeeds", async () => {
+  it("warn: the edit is surfaced but the run still succeeds", async () => {
     write("test/c_test.rb");
-    const r = await engine().run(tamperSpec(), { baseDir: workdir });
+    const r = await engine().run(tamperSpec("warn"), { baseDir: workdir });
     expect(r.success).toBe(true);
     expect(r.outcome).toBe("success");
     expect(r.warnings.join("\n")).toMatch(/evaluator depends on/);
+  });
+
+  it("default (error): editing a guarded file fails an otherwise-green run", async () => {
+    write("test/c_test.rb");
+    const r = await engine().run(tamperSpec(), { baseDir: workdir }); // no evaluatorGuard set → schema default
+    expect(r.outcome).toBe("evaluator-tampered");
+    expect(r.success).toBe(false);
   });
 
   it("off: the file is not watched, no tamper warning", async () => {
@@ -187,7 +194,10 @@ describe("evaluator-integrity guard (engine)", () => {
     expect(r.warnings.join("\n")).not.toMatch(/evaluator depends on/);
   });
 
-  it("excludes the guarded file from the work diff (no-op guard intact)", async () => {
+  it("warn: the guarded file is excluded from the work diff (no-op guard intact)", async () => {
+    // A watching guard (warn/error) excludes its files from the work diff, so
+    // editing ONLY the guarded file counts as no work and the no-op guard fires.
+    // (warn, not the error default, so the run survives to reach that assertion.)
     execSync("git init -q", { cwd: workdir });
     write("test/c_test.rb");
     const spec = parseSpec({
@@ -196,7 +206,7 @@ describe("evaluator-integrity guard (engine)", () => {
       // edits ONLY the guarded file → all "work" is excluded
       driver: { uses: "mock", options: { steps: [{ files: { "test/c_test.rb": "tampered\n" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: "true test/c_test.rb" } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, evaluatorGuard: "warn" },
     });
     const r = await engine().run(spec, { baseDir: workdir });
     expect(r.success).toBe(true);

@@ -53,35 +53,35 @@ false positives:
   merely running the test suite can't masquerade as "the agent did work"; add
   your own globs with `workspace.ignore`. It falls back to driver-reported files
   when the workspace isn't a git repo (or is git-ignored).
-- **Baseline evaluation** (`limits.baseline: true`, or `--baseline`): runs the
-  checks once *before* any agent work. If they already pass, your checks probably
-  don't test the requirement, so this is surfaced as a warning. It's off by
-  default because side-effecting checks (db migrate/seed) would run twice. Set
-  `limits.baseline: "strict"` (or `--strict-baseline`) to make that a hard
-  failure (`baseline-vacuous`) instead of a warning, on the principle that a
-  check that's green before any work isn't verifying anything. It's
-  stack-agnostic: it just runs whatever evaluators you defined on the pre-agent
-  workspace.
+- **Baseline evaluation** (`limits.baseline`, default `true`): runs the checks
+  once *before* any agent work. If they already pass, your checks probably don't
+  test the requirement, so this is surfaced as a warning. On by default; set
+  `false` to skip it (e.g. for side-effecting checks you don't want to run
+  twice). Set `limits.baseline: "strict"` (or `--strict-baseline`) to make a
+  passing baseline a hard failure (`baseline-vacuous`) instead of a warning, on
+  the principle that a check that's green before any work isn't verifying
+  anything. It's stack-agnostic: it just runs whatever evaluators you defined on
+  the pre-agent workspace.
 - **Sequential evaluators (default):** evaluators run one at a time
   (`evaluation.concurrency: 1`) so checks that share external state (several
   `bin/rails` checks against one SQLite database, say) can't race and deadlock
   into false failures. Raise `evaluation.concurrency` only for genuinely
   independent checks that are safe to run in parallel.
-- **Spec-integrity guard** (`limits.specGuard`): if the loop spec lives inside the
-  workspace, the agent can edit its own success criteria. The runner watches the
-  spec file, excludes it from the work diff (so a spec-only edit can't fake
-  "work"), and by default (`warn`) raises a warning if the agent modified it. Set
-  `specGuard: "error"` to fail the run (`spec-tampered`) so an altered contract
-  can't report green; `"off"` disables the watch. (Best practice: keep specs
-  outside the target repo.)
-- **Evaluator-integrity guard** (`limits.evaluatorGuard`): the real success
-  criteria for a `command` check are the test files it runs, and the agent could
-  fake a green by editing them. The runner watches those files — auto-detected
-  from the command (e.g. `bin/rails test test/foo_test.rb`), plus any
-  `evaluators[].guard` paths — excludes them from the work diff, and by default
-  (`warn`) raises a warning if any changed. Set `evaluatorGuard: "error"` to fail
-  the run (`evaluator-tampered`); `"off"` disables it. A bare runner with no file
-  arguments (`npm test`) names nothing and is intentionally not watched.
+- **Spec-integrity guard** (`limits.specGuard`, default `error`): if the loop
+  spec lives inside the workspace, the agent can edit its own success criteria.
+  The runner watches the spec file, excludes it from the work diff (so a
+  spec-only edit can't fake "work"), and by default (`error`) fails the run
+  (`spec-tampered`) if the agent modified it, so an altered contract can't report
+  green. Set `"warn"` to only surface a caveat, or `"off"` to disable the watch.
+  (Best practice: keep specs outside the target repo.)
+- **Evaluator-integrity guard** (`limits.evaluatorGuard`, default `error`): the
+  real success criteria for a `command` check are the test files it runs, and the
+  agent could fake a green by editing them. The runner watches those files —
+  auto-detected from the command (e.g. `bin/rails test test/foo_test.rb`), plus
+  any `evaluators[].guard` paths — excludes them from the work diff, and by
+  default (`error`) fails the run (`evaluator-tampered`) if any changed. Set
+  `"warn"` to only surface a caveat, or `"off"` to disable it. A bare runner with
+  no file arguments (`npm test`) names nothing and is intentionally not watched.
 - **Honest agent outcomes:** drivers report a `stopReason`
   (`completed | max_turns | aborted | error`). When the agent runs out of turns
   or errors but the checks pass anyway, the run still succeeds (checks are the

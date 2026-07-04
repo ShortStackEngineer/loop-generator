@@ -64,7 +64,7 @@ describe("engine evaluator concurrency", () => {
       requirements: "x",
       driver,
       evaluators,
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false }, // isolate the iteration's evaluators from the baseline run
     });
     const report = await probeEngine().run(spec, { baseDir: workdir });
     expect(report.iterations).toHaveLength(1);
@@ -80,7 +80,7 @@ describe("engine evaluator concurrency", () => {
       driver,
       evaluation: { concurrency: 2 },
       evaluators,
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     await probeEngine().run(spec, { baseDir: workdir });
     expect(maxActive).toBe(2);
@@ -93,7 +93,7 @@ describe("engine evaluator concurrency", () => {
       driver,
       evaluation: { concurrency: 2 },
       evaluators,
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await probeEngine().run(spec, { baseDir: workdir });
     const names = report.iterations[0]!.evaluations.map((e) => e.name);
