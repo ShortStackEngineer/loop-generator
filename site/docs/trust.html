@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lint &amp; trustworthy results — loop-generator</title>
-<meta name="description" content="loopgen lint catches a bad spec before any agent runs; the engine's trust guards keep a finished run from reporting a false 'all checks passed.'">
+<title>Trust model — loop-generator</title>
+<meta name="description" content="The engine's trust guards keep a finished run from reporting a false 'all checks passed' — tamper-watched specs and tests, baseline checks, workspace-diff attestation, budget ceilings — plus a lint that catches a bad spec before any agent runs.">
 <link rel="stylesheet" href="../assets/style.css">
 </head>
 <body>
@@ -13,11 +13,11 @@
   <div class="inner">
     <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
     <nav class="site-nav">
+      <a class="active" href="trust.html">Trust model</a>
       <a href="getting-started.html">Getting started</a>
       <a href="authoring.html">Authoring</a>
       <a href="debugging.html">Debugging</a>
       <a href="observing.html">Observing</a>
-      <a class="active" href="trust.html">Lint &amp; trust</a>
       <a href="roadmap.html">Roadmap</a>
       <a class="gh" href="https://github.com/ShortStackEngineer/loop-generator">GitHub →</a>
     </nav>
@@ -27,82 +27,18 @@
 <div class="wrap docs-body">
   <aside class="docs-toc">
     <div class="toc-title">On this page</div>
-    <a href="#lint">Linting before you run</a>
     <a href="#trust">Trustworthy results</a>
+    <a href="#lint">Linting before you run</a>
     <a href="#budget">Budget ceilings</a>
   </aside>
 
   <main class="docs-content">
-    <h1>Lint &amp; trustworthy results</h1>
+    <h1>Trust model</h1>
     <p class="lead">
-      Two related ideas: <code>loopgen lint</code> catches a bad spec
-      <em>before</em> any agent runs, and the engine's trust guards keep a
-      finished run from reporting a false "all checks passed."
-    </p>
-
-    <h2 id="lint">Linting before you run</h2>
-    <p>
-      A misconfigured spec can burn hours before failing for a reason that had
-      nothing to do with the agent. <code>loopgen lint</code> catches those
-      statically, in milliseconds, before any agent turn:
-    </p>
-<pre><code>loopgen lint my-feature.loop.yaml
-loopgen lint punch-list.batch.yaml      <span class="c"># lints the manifest + every item's spec</span>
-loopgen lint my.loop.yaml --strict      <span class="c"># exit non-zero on warnings too</span>
-loopgen lint my.loop.yaml --json        <span class="c"># machine-readable findings</span></code></pre>
-    <p>It flags, among other things:</p>
-    <table>
-      <thead><tr><th>Rule</th><th>Severity</th><th>What it catches</th></tr></thead>
-      <tbody>
-        <tr>
-          <td><code>SPEC-WORKDIR-NOT-PROJECT</code></td>
-          <td><span class="pill red">error</span></td>
-          <td>The resolved workspace isn't a git repo and has no markers for the
-            declared stack, yet the spec expects an existing project. Catches a
-            <code>workspace.dir</code> and a batch <code>base</code> that both go
-            relative and compound (e.g. <code>../..</code> applied twice, landing
-            in <code>$HOME</code>).</td>
-        </tr>
-        <tr>
-          <td><code>SPEC-EVAL-BINARY-MISSING</code><br><code>SPEC-EVAL-FILE-MISSING</code></td>
-          <td><span class="pill red">error</span></td>
-          <td>A check's binary or referenced script doesn't exist where it will
-            run.</td>
-        </tr>
-        <tr>
-          <td><code>SPEC-EVAL-DESTRUCTIVE-ENV</code></td>
-          <td><span class="pill amber">warn</span></td>
-          <td>A check mutates a database without a test env, so it would alter
-            your dev data every iteration.</td>
-        </tr>
-        <tr>
-          <td><code>SPEC-EVAL-SHARED-RESOURCE</code></td>
-          <td><span class="pill amber">warn</span></td>
-          <td>Multiple stateful checks set to run in parallel
-            (<code>evaluation.concurrency &gt; 1</code>) can race on a shared
-            database. Evaluators run sequentially by default, so this only fires
-            when you opt in.</td>
-        </tr>
-        <tr>
-          <td><code>SPEC-SMOKE-SELF-FULFILLING</code></td>
-          <td><span class="pill amber">warn</span></td>
-          <td>A smoke test that creates records but never drives a real endpoint
-            may pass without exercising the feature.</td>
-        </tr>
-        <tr>
-          <td><code>BATCH-MAXITER-OVERRIDE</code><br><code>BATCH-NEEDS-AS-ORDERING</code><br><code>BATCH-FAILFAST-CHAIN</code></td>
-          <td><span class="pill amber">warn</span></td>
-          <td>Batch-manifest pitfalls: item overrides, <code>needs</code> used
-            purely for ordering, and fail-fast chains.</td>
-        </tr>
-      </tbody>
-    </table>
-    <p>
-      Exit codes: <code>2</code> if any errors, <code>1</code> if
-      <code>--strict</code> and warnings, else <code>0</code>. The
-      error-severity workspace checks also run automatically as part of every
-      <code>run</code> (the resolved workspace is printed up front); skip with
-      <code>--skip-preflight</code>.
+      A green run is only a claim until something audits it. The engine layers
+      false-positive guards so "all checks passed" means the checks were real
+      and the agent did the work — and <code>loopgen lint</code> catches a bad
+      spec before any agent runs at all.
     </p>
 
     <h2 id="trust">Trustworthy results</h2>
@@ -195,6 +131,71 @@ loopgen lint my.loop.yaml --json        <span class="c"># machine-readable findi
       can also resume after a <code>max_turns</code> stop (opt-in:
       <code>driver.options.resume: true</code>).
     </div>
+
+    <h2 id="lint">Linting before you run</h2>
+    <p>
+      A misconfigured spec can burn hours before failing for a reason that had
+      nothing to do with the agent. <code>loopgen lint</code> catches those
+      statically, in milliseconds, before any agent turn:
+    </p>
+<pre><code>loopgen lint my-feature.loop.yaml
+loopgen lint punch-list.batch.yaml      <span class="c"># lints the manifest + every item's spec</span>
+loopgen lint my.loop.yaml --strict      <span class="c"># exit non-zero on warnings too</span>
+loopgen lint my.loop.yaml --json        <span class="c"># machine-readable findings</span></code></pre>
+    <p>It flags, among other things:</p>
+    <table>
+      <thead><tr><th>Rule</th><th>Severity</th><th>What it catches</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>SPEC-WORKDIR-NOT-PROJECT</code></td>
+          <td><span class="pill red">error</span></td>
+          <td>The resolved workspace isn't a git repo and has no markers for the
+            declared stack, yet the spec expects an existing project. Catches a
+            <code>workspace.dir</code> and a batch <code>base</code> that both go
+            relative and compound (e.g. <code>../..</code> applied twice, landing
+            in <code>$HOME</code>).</td>
+        </tr>
+        <tr>
+          <td><code>SPEC-EVAL-BINARY-MISSING</code><br><code>SPEC-EVAL-FILE-MISSING</code></td>
+          <td><span class="pill red">error</span></td>
+          <td>A check's binary or referenced script doesn't exist where it will
+            run.</td>
+        </tr>
+        <tr>
+          <td><code>SPEC-EVAL-DESTRUCTIVE-ENV</code></td>
+          <td><span class="pill amber">warn</span></td>
+          <td>A check mutates a database without a test env, so it would alter
+            your dev data every iteration.</td>
+        </tr>
+        <tr>
+          <td><code>SPEC-EVAL-SHARED-RESOURCE</code></td>
+          <td><span class="pill amber">warn</span></td>
+          <td>Multiple stateful checks set to run in parallel
+            (<code>evaluation.concurrency &gt; 1</code>) can race on a shared
+            database. Evaluators run sequentially by default, so this only fires
+            when you opt in.</td>
+        </tr>
+        <tr>
+          <td><code>SPEC-SMOKE-SELF-FULFILLING</code></td>
+          <td><span class="pill amber">warn</span></td>
+          <td>A smoke test that creates records but never drives a real endpoint
+            may pass without exercising the feature.</td>
+        </tr>
+        <tr>
+          <td><code>BATCH-MAXITER-OVERRIDE</code><br><code>BATCH-NEEDS-AS-ORDERING</code><br><code>BATCH-FAILFAST-CHAIN</code></td>
+          <td><span class="pill amber">warn</span></td>
+          <td>Batch-manifest pitfalls: item overrides, <code>needs</code> used
+            purely for ordering, and fail-fast chains.</td>
+        </tr>
+      </tbody>
+    </table>
+    <p>
+      Exit codes: <code>2</code> if any errors, <code>1</code> if
+      <code>--strict</code> and warnings, else <code>0</code>. The
+      error-severity workspace checks also run automatically as part of every
+      <code>run</code> (the resolved workspace is printed up front); skip with
+      <code>--skip-preflight</code>.
+    </p>
 
     <h2 id="budget">Budget ceilings</h2>
     <p>

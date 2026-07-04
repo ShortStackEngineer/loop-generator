@@ -1,7 +1,7 @@
 {
   "name": "loop-generator",
   "version": "0.1.0",
-  "description": "Generate and run agent coding feedback loops: a coding agent is invoked and re-invoked against measurable success criteria until the goal is met.",
+  "description": "The loop runner that doesn't believe the agent: drive a coding agent against your checks and get a verifiable report — with spec/test tamper guards, baseline checks, and budget ceilings.",
   "type": "module",
   "bin": {
     "loopgen": "dist/cli/index.js"

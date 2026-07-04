@@ -1,25 +1,70 @@
 # loop-generator
 
-Generate and run agent coding feedback loops. You describe a task, the stack,
-and the tools that measure success. The generator emits a reusable spec, and the
-runner invokes a coding agent and re-invokes it, feeding back the measurement
-results after each turn, until the goal is met or the iteration budget runs out.
+**The loop runner that doesn't believe the agent.**
+
+Anything can drive a coding agent in a loop until the checks go green — your
+platform probably does it natively now. The hard problem is the other one:
+*was the green earned?* loop-generator runs a coding agent against the checks
+*you* define and then **audits the result** — it hash-watches the tests and the
+spec, diffs the workspace for real work, can refuse runs whose checks were
+already passing, and caps the spend. What comes back isn't the agent's word that
+it finished; it's a `LoopReport` you can treat as evidence.
+
+You describe the task, the stack, and the tools that measure success in one
+`.loop.yaml` spec. The engine invokes an agent, audits and evaluates its work,
+folds the results back into the next prompt, and repeats — until the checks pass
+with the guards quiet, or the budget runs out.
 
 ```
-LoopSpec (.loop.yaml) ──► LoopEngine ──► loop until success / maxIterations
-                            │
-        ┌───────────────────┼─────────────────────────┐
-        ▼                   ▼                          ▼
-   AgentDriver         Evaluator[]                 TaskType
-  (the coding agent)  (the feedback tools)     (prompt scaffolding per category)
+.loop.yaml ─► drive agent ─► audit work ─► run checks ─► fold feedback ─► LoopReport
+ task+checks    any backend   diff+guards   the gate      + last diff      the verdict
 ```
 
-Each iteration follows the same path: drive the agent, run the evaluators, check
-the success criteria, fold the results into feedback, and repeat. On git-backed
-workspaces the feedback also includes a bounded diff of what the agent changed
-last turn, so the next prompt reminds it of its own work.
+Each iteration walks the same path: drive the agent, snapshot and diff the
+workspace (did real work happen?), run your evaluators, check the success
+criteria, and fold the results — including a bounded diff of what the agent
+changed last turn — back into the next prompt. It's an agent-agnostic verifier:
+one honest scorecard across `claude-agent-sdk`, `grok`, `github-copilot`, and
+`opencode` — the harness auditing the agent isn't sold by the agent's vendor.
+
+## Why it audits the agent
+
+Reward hacking isn't hypothetical: [frontier coding models have been caught
+special-casing tests, hard-coding expected values, and editing the very test
+files that grade them](https://www.anthropic.com/research/emergent-misalignment-reward-hacking).
+Most loop runners take the agent's word for it; loop-generator treats every
+green as a claim to audit.
+
+| An unattended agent can… | The guard that catches it | Result |
+|--------------------------|---------------------------|--------|
+| Edit the test files a check runs | Evaluator-integrity guard (hash-watched) | `evaluator-tampered` |
+| Rewrite its own success criteria | Spec-integrity guard (hash-watched) | `spec-tampered` |
+| Pass checks that were already green | Baseline evaluation (`baseline: strict`) | `baseline-vacuous` |
+| Report "done" without changing anything | Workspace change detection (git-index diff) | vacuous-success warning |
+| Grind the budget instead of converging | Cost / token ceilings | `budget-exceeded` |
+| Crash while the checks happen to pass | Honest `stopReason` reporting | warning on the report |
+
+None of these outcomes is inferred from the agent's self-report — "done" is a
+rule over *your* evaluator results, never the model's opinion. How each guard
+works, and where the guards have honest limits, is in
+[Trustworthy results](#trustworthy-results).
+
+## The report is the deliverable
+
+A run doesn't end when the agent says "done." It ends with a `LoopReport`: one
+verdict from the outcome list, each iteration's evaluator results, the diff of
+the real work, and every caveat the guards raised — green with receipts, or an
+honest name for why not. Every terminal outcome is one of `success`,
+`max-iterations`, `baseline-vacuous`, `spec-tampered`, `evaluator-tampered`,
+`budget-exceeded`, `preflight-failed`, `aborted`, or `error`.
+
+When you don't trust the verdict, [read the trace](#observing-a-run) — the
+outcome, each iteration, and the agent's inner trajectory, as JSONL or OTLP.
 
 ## Concepts
+
+The loop is the commodity chassis. What you compose on top — and what does the
+auditing — is four typed plug-in points plus a declarative gate:
 
 | Piece | What it is | Built-ins |
 |-------|-----------|-----------|
@@ -43,6 +88,8 @@ knowing which side of that line a task falls on before you spend agent budget.
 
 **Works best when**
 
+- The run is unattended — overnight, in CI, or a fleet of agents — and you'd
+  rather verify "done" than take the agent's word for it.
 - The task is well-scoped and the repo already has (or you can add) real
   test/metric infrastructure.
 - There's a specific suite to make green while keeping the rest green — e.g. a
@@ -172,9 +219,12 @@ success:
   type: all-pass         # all evaluators must pass
 limits:
   maxIterations: 6
-  baseline: false        # false | true | strict — run checks before the agent; "strict" fails a vacuous (already-green) check set
-  specGuard: warn        # off | warn | error — what to do if the agent edits this spec file mid-run
-  evaluatorGuard: warn   # off | warn | error — what to do if the agent edits the test files a check runs
+  # The three guards below are shown in the recommended "audit" posture. Note they
+  # are NOT the schema defaults yet — those are baseline:false, specGuard:warn,
+  # evaluatorGuard:warn — so set them explicitly to get this posture.
+  baseline: strict       # default false — false | true | strict; "strict" fails a vacuous (already-green) check set
+  specGuard: error       # default warn  — off | warn | error; "error" fails the run if the agent edits this spec (spec-tampered)
+  evaluatorGuard: error  # default warn  — off | warn | error; "error" fails the run if the agent edits a check's test files (evaluator-tampered)
   maxCostUsd: 5.0        # optional — stop with outcome "budget-exceeded" once cumulative driver-reported cost passes this
   maxTokens: 2000000     # optional — same, on cumulative input+output tokens (only enforced when the driver reports usage)
 evaluation:
@@ -185,6 +235,12 @@ observability:           # optional — stream the run's telemetry (see "Observi
       options: { file: trace.jsonl }
     - uses: otlp         # …or standard OTLP spans (file + optional HTTP push)
 ```
+
+> **Heads-up on the guards:** the example turns the tamper and baseline guards
+> *on* — the posture this project argues for — but they ship **off / `warn` by
+> default** today, so existing specs keep their behavior. Set them explicitly
+> (or scaffold with `loopgen generate … --verify`) until the defaults are
+> hardened, which is a planned follow-up.
 
 ## Examples
 
@@ -229,9 +285,10 @@ else `0`. The error-severity workspace checks also run as part of every `run`
 
 ## Trustworthy results
 
-"All checks passed" is only meaningful if the checks actually exercise the new
-requirement and the agent actually did something. The runner has layered
-false-positive guards:
+The [threat table](#why-it-audits-the-agent) names the moves; this is how each
+guard works — including where it has honest limits. "All checks passed" is only
+meaningful if the checks actually exercise the new requirement and the agent
+actually did something, so the runner layers its false-positive defenses:
 
 - **Change detection (git)** — flags a green run that changed no files (build and
   runtime artifacts excluded). Off-git (no repo, or a git-ignored workspace) it
@@ -351,8 +408,8 @@ file.
 ## Extending it
 
 The whole system is four plug-in points — drivers, evaluators, task types, and
-[observers](./docs/observing-runs.md#writing-an-observer). Register your own and pass them to the
-engine.
+[observers](./docs/observing-runs.md#writing-an-observer). Register your own and
+pass them in; the engine — and its guards — never change.
 
 ### A new evaluator (feedback tool)
 
@@ -421,9 +478,9 @@ npm run mutation   # Stryker mutation testing (gate: 60% mutation score)
 
 ## Status
 
-v1 is the full framework skeleton: a working engine, the four extension points,
-the conformance harness, five drivers (`mock`, `claude-agent-sdk`, `grok`,
-`github-copilot`, `opencode`), the `command` + `experiment` evaluators, the
-`jsonl` + `otlp` observers, and four task types.
-Task types beyond `function` ship with prompt scaffolding and recommended
-evaluators; deepen them as you go.
+The verification layer is the point; the loop is the chassis it rides on. v1 is
+the full framework: a working engine, the four extension points, the conformance
+harness, five drivers (`mock`, `claude-agent-sdk`, `grok`, `github-copilot`,
+`opencode`), the `command` + `experiment` evaluators, the `jsonl` + `otlp`
+observers, and four task types. Task types beyond `function` ship with prompt
+scaffolding and recommended evaluators; deepen them as you go.

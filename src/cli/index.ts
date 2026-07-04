@@ -11,7 +11,7 @@ const program = new Command();
 
 program
   .name("loopgen")
-  .description("Generate and run agent coding feedback loops.")
+  .description("The loop runner that doesn't believe the agent — verify agent coding loops against your own checks.")
   .version("0.1.0");
 
 registerGenerate(program);
