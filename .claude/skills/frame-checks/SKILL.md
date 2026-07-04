@@ -98,6 +98,12 @@ break). The set as a whole must hold at least one currently-red behavior check �
 a suite that's green from the start is the most common way "all checks passed"
 becomes a lie.
 
+**The trap:** a *new feature's own safety rails* — "the retry must **not**
+relaunch a tampered run," "the cap still bounds total spend" — read like
+invariants but are **behavior checks, RED now**: the rail doesn't exist until you
+build it. Only behavior that *already works* is a green-now guard. Mislabel one
+and you'll wrongly expect it to pass on today's code.
+
 ### 5. Adversarial pass — "how could a green lie?"
 
 For each check, name the **cheapest fake** that satisfies it without doing the
