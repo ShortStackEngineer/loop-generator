@@ -189,7 +189,9 @@ describe("spec defaults", () => {
   it("applies the documented defaults", () => {
     const spec = parseSpec({ name: "x", requirements: "r", driver: { uses: "mock" }, evaluators: [{ uses: "command" }] });
     expect(spec.limits.maxIterations).toBe(5);
-    expect(spec.limits.baseline).toBe(false);
+    expect(spec.limits.baseline).toBe(true);
+    expect(spec.limits.specGuard).toBe("error");
+    expect(spec.limits.evaluatorGuard).toBe("error");
     expect(spec.workspace.snapshot).toBe("none");
     expect(spec.workspace.ignore).toEqual([]);
     expect(spec.evaluators[0]!.options).toEqual({});

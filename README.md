@@ -219,12 +219,12 @@ success:
   type: all-pass         # all evaluators must pass
 limits:
   maxIterations: 6
-  # The three guards below are shown in the recommended "audit" posture. Note they
-  # are NOT the schema defaults yet — those are baseline:false, specGuard:warn,
-  # evaluatorGuard:warn — so set them explicitly to get this posture.
-  baseline: strict       # default false — false | true | strict; "strict" fails a vacuous (already-green) check set
-  specGuard: error       # default warn  — off | warn | error; "error" fails the run if the agent edits this spec (spec-tampered)
-  evaluatorGuard: error  # default warn  — off | warn | error; "error" fails the run if the agent edits a check's test files (evaluator-tampered)
+  # The guards below ship ON by default (specGuard/evaluatorGuard: error,
+  # baseline: true); they're spelled out here for clarity, with baseline bumped
+  # to "strict" so an already-green check set fails rather than only warns.
+  baseline: strict       # default true — false | true | strict; "strict" (shown) fails a vacuous already-green check set, not just warns
+  specGuard: error       # default error — off | warn | error; fails the run if the agent edits this spec (spec-tampered)
+  evaluatorGuard: error  # default error — off | warn | error; fails the run if the agent edits a check's test files (evaluator-tampered)
   maxCostUsd: 5.0        # optional — stop with outcome "budget-exceeded" once cumulative driver-reported cost passes this
   maxTokens: 2000000     # optional — same, on cumulative input+output tokens (only enforced when the driver reports usage)
 evaluation:
@@ -236,11 +236,11 @@ observability:           # optional — stream the run's telemetry (see "Observi
     - uses: otlp         # …or standard OTLP spans (file + optional HTTP push)
 ```
 
-> **Heads-up on the guards:** the example turns the tamper and baseline guards
-> *on* — the posture this project argues for — but they ship **off / `warn` by
-> default** today, so existing specs keep their behavior. Set them explicitly
-> (or scaffold with `loopgen generate … --verify`) until the defaults are
-> hardened, which is a planned follow-up.
+> **The guards default on.** `specGuard` and `evaluatorGuard` default to `error`
+> and `baseline` to `true`, so an unconfigured run is already audited — a spec
+> has to *opt out* (`warn` / `off` / `false`) to trust the agent. The example
+> spells them out and bumps `baseline` to `strict` (fail, not just warn, on an
+> already-green check set). `loopgen generate` scaffolds this posture for you.
 
 ## Examples
 

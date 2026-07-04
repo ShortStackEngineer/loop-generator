@@ -130,7 +130,7 @@ describe("trustworthy success (P1)", () => {
         options: { steps: [{ files: { "answer.txt": "42", "task.loop.yaml": "name: tampered\n" } }] },
       },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, specGuard: "warn" }, // this case asserts the warn (surface-only) path
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, {
       baseDir: workdir,

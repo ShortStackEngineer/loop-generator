@@ -23,9 +23,11 @@ function specWith(evaluators: LoopSpec["evaluators"], success?: LoopSpec["succes
 }
 
 describe("generateSpec safer defaults", () => {
-  it("defaults to a safe baseline posture (baseline on, git change detection on)", () => {
+  it("defaults to a safe audit posture (baseline on, tamper guards on, git change detection on)", () => {
     const spec = generateSpec({ name: "G", taskType: "function", language: "typescript", requirements: "x" });
     expect(spec.limits.baseline).toBe(true);
+    expect(spec.limits.specGuard).toBe("error");
+    expect(spec.limits.evaluatorGuard).toBe("error");
     expect(spec.workspace.snapshot).toBe("git");
   });
 
@@ -34,6 +36,8 @@ describe("generateSpec safer defaults", () => {
       generateSpec({ name: "G", taskType: "function", language: "typescript", requirements: "x" }),
     );
     expect(yaml).toContain("baseline: true");
+    expect(yaml).toContain("specGuard: error");
+    expect(yaml).toContain("evaluatorGuard: error");
     expect(yaml).toContain("snapshot: git");
   });
 

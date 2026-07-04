@@ -102,29 +102,31 @@ export const loopSpecSchema = z
         maxTokens: z.number().int().positive().optional(),
         /**
          * Run the evaluators once before any agent work. If they already pass,
-         * the checks probably don't verify the requirement. Off by default
-         * because checks with side effects (db migrate/seed) would run twice.
-         * `"strict"` turns that signal into a hard failure: a passing baseline
-         * means the checks are vacuous, so the run fails instead of warning.
+         * the checks probably don't verify the requirement. On by default: a run
+         * that's already green before the agent starts is the clearest "the
+         * checks don't test the requirement" smell, so it's worth surfacing — at
+         * the cost of running side-effecting checks (db migrate/seed) once more.
+         * Set `false` to skip the pre-agent run; `"strict"` turns a passing
+         * baseline into a hard failure (`baseline-vacuous`) instead of a warning.
          */
-        baseline: z.union([z.boolean(), z.literal("strict")]).default(false),
+        baseline: z.union([z.boolean(), z.literal("strict")]).default(true),
         /**
          * What to do if the agent edits the loop spec file during the run (only
-         * watched when the spec lives inside the workspace). `"warn"` (default)
-         * surfaces a caveat; `"error"` fails the run so an altered success
-         * contract can't report green; `"off"` disables the check.
+         * watched when the spec lives inside the workspace). `"error"` (default)
+         * fails the run so an altered success contract can't report green;
+         * `"warn"` only surfaces a caveat; `"off"` disables the check.
          */
-        specGuard: z.enum(["off", "warn", "error"]).default("warn"),
+        specGuard: z.enum(["off", "warn", "error"]).default("error"),
         /**
          * What to do if the agent edits a file an evaluator depends on (the test
          * files a `command` check runs, plus any `evaluators[].guard` paths). The
          * real success criteria live in those files, so editing them can fake a
-         * green. `"warn"` (default) surfaces a caveat; `"error"` fails the run
-         * (outcome `evaluator-tampered`); `"off"` disables the check.
+         * green. `"error"` (default) fails the run (outcome `evaluator-tampered`);
+         * `"warn"` only surfaces a caveat; `"off"` disables the check.
          */
-        evaluatorGuard: z.enum(["off", "warn", "error"]).default("warn"),
+        evaluatorGuard: z.enum(["off", "warn", "error"]).default("error"),
       })
-      .default({ maxIterations: 5, baseline: false, specGuard: "warn", evaluatorGuard: "warn" }),
+      .default({ maxIterations: 5, baseline: true, specGuard: "error", evaluatorGuard: "error" }),
 
     /**
      * How the engine runs a spec's evaluators. `concurrency` defaults to 1

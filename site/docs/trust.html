@@ -63,16 +63,16 @@
 
     <h3>Baseline evaluation</h3>
     <p>
-      <code>limits.baseline: true</code> (or <code>--baseline</code>) runs the
-      checks once <em>before</em> any agent work. If they already pass, your
-      checks probably don't test the requirement, so this is surfaced as a
-      warning. It's off by default because side-effecting checks (db
-      migrate/seed) would run twice. Set <code>limits.baseline: "strict"</code>
-      (or <code>--strict-baseline</code>) to make that a hard failure
-      (<code>baseline-vacuous</code>) instead — on the principle that a check
-      that's green before any work isn't verifying anything. It's
-      stack-agnostic: it just runs whatever evaluators you defined on the
-      pre-agent workspace.
+      <code>limits.baseline</code> (default <code>true</code>) runs the checks
+      once <em>before</em> any agent work. If they already pass, your checks
+      probably don't test the requirement, so this is surfaced as a warning. On
+      by default; set <code>false</code> to skip it (e.g. for side-effecting
+      checks you don't want to run twice). Set
+      <code>limits.baseline: "strict"</code> (or <code>--strict-baseline</code>)
+      to make a passing baseline a hard failure (<code>baseline-vacuous</code>)
+      instead — on the principle that a check that's green before any work isn't
+      verifying anything. It's stack-agnostic: it just runs whatever evaluators
+      you defined on the pre-agent workspace.
     </p>
 
     <h3>Sequential evaluators (default)</h3>
@@ -89,11 +89,10 @@
       If the loop spec lives inside the workspace, the agent can edit its own
       success criteria. The runner watches the spec file, excludes it from the
       work diff (so a spec-only edit can't fake "work"), and by default
-      (<code>warn</code>) raises a warning if the agent modified it. Set
-      <code>specGuard: "error"</code> to fail the run
-      (<code>spec-tampered</code>) so an altered contract can't report green;
-      <code>"off"</code> disables the watch. Best practice: keep specs outside
-      the target repo.
+      (<code>error</code>) fails the run (<code>spec-tampered</code>) if the agent
+      modified it, so an altered contract can't report green. Set
+      <code>"warn"</code> to only surface a caveat, or <code>"off"</code> to
+      disable the watch. Best practice: keep specs outside the target repo.
     </p>
 
     <h3>Evaluator-integrity guard</h3>
@@ -103,9 +102,9 @@
       runner watches those files — auto-detected from the command (e.g.
       <code>bin/rails test test/foo_test.rb</code>), plus any
       <code>evaluators[].guard</code> paths — excludes them from the work diff,
-      and by default (<code>warn</code>) raises a warning if any changed. Set
-      <code>evaluatorGuard: "error"</code> to fail the run
-      (<code>evaluator-tampered</code>); <code>"off"</code> disables it. A bare
+      and by default (<code>error</code>) fails the run
+      (<code>evaluator-tampered</code>) if any changed. Set <code>"warn"</code>
+      to only surface a caveat, or <code>"off"</code> to disable it. A bare
       runner with no file arguments (<code>npm test</code>) names nothing and is
       intentionally not watched. When both guards fire, spec-tamper takes
       precedence.

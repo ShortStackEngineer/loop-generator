@@ -26,10 +26,11 @@ const vacuousSpec = (over: Record<string, unknown> = {}) =>
 
 // ---------------------------------------------------------------------------
 describe("schema: baseline + specGuard", () => {
-  it("defaults baseline=false and specGuard=warn", () => {
+  it("defaults baseline=true, specGuard=error, evaluatorGuard=error", () => {
     const s = parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" } });
-    expect(s.limits.baseline).toBe(false);
-    expect(s.limits.specGuard).toBe("warn");
+    expect(s.limits.baseline).toBe(true);
+    expect(s.limits.specGuard).toBe("error");
+    expect(s.limits.evaluatorGuard).toBe("error");
   });
   it("accepts baseline:'strict' and specGuard values", () => {
     const s = parseSpec({
@@ -116,11 +117,17 @@ describe("spec-tamper policy (#2)", () => {
     expect(report.warnings.join("\n")).toMatch(/modified the loop spec file/);
   });
 
-  it("warn (default): tampering is surfaced but the run still succeeds", async () => {
-    const report = await runWithSpecFile();
+  it("warn: tampering is surfaced but the run still succeeds", async () => {
+    const report = await runWithSpecFile("warn");
     expect(report.success).toBe(true);
     expect(report.outcome).toBe("success");
     expect(report.warnings.join("\n")).toMatch(/modified the loop spec file/);
+  });
+
+  it("default (error): tampering fails an otherwise-green run", async () => {
+    const report = await runWithSpecFile(); // no specGuard set → schema default
+    expect(report.outcome).toBe("spec-tampered");
+    expect(report.success).toBe(false);
   });
 
   it("off: the spec file is not watched, no tamper warning", async () => {
