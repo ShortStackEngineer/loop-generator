@@ -187,9 +187,17 @@ and `test/conformance.test.ts`. This is the gate for any new driver.
 
 ## In-repo skills (`.claude/skills/`)
 
-Three skills encode the canonical workflows for this repo — prefer invoking them
-over reinventing the steps:
+Five skills encode the canonical workflows for this repo — prefer invoking them
+over reinventing the steps. The first three form the authoring pipeline (whole
+spec → one request's checks → a runnable loop):
 
+- **frame-app** — decompose a whole app spec into a dependency-ordered DAG of
+  RED-able vertical slices (a "loop of loops"): sort fragments into
+  node/artifact/cross-cutting/gate, wire setup-dependency edges, name the two
+  kinds of invariants, and emit only the buildable frontier — feeding each
+  frontier to frame-checks and promoting verified loops into a `.batch.yaml`.
+- **frame-checks** — turn one request into falsifiable acceptance checks (each
+  RED now for the right reason, hard to fake), then hand them to author-loop.
 - **author-loop** — create a verified `.loop.yaml` (interview → inspect repo for
   real commands → prove it's lint-clean and starts RED).
 - **debug-loop** — diagnose a failed/stalled/suspicious run by its
