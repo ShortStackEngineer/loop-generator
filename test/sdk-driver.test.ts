@@ -2,7 +2,11 @@ import { describe, it, expect, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { claudeAgentSdkDriver, __setSdkLoaderForTests } from "../src/drivers/claude-agent-sdk";
+import {
+  claudeAgentSdkDriver,
+  extractChangedFilesFromTranscript,
+  __setSdkLoaderForTests,
+} from "../src/drivers/claude-agent-sdk";
 import { silentLogger } from "../src/core/logger";
 import type { AgentInvocation } from "../src/drivers/types";
 
@@ -187,6 +191,66 @@ describe("claude-agent-sdk driver", () => {
       { kind: "tool-result", id: "t2", ok: false, turn: 1, output: "boom" },
       { kind: "model-message", text: "done", turn: 2 },
     ]);
+  });
+
+  it("reports changedFiles from Write/Edit tool_use inputs in the transcript", async () => {
+    const workdir = mkdtempSync(path.join(tmpdir(), "loopgen-sdk-cf-"));
+    __setSdkLoaderForTests(async () =>
+      fakeSdk([
+        {
+          type: "assistant",
+          message: {
+            content: [
+              {
+                type: "tool_use",
+                id: "t1",
+                name: "Write",
+                input: { file_path: path.join(workdir, "src/a.ts") },
+              },
+              { type: "tool_use", id: "t2", name: "Edit", input: { path: "src/b.ts" } },
+            ],
+          },
+        },
+        { type: "result", subtype: "success", result: "done" },
+      ]),
+    );
+    const inv = invocation({ workdir });
+    const r = await claudeAgentSdkDriver.run(inv);
+    rmSync(workdir, { recursive: true, force: true });
+    expect(r.changedFiles).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
+  it("extractChangedFilesFromTranscript ignores tools outside the workdir", () => {
+    const workdir = "/tmp/ws";
+    const files = extractChangedFilesFromTranscript(
+      [
+        {
+          type: "assistant",
+          message: {
+            content: [
+              { type: "tool_use", name: "Write", input: { file_path: "/etc/passwd" } },
+              { type: "tool_use", name: "Write", input: { file_path: "/tmp/ws/ok.ts" } },
+              { type: "tool_use", name: "Read", input: { file_path: "/tmp/ws/skip.ts" } },
+            ],
+          },
+        },
+      ],
+      workdir,
+    );
+    expect(files).toEqual(["ok.ts"]);
+  });
+
+  it("preflight warns on options left over from another driver", async () => {
+    __setSdkLoaderForTests(async () => fakeSdk([]));
+    const pf = await claudeAgentSdkDriver.preflight!({
+      workdir: ".",
+      options: { model: "claude-opus-4-8", allowAllTools: true, alwaysApprove: true },
+    });
+    expect(pf.ok).toBe(true);
+    const warnings = (pf.warnings ?? []).join("\n");
+    expect(warnings).toMatch(/does not recognize option/);
+    expect(warnings).toMatch(/allowAllTools/);
+    expect(warnings).toMatch(/alwaysApprove/);
   });
 
   it("emits an error event when the stream throws unaborted", async () => {

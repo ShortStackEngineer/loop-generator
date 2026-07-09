@@ -13,7 +13,18 @@ import { mergePreflight } from "./preflight";
 import type { PreflightResult } from "./preflight";
 import { createLogger, type Logger } from "./logger";
 import { resolveWorkspaceDir, type LoopSpec } from "./spec";
-import { isGitRepo, changeDetectionAvailable, snapshotTree, diffTrees, diffPatch, DEFAULT_IGNORE_GLOBS } from "./workspace";
+import {
+  isGitRepo,
+  changeDetectionAvailable,
+  snapshotTree,
+  diffTrees,
+  diffPatch,
+  snapshotContent,
+  diffContent,
+  DEFAULT_IGNORE_GLOBS,
+  type ContentSnapshot,
+  type TreeDiff,
+} from "./workspace";
 import { resolveGuardedFiles } from "./evaluator-guard";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
@@ -285,15 +296,21 @@ export class LoopEngine {
 
     // Workspace change tracking: lets us detect "green but the agent changed
     // nothing", the signature of checks that don't exercise the requirement.
+    // Prefer git; when unavailable, fall back to a content-hash walk so a
+    // driver that omits `changedFiles` can't produce a false vacuous warning.
     const gitEnabled = changeDetectionAvailable(workdir);
+    const contentFallback = !gitEnabled;
     if (spec.workspace.snapshot === "git" && !isGitRepo(workdir)) {
-      log.warn(`workspace.snapshot is "git" but ${workdir} is not a git repo; change detection disabled`);
+      log.warn(
+        `workspace.snapshot is "git" but ${workdir} is not a git repo; using content-hash change detection`,
+      );
     } else if (!gitEnabled) {
       log.debug(
-        "git change detection unavailable (not a repo, or workspace is git-ignored); no-op detection falls back to driver-reported changes",
+        "git change detection unavailable (not a repo, or workspace is git-ignored); using content-hash change detection (driver-reported files as secondary)",
       );
     }
     const baselineTree = gitEnabled ? snapshotTree(workdir) : null;
+    let baselineContent: ContentSnapshot | null = null;
 
     // Spec-integrity guard: if the loop spec lives inside the workspace, the
     // agent can edit its own success criteria. Two independent concerns:
@@ -336,15 +353,18 @@ export class LoopEngine {
     ];
 
     const runWarnings: string[] = [];
-    // Off-git trust hole: without git change detection we can't independently
-    // verify what the agent did — we trust its self-reported `changedFiles`.
-    // Make that a persistent, report-level caveat (not just a debug log) so a
-    // green run in fallback mode never *looks* as trustworthy as a git-backed one.
-    if (!gitEnabled) {
+    // Off-git: content-hash detection is independent of the driver, but lacks
+    // unified diffs and respects a file-count cap — still flag it so a green
+    // run never *looks* identical to a git-backed one.
+    if (contentFallback) {
+      baselineContent = snapshotContent(workdir, ignoreGlobs);
       runWarnings.push(
-        "git change detection is unavailable (workspace is not a git repo, or is git-ignored); this run trusts the driver's self-reported file changes, which cannot be independently verified",
+        "git change detection is unavailable (workspace is not a git repo, or is git-ignored); file changes are detected via content hashes (no unified diff; large trees are capped)",
       );
     }
+
+    /** Union of files changed across iterations (used for the overall report off-git). */
+    const overallChangedFiles = new Set<string>();
     let specTampered = false;
     // Re-hash the watched spec and flag tampering. Called on every terminal path
     // that could have seen agent activity (per-iteration success, max-iterations,
@@ -453,6 +473,9 @@ export class LoopEngine {
 
       const signal = iterationSignal(opts.signal, spec.limits.iterationTimeoutMs);
       const treeBefore = gitEnabled ? lastTree : null;
+      const contentBefore = contentFallback
+        ? (i === 0 && baselineContent ? baselineContent : snapshotContent(workdir, ignoreGlobs))
+        : null;
 
       // 1) Drive the agent. Offer the previous session for resume after an
       //    incomplete (max_turns) stop; drivers opt in to actually using it.
@@ -502,9 +525,39 @@ export class LoopEngine {
       // 2) Compute what actually changed, then evaluate the workspace.
       const treeAfter = gitEnabled ? snapshotTree(workdir) : null;
       lastTree = treeAfter ?? lastTree;
-      const diff = diffTrees(workdir, treeBefore, treeAfter, ignoreGlobs);
-      const changed = gitEnabled ? diff.changed : (agent.changedFiles?.length ?? 0) > 0;
-      const changedFiles = gitEnabled ? diff.files : agent.changedFiles ?? [];
+      const gitDiff = diffTrees(workdir, treeBefore, treeAfter, ignoreGlobs);
+      const contentAfter = contentFallback ? snapshotContent(workdir, ignoreGlobs) : null;
+      const contentDiff: TreeDiff | null =
+        contentFallback && contentBefore && contentAfter ? diffContent(contentBefore, contentAfter) : null;
+
+      // Resolution order: git → content-hash → driver self-report.
+      let changed: boolean;
+      let changedFiles: string[];
+      let iterDiffStat = "";
+      if (gitEnabled) {
+        changed = gitDiff.changed;
+        changedFiles = gitDiff.files;
+        iterDiffStat = gitDiff.stat;
+      } else if (contentDiff) {
+        changed = contentDiff.changed;
+        // Prefer content-hash list; if empty, surface driver-reported files when
+        // the driver claims work we couldn't hash (e.g. outside the walk cap).
+        changedFiles =
+          contentDiff.files.length > 0
+            ? contentDiff.files
+            : agent.changedFiles?.length
+              ? agent.changedFiles
+              : [];
+        if (!contentDiff.changed && (agent.changedFiles?.length ?? 0) > 0) {
+          changed = true;
+          changedFiles = agent.changedFiles!;
+        }
+        iterDiffStat = contentDiff.stat;
+      } else {
+        changed = (agent.changedFiles?.length ?? 0) > 0;
+        changedFiles = agent.changedFiles ?? [];
+      }
+      for (const f of changedFiles) overallChangedFiles.add(f);
 
       const evaluations = await this.runEvaluators(evaluators, {
         runId,
@@ -522,23 +575,30 @@ export class LoopEngine {
       const verdict = evaluateCriteria(spec.success, evaluations);
       feedback = buildFeedback(evaluations, verdict, {
         diff:
-          gitEnabled && diff.changed
-            ? { files: diff.files, patch: diffPatch(workdir, treeBefore, treeAfter, ignoreGlobs) }
-            : undefined,
+          gitEnabled && gitDiff.changed
+            ? { files: gitDiff.files, patch: diffPatch(workdir, treeBefore, treeAfter, ignoreGlobs) }
+            : contentDiff?.changed
+              ? { files: contentDiff.files }
+              : undefined,
       });
 
       // 4) Honest caveats about this iteration.
       const iterWarnings: string[] = [];
-      if (verdict.satisfied && gitEnabled && !changed) {
-        iterWarnings.push(
-          "criteria satisfied but the agent changed no files — this run may not have done any work (checks may be vacuous)",
-        );
-      } else if (verdict.satisfied && !gitEnabled && !changed) {
-        // Weaker fallback for the vacuous-success signal when git is unavailable:
-        // lean on the driver's self-report (untrusted, hence the softer wording).
-        iterWarnings.push(
-          "criteria satisfied but the driver reported no file changes — this run may not have done any work (checks may be vacuous; change detection is unverified without git)",
-        );
+      if (verdict.satisfied && !changed) {
+        if (gitEnabled) {
+          iterWarnings.push(
+            "criteria satisfied but the agent changed no files — this run may not have done any work (checks may be vacuous)",
+          );
+        } else if (contentFallback) {
+          iterWarnings.push(
+            "criteria satisfied but no file content changes were detected — this run may not have done any work (checks may be vacuous)",
+          );
+        } else {
+          // Last-resort wording when even content hashing is unavailable.
+          iterWarnings.push(
+            "criteria satisfied but the driver reported no file changes — this run may not have done any work (checks may be vacuous; change detection is unverified without git)",
+          );
+        }
       }
       if (verdict.satisfied && (agent.stopReason === "max_turns" || agent.stopReason === "error" || !agent.ok)) {
         iterWarnings.push(
@@ -556,7 +616,7 @@ export class LoopEngine {
         durationMs: Date.now() - iterStart,
         changed,
         changedFiles,
-        diffStat: diff.stat,
+        diffStat: iterDiffStat || undefined,
         warnings: iterWarnings,
       };
       iterations.push(report);
@@ -573,7 +633,15 @@ export class LoopEngine {
       if (verdict.satisfied) {
         checkSpecTamper();
         checkEvaluatorTamper();
-        const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
+        const overall = this.overallChanges(
+          workdir,
+          gitEnabled,
+          baselineTree,
+          lastTree,
+          baselineContent,
+          ignoreGlobs,
+          overallChangedFiles,
+        );
         const warnings = [...runWarnings, ...iterWarnings];
         // Tamper in "error" mode: the agent altered its own success criteria
         // (the spec, or the files an evaluator runs), so a green can't be
@@ -595,8 +663,8 @@ export class LoopEngine {
           iterations,
           totalUsage,
           baseline,
-          changedFiles: gitEnabled ? overall.files : undefined,
-          diffStat: gitEnabled ? overall.stat : undefined,
+          changedFiles: overall.files,
+          diffStat: overall.stat || undefined,
           warnings,
           durationMs: Date.now() - start,
         });
@@ -611,7 +679,15 @@ export class LoopEngine {
         checkSpecTamper();
         checkEvaluatorTamper();
         iterLog.warn(overBudget);
-        const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
+        const overall = this.overallChanges(
+          workdir,
+          gitEnabled,
+          baselineTree,
+          lastTree,
+          baselineContent,
+          ignoreGlobs,
+          overallChangedFiles,
+        );
         return this.finishObservers(observerSessions, {
           ...base,
           outcome: "budget-exceeded",
@@ -620,8 +696,8 @@ export class LoopEngine {
           iterations,
           totalUsage,
           baseline,
-          changedFiles: gitEnabled ? overall.files : undefined,
-          diffStat: gitEnabled ? overall.stat : undefined,
+          changedFiles: overall.files,
+          diffStat: overall.stat || undefined,
           warnings: runWarnings,
           durationMs: Date.now() - start,
         });
@@ -630,7 +706,15 @@ export class LoopEngine {
 
     checkSpecTamper();
     checkEvaluatorTamper();
-    const overall = diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
+    const overall = this.overallChanges(
+      workdir,
+      gitEnabled,
+      baselineTree,
+      lastTree,
+      baselineContent,
+      ignoreGlobs,
+      overallChangedFiles,
+    );
     return this.finishObservers(observerSessions, {
       ...base,
       outcome: "max-iterations",
@@ -639,11 +723,38 @@ export class LoopEngine {
       iterations,
       totalUsage,
       baseline,
-      changedFiles: gitEnabled ? overall.files : undefined,
-      diffStat: gitEnabled ? overall.stat : undefined,
+      changedFiles: overall.files,
+      diffStat: overall.stat || undefined,
       warnings: runWarnings,
       durationMs: Date.now() - start,
     });
+  }
+
+  /**
+   * Whole-run change summary: git tree diff when available, otherwise
+   * content-hash baseline→now (or the union of per-iteration files).
+   */
+  private overallChanges(
+    workdir: string,
+    gitEnabled: boolean,
+    baselineTree: string | null,
+    lastTree: string | null,
+    baselineContent: ContentSnapshot | null,
+    ignoreGlobs: string[],
+    overallChangedFiles: Set<string>,
+  ): TreeDiff {
+    if (gitEnabled) return diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
+    if (baselineContent) {
+      const now = snapshotContent(workdir, ignoreGlobs);
+      const diff = diffContent(baselineContent, now);
+      if (diff.changed) return diff;
+    }
+    const files = [...overallChangedFiles].sort();
+    return {
+      changed: files.length > 0,
+      files,
+      stat: files.length ? `${files.length} file(s) changed across run` : "",
+    };
   }
 
   /**

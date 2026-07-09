@@ -1,11 +1,24 @@
+import path from "node:path";
 import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import type { PreflightResult } from "../core/preflight";
 import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import { unknownOptionWarnings } from "./options";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
 const DEFAULT_MODEL = "claude-opus-4-8";
 const DEFAULT_ALLOWED_TOOLS = ["Read", "Write", "Edit", "Bash", "Glob", "Grep"];
+
+/** Known `driver.options` keys for this backend (unknowns → preflight warnings). */
+export const CLAUDE_SDK_OPTION_KEYS = [
+  "model",
+  "maxTurns",
+  "permissionMode",
+  "allowedTools",
+  "disallowedTools",
+  "resume",
+  "queryOptions",
+] as const;
 
 const optionsSchema = z.object({
   model: z.string().default(DEFAULT_MODEL),
@@ -21,6 +34,18 @@ const optionsSchema = z.object({
   /** Escape hatch: any extra options forwarded verbatim to `query({ options })`. */
   queryOptions: z.record(z.string(), z.unknown()).optional(),
 });
+
+/** Tools that edit the workspace — their inputs yield paths for changedFiles. */
+const WRITE_TOOLS = new Set([
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+  "create_file",
+  "edit_file",
+  "str_replace",
+  "str_replace_editor",
+]);
 
 // The SDK's types aren't guaranteed to be installed (it's an optional dep), so
 // we model only what we touch and import it dynamically.
@@ -92,7 +117,9 @@ export const claudeAgentSdkDriver: AgentDriver = {
         `The optional dependency "${SDK_PACKAGE}" is not installed. Run: npm install ${SDK_PACKAGE}`,
       ]);
     }
-    const warnings: string[] = [];
+    const warnings: string[] = [
+      ...unknownOptionWarnings("claude-agent-sdk", options, CLAUDE_SDK_OPTION_KEYS),
+    ];
     if (!hasAuth()) {
       warnings.push(
         "No ANTHROPIC_API_KEY (or alt provider env) detected. The SDK may rely on an interactive Claude login; set credentials for unattended runs.",
@@ -164,16 +191,72 @@ export const claudeAgentSdkDriver: AgentDriver = {
       };
     }
 
+    const changedFiles = extractChangedFilesFromTranscript(transcript, invocation.workdir);
+
     return {
       ok: stopReason !== "error",
       stopReason,
       summary: finalResult ?? "(agent produced no final summary)",
+      changedFiles: changedFiles.length ? changedFiles : undefined,
       usage,
       sessionId,
       raw: transcript,
     };
   },
 };
+
+/**
+ * Collect workspace-relative paths the agent wrote/edited from tool_use blocks
+ * in the SDK transcript. Supports both Claude Code (`file_path`) and shorter
+ * `path` keys; absolute paths are relativized to `workdir`.
+ *
+ * @internal exported for unit tests
+ */
+export function extractChangedFilesFromTranscript(transcript: SdkMessage[], workdir: string): string[] {
+  const files = new Set<string>();
+  for (const message of transcript) {
+    if (message.type !== "assistant") continue;
+    const inner = isRecord(message.message) ? message.message : undefined;
+    const content: unknown[] = inner && Array.isArray(inner.content) ? inner.content : [];
+    for (const block of content) {
+      if (!isRecord(block) || block.type !== "tool_use") continue;
+      const name = typeof block.name === "string" ? block.name : "";
+      if (!WRITE_TOOLS.has(name) && !/write|edit|replace/i.test(name)) continue;
+      for (const p of pathsFromToolInput(block.input)) {
+        const rel = toWorkdirRel(p, workdir);
+        if (rel) files.add(rel);
+      }
+    }
+  }
+  return [...files].sort();
+}
+
+function pathsFromToolInput(input: unknown): string[] {
+  if (!isRecord(input)) return [];
+  const out: string[] = [];
+  for (const key of ["file_path", "filePath", "path", "file", "notebook_path", "notebookPath"]) {
+    const v = input[key];
+    if (typeof v === "string" && v.trim()) out.push(v.trim());
+  }
+  // MultiEdit-style: edits: [{ file_path }]
+  if (Array.isArray(input.edits)) {
+    for (const e of input.edits) {
+      if (!isRecord(e)) continue;
+      for (const key of ["file_path", "filePath", "path"]) {
+        const v = e[key];
+        if (typeof v === "string" && v.trim()) out.push(v.trim());
+      }
+    }
+  }
+  return out;
+}
+
+function toWorkdirRel(p: string, workdir: string): string | null {
+  const abs = path.isAbsolute(p) ? p : path.resolve(workdir, p);
+  const rel = path.relative(workdir, abs).replace(/\\/g, "/");
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+  return rel;
+}
 
 function signalToController(signal: AbortSignal): AbortController {
   const controller = new AbortController();

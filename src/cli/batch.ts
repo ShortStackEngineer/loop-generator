@@ -4,8 +4,9 @@ import type { Command } from "commander";
 import { loadBatchFile } from "../batch/manifest";
 import { runBatch, type BatchItemResult, type BatchReport } from "../batch/runner";
 import { LoopEngine } from "../core/engine";
-import { createDefaultRegistries } from "../registry";
+import { createDefaultRegistries, createDriverRegistry } from "../registry";
 import { createLogger, type LogLevel } from "../core/logger";
+import { validateDriverName } from "../core/driver-override";
 
 interface BatchFlags {
   concurrency?: string;
@@ -15,6 +16,7 @@ interface BatchFlags {
   strictBaseline?: boolean;
   report?: string;
   logLevel?: LogLevel;
+  driver?: string;
 }
 
 /** Fixed-width item name, clipped with an ellipsis when too long. */
@@ -72,11 +74,26 @@ export function registerBatch(program: Command): void {
     .option("--stop-on-error", "stop scheduling new items after the first failure")
     .option("--report <file>", "write the full aggregate JSON report to a file")
     .option("--log-level <level>", "debug|info|warn|error|silent", "info")
+    .option(
+      "-d, --driver <name>",
+      "override driver.uses on every item (keeps each item's driver.options)",
+    )
     .action(async (manifestPath: string, flags: BatchFlags) => {
       const { manifest, baseDir } = loadBatchFile(manifestPath);
 
       const continueOnError = flags.stopOnError ? false : flags.continueOnError ? true : undefined;
       const log = createLogger(flags.logLevel ?? "info", "loopgen");
+
+      if (flags.driver) {
+        const known = createDriverRegistry().keys();
+        const err = validateDriverName(flags.driver, known);
+        if (err) {
+          console.error(err);
+          process.exit(1);
+        }
+        log.info(`driver override for all batch items: ${flags.driver}`);
+      }
+
       const engine = new LoopEngine(createDefaultRegistries(), log);
 
       const controller = new AbortController();
@@ -95,6 +112,7 @@ export function registerBatch(program: Command): void {
           maxIterations: flags.maxIterations ? Number(flags.maxIterations) : undefined,
           baseline: flags.strictBaseline ? "strict" : undefined,
           continueOnError,
+          driver: flags.driver,
           log,
           onItemStart: (name) => log.info(`▶ ${name}`),
           onItem: (r) => log.info(`${MARK[r.status]} ${r.name}: ${r.status} — ${r.reason}`),

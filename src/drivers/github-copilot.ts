@@ -16,9 +16,20 @@ import {
   tail,
 } from "./cli";
 import type { JsonObject, ResolvedBin } from "./cli";
+import { unknownOptionWarnings } from "./options";
 
 // Re-export the shared helpers the copilot tests import from this module.
 export { cleanSummary, parseJsonl, lastMeaningfulLine };
+
+/** Known `driver.options` keys (unknowns → preflight warnings). */
+export const COPILOT_OPTION_KEYS = [
+  "model",
+  "reasoningEffort",
+  "allowAllTools",
+  "resume",
+  "env",
+  "extraArgs",
+] as const;
 
 const optionsSchema = z.object({
   /** Model id passed via --model (e.g. "claude-sonnet-4.5", "gpt-5", "auto"). Omit for the CLI default. */
@@ -74,7 +85,9 @@ export const githubCopilotDriver: AgentDriver = {
       ]);
     }
 
-    const warnings: string[] = [];
+    const warnings: string[] = [
+      ...unknownOptionWarnings("github-copilot", options, COPILOT_OPTION_KEYS),
+    ];
     if (!parsed.data.allowAllTools) {
       warnings.push(
         "allowAllTools is false, but the Copilot CLI requires --allow-all-tools for non-interactive (-p) runs; the agent may refuse to act or hang waiting for confirmation.",

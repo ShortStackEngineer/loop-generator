@@ -17,8 +17,22 @@ import {
 } from "./cli";
 import type { JsonObject, ResolvedBin } from "./cli";
 
+import { unknownOptionWarnings } from "./options";
+
 // Re-export the shared helpers the opencode tests import from this module.
 export { cleanSummary, parseJsonl, lastMeaningfulLine };
+
+/** Known `driver.options` keys (unknowns → preflight warnings). */
+export const OPENCODE_OPTION_KEYS = [
+  "model",
+  "agent",
+  "variant",
+  "dangerouslySkipPermissions",
+  "pure",
+  "resume",
+  "env",
+  "extraArgs",
+] as const;
 
 const optionsSchema = z.object({
   /**
@@ -90,7 +104,9 @@ export const opencodeDriver: AgentDriver = {
       ]);
     }
 
-    const warnings: string[] = [];
+    const warnings: string[] = [
+      ...unknownOptionWarnings("opencode", options, OPENCODE_OPTION_KEYS),
+    ];
     if (!parsed.data.dangerouslySkipPermissions) {
       warnings.push(
         "dangerouslySkipPermissions is false, but headless `opencode run` needs it to apply edits without a permission prompt; the agent may stall waiting for confirmation.",

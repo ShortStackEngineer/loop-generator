@@ -31,8 +31,10 @@ npm run test:watch                            # watch mode
 ```
 
 `loopgen` subcommands: `generate` (scaffold a spec, `-i` for interactive),
-`run`, `batch`, `lint`, `list`, `verify-driver`. The offline smoke path that
-needs no API key is `npm run dev -- run examples/building-blocks/mock-demo.loop.yaml` (scripted
+`run` (`-d`/`--driver` overrides `driver.uses`), `batch` (same `--driver`),
+`lint`, `list`, `verify-driver`, `init-target` (RED `./target` scaffolds for
+illustrative examples). The offline smoke path that needs no API key is
+`npm run dev -- run examples/building-blocks/mock-demo.loop.yaml` (scripted
 `mock` driver).
 
 ## Architecture
@@ -112,10 +114,11 @@ engine, preserve them:
 - **Change detection** (`src/core/workspace.ts`): each iteration is diffed via a
   throwaway git index (`snapshotTree`/`diffTrees`). A green run that changed no
   files is flagged. Build/runtime artifacts are excluded (`DEFAULT_IGNORE_GLOBS`
-  + `workspace.ignore`). Falls back to driver-reported `changedFiles` when the
-  workspace isn't a git repo — and when it does, the run carries a persistent
-  `report.warnings` caveat (the change list is unverified) and the vacuous-success
-  flag still fires off the driver's self-report (weaker, honestly labeled).
+  + `workspace.ignore`). When the workspace isn't a git repo (or is git-ignored),
+  falls back to a content-hash walk (`snapshotContent`/`diffContent`) so a
+  driver that omits `changedFiles` can't produce a false vacuous-success
+  warning; driver-reported files are secondary. The run still carries a
+  persistent caveat (no unified diff; large trees are capped).
 - **Baseline eval** (`limits.baseline: true|"strict"`): runs checks before any
   agent work; if already green, the checks probably don't test the requirement.
   `"strict"` makes that a hard `baseline-vacuous` failure.

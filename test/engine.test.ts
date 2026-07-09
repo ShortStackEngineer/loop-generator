@@ -178,14 +178,15 @@ describe("diff-in-feedback (roadmap #1)", () => {
     expect(prompts[1]).toContain("```diff");
   });
 
-  it("does not attach a diff when git change detection is unavailable", async () => {
+  it("attaches a file list (but no unified diff) when only content-hash detection is available", async () => {
     const prompts: string[] = [];
     const capturing: AgentDriver = {
       name: "capture-nogit",
       async run(inv) {
         prompts.push(inv.prompt);
         writeFileSync(path.join(inv.workdir, "answer.txt"), inv.iteration === 0 ? "wrong" : "42");
-        return { ok: true, stopReason: "completed", changedFiles: ["answer.txt"] };
+        // Deliberately omit changedFiles — content-hash must still see the write.
+        return { ok: true, stopReason: "completed" };
       },
     };
     const regs = createDefaultRegistries();
@@ -200,7 +201,9 @@ describe("diff-in-feedback (roadmap #1)", () => {
     });
     await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
     expect(prompts.length).toBeGreaterThanOrEqual(2);
-    expect(prompts[1]).not.toContain("Changes you made last iteration"); // no git → no patch
+    expect(prompts[1]).toContain("Changes you made last iteration");
+    expect(prompts[1]).toContain("answer.txt");
+    expect(prompts[1]).not.toContain("```diff"); // unified diff is git-only
   });
 });
 
@@ -220,7 +223,7 @@ describe("off-git trust hole (roadmap #2)", () => {
     expect(report.warnings.join("\n")).toMatch(/git change detection is unavailable/);
   });
 
-  it("flags a vacuous success off-git when the driver reports no changes", async () => {
+  it("flags a vacuous success off-git when content hashes show no changes", async () => {
     writeFileSync(path.join(workdir, "answer.txt"), "42"); // check already passes
     const spec = parseSpec({
       name: "offgit-vacuous",
@@ -232,7 +235,34 @@ describe("off-git trust hole (roadmap #2)", () => {
     const report = await engine().run(spec, { baseDir: workdir });
     expect(report.success).toBe(true);
     expect(report.iterations[0]!.changed).toBe(false);
-    expect(report.warnings.join("\n")).toMatch(/driver reported no file changes/);
+    expect(report.warnings.join("\n")).toMatch(/no file content changes were detected/);
+  });
+
+  it("does not false-flag vacuous success off-git when the agent wrote files but omitted changedFiles", async () => {
+    const silentWriter: AgentDriver = {
+      name: "silent-writer",
+      async run(inv) {
+        writeFileSync(path.join(inv.workdir, "answer.txt"), "42");
+        // No changedFiles — the bug that made eval-classifier look vacuous.
+        return { ok: true, stopReason: "completed", summary: "wrote answer" };
+      },
+    };
+    const regs = createDefaultRegistries();
+    regs.drivers.override(silentWriter);
+    const spec = parseSpec({
+      name: "offgit-real-work",
+      requirements: "x",
+      driver: { uses: "silent-writer" },
+      evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
+      limits: { maxIterations: 1 },
+    });
+    const report = await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
+    expect(report.success).toBe(true);
+    expect(report.iterations[0]!.changed).toBe(true);
+    expect(report.iterations[0]!.changedFiles).toContain("answer.txt");
+    expect(report.changedFiles).toContain("answer.txt");
+    expect(report.warnings.join("\n")).not.toMatch(/vacuous/);
+    expect(report.warnings.join("\n")).toMatch(/content hashes/);
   });
 });
 

@@ -15,7 +15,8 @@ function truncate(text: string, max: number): string {
  * What the agent changed last iteration, surfaced back to it so it stops
  * re-deriving state it already touched. `patch` is an optional, already-bounded
  * unified diff (see `diffPatch` in workspace.ts); `files` is the changed-file
- * list. Only supplied when git change detection is available.
+ * list. Supplied when git or content-hash change detection saw edits (`patch`
+ * is git-only).
  */
 export interface FeedbackDiff {
   files: string[];

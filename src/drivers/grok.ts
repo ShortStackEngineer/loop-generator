@@ -16,9 +16,20 @@ import {
   tail,
 } from "./cli";
 import type { JsonObject, ResolvedBin } from "./cli";
+import { unknownOptionWarnings } from "./options";
 
 // Re-export the shared parsers the grok tests import from this module.
 export { cleanSummary, parseJsonObjects };
+
+/** Known `driver.options` keys (unknowns → preflight warnings). */
+export const GROK_OPTION_KEYS = [
+  "model",
+  "maxTurns",
+  "alwaysApprove",
+  "env",
+  "resume",
+  "extraArgs",
+] as const;
 
 const optionsSchema = z.object({
   /** Model id to pass via -m / --model. If omitted, the grok CLI uses its configured default. */
@@ -71,7 +82,7 @@ export const grokDriver: AgentDriver = {
       ]);
     }
 
-    const warnings: string[] = [];
+    const warnings: string[] = [...unknownOptionWarnings("grok", options, GROK_OPTION_KEYS)];
     if (!process.env.XAI_API_KEY) {
       warnings.push(
         "No XAI_API_KEY detected. The grok CLI will use a cached login if you've signed in before; otherwise it may require an interactive login (opens browser) or a key for unattended runs.",
