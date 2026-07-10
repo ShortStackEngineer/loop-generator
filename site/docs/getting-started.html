@@ -275,6 +275,13 @@ console.log(formatConformanceReport(report));   <span class="c">// ✓/✗ per b
       <code>optionsFor</code> mapping. The CLI exposes it too:
     </p>
 <pre><code>npm run loopgen -- verify-driver claude-agent-sdk</code></pre>
+    <p>
+      Working in Claude Code? The in-repo <code>add-driver</code> skill
+      (<code>.claude/skills/add-driver/</code>) scaffolds a new backend and
+      loops on <code>verify-driver</code> for you, fixing one failing scenario
+      at a time — part of the
+      <a href="authoring.html#skills">skill pipeline</a> the repo ships.
+    </p>
 
     <h3>Use the engine as a library</h3>
 <pre><code><span class="k">import</span> { LoopEngine, createDefaultRegistries, parseSpec } <span class="k">from</span> <span class="s">"loop-generator"</span>;
