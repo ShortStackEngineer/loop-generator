@@ -12,7 +12,7 @@
   ],
   "reporters": ["html", "clear-text", "progress"],
   "thresholds": { "high": 80, "low": 70, "break": 70 },
-  "concurrency": 4,
+  "concurrency": 16,
   "timeoutMS": 20000,
   "tempDirName": ".stryker-tmp"
 }
