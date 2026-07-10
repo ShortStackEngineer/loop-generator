@@ -1,0 +1,51 @@
+# Nightly canary: one small REAL agent run, graded in full audit posture.
+#
+# Offline CI can't catch driver/SDK drift — this can. The job that runs it
+# (.github/workflows/canary.yml) fails unless the outcome is `success` AND
+# report.warnings is empty: a warning on a green run is a finding.
+#
+# The workspace is scaffolded fresh each run:
+#   loopgen init-target fizzbuzz -d ci/canary-target   (RED stub + failing tests)
+# This spec lives OUTSIDE workspace.dir, so specGuard: error has teeth.
+version: 1
+name: canary-fizzbuzz
+description: Live-driver canary — implement fizzbuzz against pre-written RED tests.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ./canary-target
+requirements: |
+  Implement `fizzbuzz(n: number): string[]` in src/fizzbuzz.ts so the existing
+  tests in src/fizzbuzz.test.ts pass. Each element i (1-based) is "FizzBuzz" if
+  divisible by 15, "Fizz" if divisible by 3, "Buzz" if divisible by 5,
+  otherwise the number as a string. Do not modify the tests.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-sonnet-5
+    maxTurns: 16
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm test
+    # `npm test` is a bare runner (names no files), so hash-watch the real
+    # success criteria explicitly — editing them fails the run.
+    guard:
+      - src/fizzbuzz.test.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npx tsc --noEmit
+success:
+  type: all-pass
+limits:
+  maxIterations: 3
+  iterationTimeoutMs: 600000
+  baseline: strict # scaffold is RED by design; already-green = broken canary
+  specGuard: error
+  evaluatorGuard: error
+  maxCostUsd: 2.0 # hard nightly spend ceiling

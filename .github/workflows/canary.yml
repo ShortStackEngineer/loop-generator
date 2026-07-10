@@ -1,0 +1,103 @@
+name: Canary (live driver)
+
+# One small REAL agent run in full audit posture (ci/canary.loop.yaml):
+# baseline strict, tamper guards on error, $2 cost ceiling. The job fails
+# unless the outcome is `success` with ZERO warnings — the trust guards run
+# against a live agent, and a suspicious green is a failure.
+#
+# ── Currently manual-only. ─────────────────────────────────────────────
+# To turn the nightly schedule on, uncomment the `schedule` block below.
+# Requires the ANTHROPIC_API_KEY repo secret. Worst-case spend when
+# scheduled: ~$2/night (the cap is a ceiling; convergent runs cost cents).
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "41 5 * * *" # nightly, 05:41 UTC
+
+concurrency:
+  group: canary
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+      - name: Scaffold RED canary target
+        run: |
+          node dist/cli/index.js init-target fizzbuzz -d ci/canary-target
+          # init-target skips `git init` here: the dir sits inside the checkout's
+          # work tree (even though gitignored), so it looks like a repo already.
+          # Without a NESTED repo the engine falls back to content-hash change
+          # detection and adds a persistent warning — which the zero-warning
+          # grade below would fail every time. A real nested repo (with an
+          # initial commit) gives the engine genuine git change detection.
+          git -C ci/canary-target init -b main
+          git -C ci/canary-target add -A
+          git -C ci/canary-target -c user.email=canary@ci -c user.name=canary \
+            commit -m "RED scaffold" --quiet
+          (cd ci/canary-target && npm install)
+
+      - name: Prove the spec before spending (lint --strict)
+        run: node dist/cli/index.js lint ci/canary.loop.yaml --strict
+
+      - name: Run canary loop (live driver)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          node dist/cli/index.js run ci/canary.loop.yaml \
+            --report canary-report.json \
+            --trace canary-trace.jsonl
+
+      - name: Grade (success + zero warnings, or fail)
+        run: node scripts/ci/grade-canary.mjs canary-report.json
+
+      - name: Upload run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-evidence-${{ github.run_id }}
+          path: |
+            canary-report.json
+            canary-trace.jsonl
+          if-no-files-found: ignore
+
+      # Only file/refresh an issue on unattended (scheduled) failures.
+      - name: Report scheduled failure as an issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Canary failing"
+          run_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ -f canary-report.json ]; then
+            outcome=$(jq -r '.outcome // "unknown"' canary-report.json)
+            warnings=$(jq -r '.warnings[]? | "- ⚠ " + .' canary-report.json)
+            [ -n "$warnings" ] || warnings="(none)"
+          else
+            outcome="no report produced (run crashed before the report was written)"
+            warnings="(no report)"
+          fi
+          body=$(printf 'Nightly canary failed: %s\n\n**Outcome:** `%s`\n\n**Warnings:**\n%s' \
+            "$run_url" "$outcome" "$warnings")
+          existing=$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            # Label is best-effort: never let a missing label break the report.
+            gh label create canary --description "Live-driver canary failures" --color D93F0B 2>/dev/null || true
+            gh issue create --title "$title" --body "$body" --label canary \
+              || gh issue create --title "$title" --body "$body"
+          fi

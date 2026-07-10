@@ -16,6 +16,11 @@ examples/**/.workspace/
 examples/**/target/
 examples/**/.batch-demo/
 
+# Canary workspace (scaffolded fresh by .github/workflows/canary.yml)
+ci/canary-target/
+canary-report.json
+canary-trace.jsonl
+
 # IDE / AI assistant
 .idea/
 .junie/

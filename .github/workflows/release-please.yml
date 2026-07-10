@@ -1,0 +1,71 @@
+name: release-please
+
+# Maintains a rolling Release PR from conventional commits (fix:, feat:,
+# chore:, docs:, ...). Merging that PR bumps package.json, updates
+# CHANGELOG.md, tags vX.Y.Z, and creates the GitHub release.
+#
+# The build/attach steps live HERE, gated on release_created, because releases
+# created with GITHUB_TOKEN do not trigger other workflows (`on: release` would
+# never fire). Config (prerelease marking, 0.x bump rules) lives in
+# release-please-config.json + .release-please-manifest.json.
+#
+# Releases are created as DRAFTS (config `draft: true`) and only flipped
+# public after typecheck + tests + build + tarball upload succeed — a step
+# failure leaves a draft, never a public release with no artifact. Because a
+# draft's tag doesn't exist yet, checkout uses the `sha` output, not the tag.
+#
+# No npm publish (yet) — installing from the release asset:
+#   npm i https://github.com/ShortStackEngineer/loop-generator/releases/download/vX.Y.Z/loop-generator-X.Y.Z.tgz
+# When npm publishing is wanted, add `npm publish --provenance` after the
+# upload step and an NPM_TOKEN secret; nothing else changes.
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+
+      # Everything below runs only on the push that actually created a release.
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          ref: ${{ steps.release.outputs.sha }} # exact release commit (draft tags don't exist yet)
+      - uses: actions/setup-node@v4
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          node-version: 22
+          cache: npm
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm ci
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm run typecheck
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm test
+      - if: ${{ steps.release.outputs.release_created }}
+        run: npm run build
+      - name: Pack tarball
+        if: ${{ steps.release.outputs.release_created }}
+        id: pack
+        run: echo "tarball=$(npm pack --silent)" >> "$GITHUB_OUTPUT"
+      - name: Attach tarball to release
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ steps.release.outputs.tag_name }}" "${{ steps.pack.outputs.tarball }}" --clobber
+      - name: Publish release (flip draft → public)
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${{ steps.release.outputs.tag_name }}" --draft=false
