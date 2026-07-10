@@ -10,7 +10,11 @@ credentials — but you can lint any of them with no agent, from the repo root:
 
 ```bash
 npm run loopgen -- lint examples/patterns/ralph-loop.loop.yaml
+
+# scaffold a RED ./target for ralph / evaluator-optimizer / osmani:
+npm run loopgen -- init-target ralph -d ./examples/patterns/target
 ```
 
-See the [examples index](../README.md#loop-patterns) for what each one does and
-what the declarative version adds.
+Override the driver at run time with `-d` / `--driver` (e.g.
+`-d claude-agent-sdk`). See the [examples index](../README.md#loop-patterns) for
+what each one does and what the declarative version adds.

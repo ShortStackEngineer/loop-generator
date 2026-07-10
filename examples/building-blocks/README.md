@@ -10,6 +10,9 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 npm run loopgen -- run examples/building-blocks/observed-demo.loop.yaml
 ```
 
-The rest are agent-driven and point at your own repo (`workspace.dir`); with no
-API key you can still `npm run loopgen -- lint` them. See the
+The rest are agent-driven and point at your own repo (`workspace.dir`). Scaffold
+a minimal RED target with `npm run loopgen -- init-target <template>` (e.g.
+`fizzbuzz`, `fetch-user`, `api-orders`), or pass `-d claude-agent-sdk` to swap
+the driver without editing the YAML. With no API key you can still
+`npm run loopgen -- lint` them. See the
 [examples index](../README.md#building-blocks) for what each spec shows.

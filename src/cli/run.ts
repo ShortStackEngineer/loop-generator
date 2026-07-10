@@ -3,9 +3,10 @@ import path from "node:path";
 import type { Command } from "commander";
 import { loadSpecFile } from "../core/spec";
 import { LoopEngine, type IterationReport, type LoopReport } from "../core/engine";
-import { createDefaultRegistries } from "../registry";
+import { createDefaultRegistries, createDriverRegistry } from "../registry";
 import { createLogger, type LogLevel } from "../core/logger";
 import { createTraceRecorder, jsonlFileSink } from "../observability/recorder";
+import { applyDriverOverride, validateDriverName } from "../core/driver-override";
 
 interface RunFlags {
   base?: string;
@@ -17,6 +18,7 @@ interface RunFlags {
   baseline?: boolean;
   strictBaseline?: boolean;
   skipBaseline?: boolean;
+  driver?: string;
 }
 
 function firstLine(text: string | undefined): string {
@@ -126,14 +128,33 @@ export function registerRun(program: Command): void {
     .option("--baseline", "run a pre-run baseline evaluation (detects vacuous checks)")
     .option("--strict-baseline", "fail the run if the baseline already passes (vacuous checks); takes precedence over --baseline/--skip-baseline")
     .option("--skip-baseline", "skip the baseline evaluation even if the spec enables it")
+    .option(
+      "-d, --driver <name>",
+      "override driver.uses from the spec (keeps driver.options; preflight warns on unknown keys)",
+    )
     .action(async (specPath: string, flags: RunFlags) => {
-      const { spec, baseDir, file } = loadSpecFile(specPath);
+      let { spec, baseDir, file } = loadSpecFile(specPath);
       const maxIterations = flags.maxIterations ? Number(flags.maxIterations) : undefined;
 
       // --strict-baseline forces strict, --baseline forces on, --skip-baseline forces off, else defer to spec.
       const baseline = flags.strictBaseline ? "strict" : flags.baseline ? true : flags.skipBaseline ? false : undefined;
 
       const log = createLogger(flags.logLevel ?? "info", "loopgen");
+
+      if (flags.driver) {
+        const known = createDriverRegistry().keys();
+        const err = validateDriverName(flags.driver, known);
+        if (err) {
+          console.error(err);
+          process.exit(1);
+        }
+        const prev = spec.driver.uses;
+        spec = applyDriverOverride(spec, flags.driver);
+        if (prev !== spec.driver.uses) {
+          log.info(`driver override: ${prev} → ${spec.driver.uses}`);
+        }
+      }
+
       const engine = new LoopEngine(createDefaultRegistries(), log);
 
       const controller = new AbortController();

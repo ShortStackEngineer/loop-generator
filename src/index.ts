@@ -95,10 +95,25 @@ export {
   snapshotTree,
   diffTrees,
   diffPatch,
+  snapshotContent,
+  diffContent,
   DEFAULT_MAX_PATCH_CHARS,
+  CONTENT_SNAPSHOT_FILE_CAP,
 } from "./core/workspace";
-export type { TreeDiff } from "./core/workspace";
+export type { TreeDiff, ContentSnapshot } from "./core/workspace";
 export { resolveGuardedFiles, isTestLikePath } from "./core/evaluator-guard";
+export { applyDriverOverride, validateDriverName } from "./core/driver-override";
+export { unknownOptionKeys, unknownOptionWarnings } from "./drivers/options";
+export {
+  initTarget,
+  listTargetTemplates,
+  resolveTargetTemplate,
+} from "./scaffold/init-target";
+export type {
+  InitTargetOptions,
+  InitTargetResult,
+  TargetTemplateMeta,
+} from "./scaffold/init-target";
 
 // Generation
 export { generateSpec, specToYaml } from "./generate";

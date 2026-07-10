@@ -9,13 +9,23 @@ Examples come in two shapes:
 - **Single-file specs** (`*.loop.yaml`, `*.batch.yaml`) — illustrative specs you
   point at *your own* repo via `workspace.dir`. They lint and read as-is; the
   agent-driven ones warn that `./target` doesn't exist until you set it, which is
-  expected.
+  expected. Scaffold a minimal RED workspace with
+  `npm run loopgen -- init-target <template|example>` (see
+  `loopgen init-target --list`).
 - **Self-contained projects** — a directory with its own runnable `project/` and
   README, no external repo needed. These live in [`projects/`](./projects).
 
 Every spec parses and lints with zero errors, and each keeps its success criteria
 in a file *outside* the workspace the agent edits, so the agent can't quietly
 rewrite its own contract. Run `npm run loopgen -- lint <file>` on any of them first.
+
+To try a different agent backend without editing the YAML, pass
+`-d` / `--driver` (keeps `driver.options`; preflight warns if those options
+belong to another backend):
+
+```bash
+npm run loopgen -- run examples/building-blocks/api-feature-grok.loop.yaml -d claude-agent-sdk
+```
 
 > **Invoking the CLI:** the commands below use `npm run loopgen -- <args>`, which
 > works from the repo root with no build step. If you've installed loop-generator
@@ -45,6 +55,11 @@ loop turn over.
 npm run loopgen -- run   examples/building-blocks/mock-demo.loop.yaml
 npm run loopgen -- run   examples/building-blocks/observed-demo.loop.yaml
 npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml
+
+# agent-driven example with a scaffolded RED target:
+npm run loopgen -- init-target fizzbuzz -d ./examples/building-blocks/target
+(cd examples/building-blocks/target && npm install)
+npm run loopgen -- run examples/building-blocks/function-fizzbuzz.loop.yaml
 ```
 
 Any spec can also produce a one-off trace without an observability block:

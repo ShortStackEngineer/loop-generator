@@ -4,6 +4,7 @@ import { LoopEngine, type LoopReport } from "../core/engine";
 import type { AgentUsage } from "../drivers/types";
 import { addUsage } from "../core/usage";
 import { createLogger, type Logger } from "../core/logger";
+import { applyDriverOverride } from "../core/driver-override";
 import type { BatchItem, BatchManifest } from "./manifest";
 import { validateBatchManifest, BatchValidationError } from "./manifest";
 
@@ -43,6 +44,11 @@ export interface RunBatchOptions {
   maxIterations?: number;
   /** Override every item's baseline setting (e.g. "strict" to fail vacuous checks). */
   baseline?: boolean | "strict";
+  /**
+   * Override `driver.uses` on every item (keeps each item's `driver.options`).
+   * Unknown keys for the new driver surface as preflight warnings.
+   */
+  driver?: string;
 }
 
 export interface ResolvedItem {
@@ -150,7 +156,8 @@ export async function runBatch(
     const itemStart = Date.now();
     opts.onItemStart?.(item.name);
     try {
-      const report = await engine.run(r.spec, {
+      const spec = opts.driver ? applyDriverOverride(r.spec, opts.driver) : r.spec;
+      const report = await engine.run(spec, {
         baseDir: r.baseDir,
         specFile: r.specFile,
         maxIterations: opts.maxIterations ?? r.maxIterations,
