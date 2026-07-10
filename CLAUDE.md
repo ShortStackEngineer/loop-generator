@@ -19,7 +19,7 @@ npm run typecheck              # tsc --noEmit (strict)
 npm test                       # vitest run (whole suite)
 npm run build                  # tsup → dist/ (then the `loopgen` bin works directly)
 npm run coverage               # vitest + v8 coverage; gate 85% lines/functions/statements, 80% branches
-npm run mutation               # Stryker mutation testing; gate 60% (break), 75% high
+npm run mutation               # Stryker mutation testing; gate 70% (break), 80% high
 ```
 
 Single test / focused run (no dedicated script — call vitest directly):
