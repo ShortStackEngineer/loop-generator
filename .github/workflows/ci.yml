@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  test:
+    name: Test + coverage (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      # vitest enforces the coverage gates itself
+      # (85% lines/functions/statements, 80% branches)
+      - run: npm run coverage
+
+  build-smoke:
+    name: Build + offline smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # Prove the BUILT binary runs a real loop end-to-end, offline (mock driver,
+      # no API key). This is the README's own quick-start path.
+      - name: Offline smoke (mock demo)
+        run: node dist/cli/index.js run examples/building-blocks/mock-demo.loop.yaml
+      # The driver behavioral contract, against the built binary.
+      - name: Driver conformance (mock)
+        run: node dist/cli/index.js verify-driver mock
+      # Every example spec and batch manifest must be lint-clean of ERRORS.
+      # (Not --strict: the illustrative examples point at ./target scaffolds
+      # that are created on demand by `init-target`, which lints as a
+      # SPEC-WORKDIR-MISSING warning by design.)
+      - name: Lint example specs
+        run: |
+          status=0
+          for f in $(find examples -name '*.loop.yaml' -o -name '*.batch.yaml' | sort); do
+            echo "::group::lint $f"
+            node dist/cli/index.js lint "$f" || status=1
+            echo "::endgroup::"
+          done
+          exit $status
