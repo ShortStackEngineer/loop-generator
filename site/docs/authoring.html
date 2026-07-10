@@ -29,6 +29,7 @@
     <div class="toc-title">On this page</div>
     <a href="#one-rule">The one rule</a>
     <a href="#fit">When a loop fits</a>
+    <a href="#skills">The skill pipeline</a>
     <a href="#goal">1. Pin down the goal</a>
     <a href="#inspect">2. Inspect the repo</a>
     <a href="#decide">3. Decide the spec</a>
@@ -126,6 +127,39 @@
       only when the requirement is met, the task isn't ready for a loop. The
       steps below are how you get it ready — and prove it.
     </div>
+
+    <h2 id="skills">The skill pipeline: let an agent run this workflow</h2>
+    <p>
+      The engine audits the run; these skills produce checks worth auditing.
+      The repo ships Claude Code skills (<code>.claude/skills/</code>) that
+      load automatically when you open it in Claude Code — two of them form
+      the authoring pipeline, from one request down to a runnable loop:
+    </p>
+    <pre><code>frame-checks ──► author-loop ──► loopgen run
+one request       one verified     (debug-loop when a run
+into falsifiable  .loop.yaml,      goes sideways)
+acceptance checks proven RED</code></pre>
+    <ul>
+      <li><strong><code>frame-checks</code></strong> — turn one request into
+        falsifiable acceptance checks: each RED now, for the right reason, and
+        hard to fake.</li>
+      <li><strong><code>author-loop</code></strong> — run the interview →
+        inspect → decide → generate → <em>prove</em> steps on this page, ending
+        in a lint-clean spec whose checks start RED.</li>
+      <li><strong><code>debug-loop</code></strong> — diagnose a failed,
+        stalled, or suspiciously-green run by its <code>outcome</code>,
+        reproducing the failing check without spending agent budget
+        (<a href="debugging.html">the debugging guide</a>).</li>
+      <li><strong><code>add-driver</code></strong> — scaffold a new agent
+        backend and drive it to green against
+        <code>loopgen verify-driver</code>
+        (<a href="getting-started.html#extending">extending</a>).</li>
+    </ul>
+    <p>
+      No Claude Code? The pipeline is just this page plus
+      <a href="debugging.html">debugging</a> — the skills automate the
+      workflow, they don't replace it.
+    </p>
 
     <h2 id="goal">1. Pin down the goal</h2>
     <p>Write the goal as something a command can verify. Push vague asks until they're testable:</p>

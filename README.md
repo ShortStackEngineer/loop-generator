@@ -152,7 +152,14 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
   and [debugging](https://shortstackengineer.github.io/loop-generator/docs/debugging.html) workflows** —
   interview the goal into something checkable and prove the spec RED before
   spending budget; diagnose a failed or suspiciously-green run by its `outcome`.
-  (Claude Code users: the in-repo `author-loop` / `debug-loop` skills run these.)
+- **[Agent-assisted workflows](https://shortstackengineer.github.io/loop-generator/docs/authoring.html#skills)
+  (`.claude/skills/`)** — the engine audits the run; these Claude Code skills
+  produce checks worth auditing. The authoring pipeline: `frame-checks` (turn
+  one request into falsifiable acceptance checks) → `author-loop` (a verified,
+  lint-clean spec that starts RED). Plus `debug-loop` (diagnose a run by its
+  `outcome` without spending agent budget) and `add-driver` (scaffold a new
+  backend and drive it through `verify-driver`). They load automatically when
+  you open this repo in Claude Code.
 - **[Batch runs](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#batch)** —
   a `.batch.yaml` punch list runs many specs with `needs` ordering, a
   concurrency cap, and same-workspace auto-serialization.
