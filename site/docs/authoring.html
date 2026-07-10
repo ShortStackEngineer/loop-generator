@@ -28,6 +28,7 @@
   <aside class="docs-toc">
     <div class="toc-title">On this page</div>
     <a href="#one-rule">The one rule</a>
+    <a href="#fit">When a loop fits</a>
     <a href="#goal">1. Pin down the goal</a>
     <a href="#inspect">2. Inspect the repo</a>
     <a href="#decide">3. Decide the spec</a>
@@ -62,6 +63,68 @@
       A loop is only as good as its evaluators — "all checks passed" means
       nothing if the checks don't exercise the new behavior or were already
       green on the untouched workspace. Step 5 confirms exactly that.
+    </div>
+
+    <h2 id="fit">When a loop fits (and when it doesn't)</h2>
+    <p>
+      A loop is only as good as the checks you hand it. loop-generator shines
+      where success is mechanically checkable and misleads where it isn't, so
+      it's worth knowing which side of that line a task falls on before you
+      spend agent budget.
+    </p>
+    <h3>Works best when</h3>
+    <ul>
+      <li>The run is unattended — overnight, in CI, or a fleet of agents — and
+        you'd rather verify "done" than take the agent's word for it.</li>
+      <li>The task is well-scoped and the repo already has (or you can add)
+        real test/metric infrastructure.</li>
+      <li>There's a specific suite to make green while keeping the rest green —
+        e.g. a failing test that encodes the new behavior and turns green only
+        when it's done.</li>
+      <li>The target is a measurable number: keep p95 under X ms, coverage
+        ≥ 90%, bundle under Y KB. (The <code>experiment</code> evaluator is
+        built for this.)</li>
+      <li>You're remediating against a concrete check across many call sites —
+        add retries/logging/validation, fix a lint rule repo-wide, drag a flaky
+        suite to green.</li>
+    </ul>
+    <h3>Poor fit</h3>
+    <p>Tasks where the framework mostly ends up telling you the checks were the
+      wrong contract:</p>
+    <ul>
+      <li>"Improve the architecture," "make the UI delightful," "clean this
+        up" — no exit-zero definition of done.</li>
+      <li>Subjective or judgment-heavy work (API ergonomics, copy, visual
+        polish): a passing check doesn't mean the outcome is good.</li>
+      <li>Large, novel refactors with emergent design — the loop can't hold the
+        whole design in mind across iterations, and the checks rarely capture
+        "is this the right structure."</li>
+    </ul>
+    <h3>What it can't solve</h3>
+    <p>
+      These are fundamental to the agentic-loop approach, not gaps to be closed.
+      The <a href="trust.html">trust guards</a> make them <em>visible</em>; they
+      don't eliminate them:
+    </p>
+    <ul>
+      <li><strong>Mis-specified or insufficient checks.</strong> The checks are
+        the contract — bad checks, bad contract. A green run only ever means
+        "the checks passed."</li>
+      <li><strong>Agents that game metrics or ship minimal patches.</strong> An
+        agent can satisfy a surface check without doing the real work:
+        hard-code the expected value, weaken an assertion, ship the narrowest
+        patch that passes.</li>
+      <li><strong>Context degradation over many iterations.</strong> The agent
+        re-derives state and drifts as the loop grows; feeding the last diff
+        back into the next prompt mitigates this — it doesn't cure it.</li>
+      <li><strong>The underlying unreliability of LLM agents on large, novel
+        work.</strong> More iterations don't turn an unreliable agent into a
+        reliable one on a task it can't hold in its head.</li>
+    </ul>
+    <div class="callout">
+      If you can't write a check that's RED before the work and turns GREEN
+      only when the requirement is met, the task isn't ready for a loop. The
+      steps below are how you get it ready — and prove it.
     </div>
 
     <h2 id="goal">1. Pin down the goal</h2>

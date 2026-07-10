@@ -34,6 +34,11 @@
     "coverage": "vitest run --coverage",
     "mutation": "stryker run"
   },
+  "homepage": "https://shortstackengineer.github.io/loop-generator/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ShortStackEngineer/loop-generator.git"
+  },
   "keywords": [
     "agent",
     "claude",
