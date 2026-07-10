@@ -64,7 +64,7 @@ npm run loopgen -- run examples/building-blocks/function-fizzbuzz.loop.yaml
 
 Any spec can also produce a one-off trace without an observability block:
 `npm run loopgen -- run <spec> --trace trace.jsonl` (see
-[Observing runs](../docs/observing-runs.md)).
+[Observing runs](https://shortstackengineer.github.io/loop-generator/docs/observing.html)).
 
 ## Loop patterns
 
