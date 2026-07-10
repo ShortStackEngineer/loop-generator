@@ -22,6 +22,7 @@ import {
   snapshotContent,
   diffContent,
   DEFAULT_IGNORE_GLOBS,
+  CONTENT_SNAPSHOT_FILE_CAP,
   type ContentSnapshot,
   type TreeDiff,
 } from "./workspace";
@@ -365,6 +366,8 @@ export class LoopEngine {
 
     /** Union of files changed across iterations (used for the overall report off-git). */
     const overallChangedFiles = new Set<string>();
+    /** Carry the last content snapshot so each iteration walks the tree once (after), not twice. */
+    let lastContent: ContentSnapshot | null = baselineContent;
     let specTampered = false;
     // Re-hash the watched spec and flag tampering. Called on every terminal path
     // that could have seen agent activity (per-iteration success, max-iterations,
@@ -473,9 +476,10 @@ export class LoopEngine {
 
       const signal = iterationSignal(opts.signal, spec.limits.iterationTimeoutMs);
       const treeBefore = gitEnabled ? lastTree : null;
-      const contentBefore = contentFallback
-        ? (i === 0 && baselineContent ? baselineContent : snapshotContent(workdir, ignoreGlobs))
-        : null;
+      // Reuse the previous iteration's post-snapshot (or baseline) so we don't
+      // re-hash the whole tree before every agent turn. Evaluators run after the
+      // after-snapshot, so their artifacts never count as agent work.
+      const contentBefore = contentFallback ? lastContent : null;
 
       // 1) Drive the agent. Offer the previous session for resume after an
       //    incomplete (max_turns) stop; drivers opt in to actually using it.
@@ -527,6 +531,7 @@ export class LoopEngine {
       lastTree = treeAfter ?? lastTree;
       const gitDiff = diffTrees(workdir, treeBefore, treeAfter, ignoreGlobs);
       const contentAfter = contentFallback ? snapshotContent(workdir, ignoreGlobs) : null;
+      if (contentAfter) lastContent = contentAfter;
       const contentDiff: TreeDiff | null =
         contentFallback && contentBefore && contentAfter ? diffContent(contentBefore, contentAfter) : null;
 
@@ -534,25 +539,30 @@ export class LoopEngine {
       let changed: boolean;
       let changedFiles: string[];
       let iterDiffStat = "";
+      /** Driver claimed files when content-hash saw none — only trusted if the walk hit the cap. */
+      let driverClaimUnverified = false;
       if (gitEnabled) {
         changed = gitDiff.changed;
         changedFiles = gitDiff.files;
         iterDiffStat = gitDiff.stat;
       } else if (contentDiff) {
         changed = contentDiff.changed;
-        // Prefer content-hash list; if empty, surface driver-reported files when
-        // the driver claims work we couldn't hash (e.g. outside the walk cap).
-        changedFiles =
-          contentDiff.files.length > 0
-            ? contentDiff.files
-            : agent.changedFiles?.length
-              ? agent.changedFiles
-              : [];
+        changedFiles = contentDiff.files;
+        // Content-hash is authoritative under the file cap. Only defer to the
+        // driver's self-report when the walk may have missed files (cap hit).
+        const hitCap =
+          (contentBefore?.size ?? 0) >= CONTENT_SNAPSHOT_FILE_CAP ||
+          (contentAfter?.size ?? 0) >= CONTENT_SNAPSHOT_FILE_CAP;
         if (!contentDiff.changed && (agent.changedFiles?.length ?? 0) > 0) {
-          changed = true;
-          changedFiles = agent.changedFiles!;
+          if (hitCap) {
+            changed = true;
+            changedFiles = agent.changedFiles!;
+            driverClaimUnverified = true;
+            iterDiffStat = `${agent.changedFiles!.length} file(s) driver-reported (content-hash walk hit cap)`;
+          }
+          // else: ignore the claim — a fabricating driver must not silence the vacuous guard
         }
-        iterDiffStat = contentDiff.stat;
+        if (!iterDiffStat) iterDiffStat = contentDiff.stat;
       } else {
         changed = (agent.changedFiles?.length ?? 0) > 0;
         changedFiles = agent.changedFiles ?? [];
@@ -584,6 +594,11 @@ export class LoopEngine {
 
       // 4) Honest caveats about this iteration.
       const iterWarnings: string[] = [];
+      if (driverClaimUnverified) {
+        iterWarnings.push(
+          "content-hash walk hit the file cap; treating driver-reported changedFiles as the change list (unverified)",
+        );
+      }
       if (verdict.satisfied && !changed) {
         if (gitEnabled) {
           iterWarnings.push(
@@ -639,6 +654,7 @@ export class LoopEngine {
           baselineTree,
           lastTree,
           baselineContent,
+          lastContent,
           ignoreGlobs,
           overallChangedFiles,
         );
@@ -685,6 +701,7 @@ export class LoopEngine {
           baselineTree,
           lastTree,
           baselineContent,
+          lastContent,
           ignoreGlobs,
           overallChangedFiles,
         );
@@ -712,6 +729,7 @@ export class LoopEngine {
       baselineTree,
       lastTree,
       baselineContent,
+      lastContent,
       ignoreGlobs,
       overallChangedFiles,
     );
@@ -740,12 +758,14 @@ export class LoopEngine {
     baselineTree: string | null,
     lastTree: string | null,
     baselineContent: ContentSnapshot | null,
+    /** End-of-run content snapshot when available (avoids a third full walk). */
+    endContent: ContentSnapshot | null,
     ignoreGlobs: string[],
     overallChangedFiles: Set<string>,
   ): TreeDiff {
     if (gitEnabled) return diffTrees(workdir, baselineTree, lastTree, ignoreGlobs);
     if (baselineContent) {
-      const now = snapshotContent(workdir, ignoreGlobs);
+      const now = endContent ?? snapshotContent(workdir, ignoreGlobs);
       const diff = diffContent(baselineContent, now);
       if (diff.changed) return diff;
     }

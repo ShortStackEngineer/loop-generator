@@ -270,14 +270,16 @@ test("maps 1..15 with Fizz/Buzz/FizzBuzz", () => {
 `,
     "README.md": `# fizzbuzz target (RED)
 
-Scaffolded by \`loopgen init-target fizzbuzz\`. Run \`npm install\` then the loop:
+Scaffolded by \`loopgen init-target fizzbuzz\`. From the **loop-generator repo root**:
 
 \`\`\`bash
-npm install
-npm run loopgen -- run examples/building-blocks/function-fizzbuzz.loop.yaml -b .
+npm run loopgen -- init-target fizzbuzz -d ./target   # if you have not already
+(cd target && npm install)
+npm run loopgen -- run examples/building-blocks/function-fizzbuzz.loop.yaml
 \`\`\`
 
-(with this directory as \`workspace.dir\` / \`./target\`).
+The spec's \`workspace.dir: ./target\` resolves relative to the spec file
+(or \`-b\` / \`--base\` if you point elsewhere).
 `,
   };
 }
@@ -320,8 +322,11 @@ test("succeeds after a transient 5xx", async () => {
     if (n < 3) return new Response("nope", { status: 503 });
     return Response.json({ id: 1 });
   };
-  // Stub has no retries — this fails until exponential backoff is implemented.
-  await assert.rejects(() => fetchUser("https://example.test/u", { fetchImpl }));
+  // RED on the single-shot stub (throws on first 503). GREEN only after backoff
+  // retries until the 200 — assert success, not rejects.
+  const body = await fetchUser("https://example.test/u", { fetchImpl });
+  assert.deepEqual(body, { id: 1 });
+  assert.equal(n, 3);
 });
 
 test("does not retry 4xx", async () => {
@@ -337,6 +342,13 @@ test("does not retry 4xx", async () => {
     "README.md": `# fetchUser target (RED)
 
 Scaffolded by \`loopgen init-target fetch-user\`. For copilot/opencode feature examples.
+
+\`\`\`bash
+# from the loop-generator repo root:
+npm run loopgen -- init-target fetch-user -d ./target
+(cd target && npm install)
+npm run loopgen -- run examples/building-blocks/copilot-feature.loop.yaml -d claude-agent-sdk
+\`\`\`
 `,
   };
 }
@@ -460,6 +472,8 @@ function experimentAbFiles(): FileMap {
     )}\n`,
     "sim.mjs": `// RED: variantB conversion is below the +2pp bar over control baseline 0.18.
 // Print ONLY JSON on stdout (experiment evaluator parses the whole stream).
+// Prefer implementing a real sim the agent improves; if this file stays a stub
+// metric, guard it in the loop spec so the agent cannot green by editing it.
 const metrics = {
   control: { conversion: 0.18 },
   variantB: { conversion: 0.15 },
@@ -518,15 +532,28 @@ test("succeeds after transient 5xx", async () => {
     if (n < 3) return new Response("nope", { status: 503 });
     return new Response("ok", { status: 200 });
   };
-  await assert.rejects(() => fetchWithRetry("https://example.test", { fetchImpl, retries: 3 }));
+  // RED on the no-retry stub (returns the first 503). GREEN only after retries
+  // yield the final 200 — assert success + attempt count, not rejects.
+  const res = await fetchWithRetry("https://example.test", { fetchImpl, retries: 3 });
+  assert.equal(res.status, 200);
+  assert.equal(n, 3);
 });
 `,
     "bench.mjs": `// RED: p95 above the 150ms bar. Print ONLY JSON.
+// Note: for a real loop, guard this file in the spec (evaluatorGuard) so the
+// agent cannot green the metric by editing the bench instead of the code.
 process.stdout.write(JSON.stringify({ p95_ms: 500 }));
 `,
     "README.md": `# evaluator-optimizer target (RED)
 
 Scaffolded by \`loopgen init-target evaluator-optimizer\`.
+
+\`\`\`bash
+# from the loop-generator repo root:
+npm run loopgen -- init-target evaluator-optimizer -d ./target
+(cd target && npm install)
+npm run loopgen -- run examples/patterns/evaluator-optimizer.loop.yaml
+\`\`\`
 `,
   };
 }
@@ -568,7 +595,8 @@ test("add", () => assert.equal(add(1, 2), 3));
 test("subtract", () => assert.equal(subtract(5, 2), 3));
 test("multiply", () => assert.equal(multiply(3, 4), 12));
 `,
-    "coverage.mjs": `// Baseline below the verify stage's 85 line bar. Agent should raise this.
+    "coverage.mjs": `// Baseline below the verify stage's 85 line bar. Prefer a real coverage report;
+// if this stays hard-coded, guard it in the verify stage so gaming is blocked.
 process.stdout.write(JSON.stringify({ lines: 67 }));
 `,
     "README.md": `# osmani harness target (RED)

@@ -8,7 +8,11 @@ import {
 interface InitTargetFlags {
   dir?: string;
   force?: boolean;
-  noGit?: boolean;
+  /**
+   * Commander maps `--no-git` to `git: false` (and the positive form to true).
+   * Default when the flag is omitted is `true` via `.option("--no-git", ..., true)`.
+   */
+  git?: boolean;
   list?: boolean;
 }
 
@@ -20,16 +24,12 @@ export function registerInitTarget(program: Command): void {
     )
     .option("-d, --dir <path>", "destination directory", "./target")
     .option("--force", "overwrite scaffold files if the destination is not empty")
+    // Commander `--no-X` form: property is `git`, default true; `--no-git` → false.
     .option("--no-git", "skip git init (change detection will use content hashes)")
     .option("-l, --list", "list available templates and exit")
     .action((template: string | undefined, flags: InitTargetFlags) => {
       if (flags.list || !template) {
-        if (!flags.list && !template) {
-          // No template and no --list: show help-ish list rather than error hard.
-          console.log("Available target templates:\n");
-        } else {
-          console.log("Available target templates:\n");
-        }
+        console.log("Available target templates:\n");
         for (const t of listTargetTemplates()) {
           console.log(`  ${t.id.padEnd(22)} ${t.description}`);
           if (t.examples.length) {
@@ -53,13 +53,14 @@ export function registerInitTarget(program: Command): void {
         const result = initTarget(template, {
           dest: flags.dir,
           force: flags.force,
-          git: !flags.noGit,
+          // Commander: default true; --no-git → false
+          git: flags.git !== false,
         });
         console.log(`Scaffolded template "${result.template}" → ${result.dest}`);
         console.log(`  ${result.files.length} file(s)${result.git ? " · git init" : ""}`);
         for (const f of result.files) console.log(`  - ${f}`);
         console.log(
-          "\nNext: npm install (in the target if needed), then loopgen run <spec> with workspace.dir pointing here.",
+          "\nNext: npm install (in the target if needed), then from the loop-generator repo root: loopgen run <spec>",
         );
       } catch (err) {
         console.error(err instanceof Error ? err.message : String(err));

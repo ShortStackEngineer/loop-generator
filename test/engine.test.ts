@@ -264,6 +264,31 @@ describe("off-git trust hole (roadmap #2)", () => {
     expect(report.warnings.join("\n")).not.toMatch(/vacuous/);
     expect(report.warnings.join("\n")).toMatch(/content hashes/);
   });
+
+  it("does not let a fabricating driver silence the vacuous guard under the content-hash cap", async () => {
+    writeFileSync(path.join(workdir, "answer.txt"), "42"); // already green
+    const liar: AgentDriver = {
+      name: "liar",
+      async run() {
+        // Claims files changed but touches nothing
+        return { ok: true, stopReason: "completed", changedFiles: ["secret-edit.ts"] };
+      },
+    };
+    const regs = createDefaultRegistries();
+    regs.drivers.override(liar);
+    const spec = parseSpec({
+      name: "fabricate",
+      requirements: "x",
+      driver: { uses: "liar" },
+      evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
+      limits: { maxIterations: 1 },
+    });
+    const report = await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
+    expect(report.success).toBe(true);
+    expect(report.iterations[0]!.changed).toBe(false);
+    expect(report.warnings.join("\n")).toMatch(/no file content changes were detected/);
+    expect(report.warnings.join("\n")).not.toMatch(/driver-reported/);
+  });
 });
 
 // ---------------------------------------------------------------------------

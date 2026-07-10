@@ -178,7 +178,7 @@ function matchesIgnoreGlob(rel: string, glob: string): boolean {
   const norm = rel.replace(/\\/g, "/");
   const g = glob.replace(/\\/g, "/");
   if (g.startsWith("*.") && !g.includes("/", 1)) {
-    return norm.endsWith(g.slice(1)) || norm.includes(`/${g.slice(1)}`);
+    return norm.endsWith(g.slice(1));
   }
   // Escape regex specials except * which becomes "match any chars including /".
   const re = new RegExp(

@@ -83,4 +83,76 @@ describe("initTarget", () => {
     const result = initTarget("fizzbuzz", { dest, force: true });
     expect(result.files.length).toBeGreaterThan(0);
   });
+
+  it("honors git: false (no .git)", () => {
+    const dest = path.join(tmp(), "nogit");
+    const result = initTarget("fizzbuzz", { dest, git: false });
+    expect(result.git).toBe(false);
+    expect(existsSync(path.join(dest, ".git"))).toBe(false);
+  });
+});
+
+/** Resolve tsx loader from the monorepo so scaffold tests run outside their own node_modules. */
+const TSX_LOADER = path.resolve(process.cwd(), "node_modules/tsx/dist/loader.mjs");
+
+function runScaffoldTest(dest: string, testFile: string): void {
+  execSync(`node --import ${JSON.stringify(TSX_LOADER)} --test ${JSON.stringify(testFile)}`, {
+    cwd: dest,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
+/**
+ * Template polarity: scaffolds must start RED for the right reason and go GREEN
+ * only with a correct implementation — not born green, not unsatisfiable.
+ */
+describe("template polarity (fetch-user + evaluator-optimizer)", () => {
+  it("fetch-user: stub fails the success-after-5xx test; correct backoff passes", () => {
+    const dest = path.join(tmp(), "fu");
+    initTarget("fetch-user", { dest, git: false });
+    // Stub: single-shot → throws on first 503 → test wants success → RED
+    expect(() => runScaffoldTest(dest, "test/fetchUser.backoff.test.ts")).toThrow();
+
+    // Correct-ish backoff: retry 5xx until 200
+    writeFileSync(
+      path.join(dest, "src/fetchUser.ts"),
+      `export type FetchUserOpts = { fetchImpl?: typeof fetch };
+export async function fetchUser(url: string, opts: FetchUserOpts = {}): Promise<unknown> {
+  const f = opts.fetchImpl ?? fetch;
+  let last: Response | undefined;
+  for (let i = 0; i < 3; i++) {
+    last = await f(url);
+    if (last.ok) return last.json();
+    if (last.status < 500) throw new Error(\`HTTP \${last.status}\`);
+  }
+  throw new Error(\`HTTP \${last?.status}\`);
+}
+`,
+    );
+    runScaffoldTest(dest, "test/fetchUser.backoff.test.ts");
+  });
+
+  it("evaluator-optimizer: stub fails success-after-5xx; correct retry passes", () => {
+    const dest = path.join(tmp(), "eo");
+    initTarget("evaluator-optimizer", { dest, git: false });
+    expect(() => runScaffoldTest(dest, "test/fetchWithRetry.test.ts")).toThrow();
+
+    writeFileSync(
+      path.join(dest, "src/fetchWithRetry.ts"),
+      `export type RetryOpts = { retries?: number; fetchImpl?: typeof fetch };
+export async function fetchWithRetry(url: string, opts: RetryOpts = {}): Promise<Response> {
+  const f = opts.fetchImpl ?? fetch;
+  const retries = opts.retries ?? 3;
+  let last: Response | undefined;
+  for (let i = 0; i < retries; i++) {
+    last = await f(url);
+    if (last.ok || last.status < 500) return last;
+  }
+  return last!;
+}
+`,
+    );
+    runScaffoldTest(dest, "test/fetchWithRetry.test.ts");
+  });
 });
