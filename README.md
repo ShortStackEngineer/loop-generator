@@ -138,8 +138,6 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
 
 ## Going deeper
 
-Each of these is a stub; the site page is the real documentation.
-
 - **[Trust model](https://shortstackengineer.github.io/loop-generator/docs/trust.html)** —
   how each guard works (change detection, baseline, tamper guards, budget
   ceilings) and where each has honest limits.
