@@ -29,3 +29,9 @@ canary-trace.jsonl
 coverage/
 reports/
 .stryker-tmp/
+
+# Vite temp config transpiles (course/)
+*.timestamp-*.mjs
+
+# Course build notes — kept local, not committed
+course/PROJECT-NOTES.md
