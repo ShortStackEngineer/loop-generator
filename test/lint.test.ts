@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseSpec } from "../src/core/spec";
 import { parseBatchManifest } from "../src/batch/manifest";
-import { lintSpec, lintBatch, lintPath, workspacePreflight } from "../src/lint";
+import { lintSpec, lintBatch, lintPath, workspacePreflight, defaultKnownPlugins } from "../src/lint";
 import { analyzeCommand, effectiveCwd, isExistingProjectSpec } from "../src/lint/analysis";
 
 let dir: string;
@@ -139,6 +139,68 @@ describe("SPEC-WORKDIR rules", () => {
     expect(ids(lintSpec(s, { workdir: dir }))).toContain("SPEC-WORKDIR-NOT-PROJECT");
     writeFileSync(path.join(dir, "package.json"), "{}");
     expect(ids(lintSpec(s, { workdir: dir }))).not.toContain("SPEC-WORKDIR-NOT-PROJECT");
+  });
+});
+
+// ---------------------------------------------------------------------------
+describe("plug-in resolution rules", () => {
+  const known = defaultKnownPlugins();
+
+  it("flags an unregistered driver against the known set", () => {
+    const s = spec({
+      driver: { uses: "claud" }, // typo for a real driver
+      evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
+    });
+    const found = lintSpec(s, { workdir: dir, known });
+    expect(ids(found)).toContain("SPEC-DRIVER-UNKNOWN");
+    // hint lists the available drivers so the typo is easy to fix
+    expect(found.find((f) => f.ruleId === "SPEC-DRIVER-UNKNOWN")?.hint).toMatch(/mock/);
+  });
+
+  it("passes a registered driver", () => {
+    const s = spec({ evaluators: [{ uses: "command", as: "c", options: { command: "true" } }] });
+    expect(ids(lintSpec(s, { workdir: dir, known }))).not.toContain("SPEC-DRIVER-UNKNOWN");
+  });
+
+  it("flags an unregistered evaluator type (per evaluator, keyed by alias)", () => {
+    const s = spec({
+      evaluators: [
+        { uses: "command", as: "ok", options: { command: "true" } },
+        { uses: "commnd", as: "typo", options: { command: "true" } },
+      ],
+    });
+    const found = lintSpec(s, { workdir: dir, known });
+    const unknown = found.filter((f) => f.ruleId === "SPEC-EVAL-UNKNOWN");
+    expect(unknown).toHaveLength(1);
+    expect(unknown[0]!.message).toMatch(/typo/);
+    expect(unknown[0]!.path).toBe("evaluators[1].uses");
+  });
+
+  it("skips the unknown-name rules when no known set is supplied", () => {
+    // A caller with a custom registry that didn't pass names must not be
+    // false-flagged for a legitimately-custom plug-in.
+    const s = spec({
+      driver: { uses: "my-custom-driver" },
+      evaluators: [{ uses: "my-custom-eval", as: "c", options: {} }],
+    });
+    const found = ids(lintSpec(s, { workdir: dir }));
+    expect(found).not.toContain("SPEC-DRIVER-UNKNOWN");
+    expect(found).not.toContain("SPEC-EVAL-UNKNOWN");
+  });
+
+  it("errors (preflight) when a spec has no evaluators", () => {
+    const s = spec({}); // evaluators default to []
+    const found = lintSpec(s, { workdir: dir });
+    expect(ids(found)).toContain("SPEC-NO-EVALUATORS");
+    // preflight rule → also blocks the engine's run-path preflight
+    const pf = workspacePreflight(s, dir);
+    expect(pf.ok).toBe(false);
+    expect(pf.errors?.join("\n")).toMatch(/SPEC-NO-EVALUATORS/);
+  });
+
+  it("does not flag a spec that has at least one evaluator", () => {
+    const s = spec({ evaluators: [{ uses: "command", as: "c", options: { command: "true" } }] });
+    expect(ids(lintSpec(s, { workdir: dir }))).not.toContain("SPEC-NO-EVALUATORS");
   });
 });
 

@@ -4,11 +4,24 @@ import { parse as parseYaml } from "yaml";
 import { parseSpec, resolveWorkspaceDir } from "../core/spec";
 import { parseBatchManifest, validateBatchManifest, type BatchManifest } from "../batch/manifest";
 import { resolveItem, type ResolvedItem } from "../batch/runner";
-import type { LintFinding } from "./types";
+import { createDriverRegistry, createEvaluatorRegistry } from "../registry";
+import type { KnownPlugins, LintFinding } from "./types";
 import { lintSpec, workspacePreflight } from "./spec-lint";
 
 export type { LintFinding, LintSeverity } from "./types";
 export { lintSpec, workspacePreflight } from "./spec-lint";
+
+/**
+ * The plug-in names registered by default. Fed to the unknown-name rules so
+ * `loopgen lint` / `loopgen generate` catch a mistyped `driver.uses` or
+ * `evaluators[].uses` against the built-ins.
+ */
+export function defaultKnownPlugins(): KnownPlugins {
+  return {
+    drivers: new Set(createDriverRegistry().keys()),
+    evaluators: new Set(createEvaluatorRegistry().keys()),
+  };
+}
 
 // Batch findings carry prose messages/hints and rule-id constants (data, not
 // control flow); the scheduling/override *logic* is what the tests pin.
@@ -41,10 +54,11 @@ export function lintBatch(
 
   findings.push(...batchRules(manifest, resolved));
 
+  const known = defaultKnownPlugins();
   for (const item of manifest.items) {
     const r = resolved.get(item.name);
     if (!r) continue;
-    for (const f of lintSpec(r.spec, { workdir: r.workspace, file: r.specFile })) {
+    for (const f of lintSpec(r.spec, { workdir: r.workspace, file: r.specFile, known })) {
       findings.push({ ...f, item: item.name });
     }
   }
@@ -131,5 +145,5 @@ export function lintPath(file: string, opts: { base?: string } = {}): LintResult
   const spec = parseSpec(data);
   const base = opts.base ? path.resolve(opts.base) : dir;
   const workdir = resolveWorkspaceDir(spec, base);
-  return { kind: "spec", findings: lintSpec(spec, { workdir, file: abs }) };
+  return { kind: "spec", findings: lintSpec(spec, { workdir, file: abs, known: defaultKnownPlugins() }) };
 }

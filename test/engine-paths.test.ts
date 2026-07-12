@@ -73,6 +73,9 @@ describe("engine resolution + preflight paths", () => {
       requirements: "x",
       task: { type: "strict" },
       driver: { uses: "mock" },
+      // An evaluator so preflight passes and the run reaches task validation
+      // (which runs after preflight).
+      evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
     });
     const report = await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
     expect(report.success).toBe(false);
