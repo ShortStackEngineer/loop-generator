@@ -15,6 +15,7 @@ export type {
   LoopOutcome,
   IterationReport,
   BaselineReport,
+  RunSnapshot,
 } from "./core/engine";
 
 // Spec

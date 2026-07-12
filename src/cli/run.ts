@@ -106,6 +106,12 @@ function formatReport(report: LoopReport): string {
     }
   }
 
+  if (report.snapshot) {
+    lines.push(`snapshot: ${report.snapshot.checkpoints} checkpoint(s) at ${report.snapshot.preRunRef}`);
+    lines.push(indent(`reset:   ${report.snapshot.resetCommand}`, "  "));
+    if (report.snapshot.inspectCommand) lines.push(indent(`inspect: ${report.snapshot.inspectCommand}`, "  "));
+  }
+
   if (report.warnings.length) {
     lines.push("");
     lines.push("⚠ warnings:");
