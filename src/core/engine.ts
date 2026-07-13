@@ -17,6 +17,7 @@ import {
   isGitRepo,
   changeDetectionAvailable,
   snapshotTree,
+  commitTreeToRef,
   diffTrees,
   diffPatch,
   snapshotContent,
@@ -73,6 +74,25 @@ export type LoopOutcome =
   | "evaluator-tampered"
   | "budget-exceeded";
 
+/**
+ * Git checkpoints written when `workspace.snapshot: "git"` is set on a git
+ * workspace. Non-destructive refs under `refs/loopgen/<run>/*` that let a
+ * failed run be inspected and reset. Absent when snapshotting is off, the
+ * workspace isn't a git repo, or the pre-run snapshot couldn't be written.
+ */
+export interface RunSnapshot {
+  /** Ref at the pre-run workspace state — the restore target. */
+  preRunRef: string;
+  /** Ref at the latest per-iteration checkpoint (the agent's cumulative work). */
+  latestRef?: string;
+  /** Iteration checkpoints written (one per iteration that changed files). */
+  checkpoints: number;
+  /** Copy-pasteable command to restore the workspace to its pre-run state. */
+  resetCommand: string;
+  /** Copy-pasteable command to inspect what changed across the run. */
+  inspectCommand?: string;
+}
+
 export interface LoopReport {
   spec: string;
   outcome: LoopOutcome;
@@ -90,6 +110,8 @@ export interface LoopReport {
   diffStat?: string;
   /** Run-level caveats — surfaced even on success (false-positive guards). */
   warnings: string[];
+  /** Git checkpoints for inspect/reset, when `workspace.snapshot: "git"`. */
+  snapshot?: RunSnapshot;
   error?: string;
 }
 
@@ -137,6 +159,16 @@ function hashFileSafe(file: string): string | null {
 function firstLine(text: string | undefined): string {
   if (!text) return "(no detail)";
   return text.split("\n").map((l) => l.trim()).find(Boolean) ?? "(no detail)";
+}
+
+/**
+ * POSIX single-quote a string so an interpolated path stays paste-safe in a
+ * shell — a workspace like `/Users/Kyle Smith/proj` must survive copy-paste
+ * (spaces, `$`, `;`, quotes). Wrap in single quotes; a literal `'` becomes
+ * `'\''` (close-quote, escaped quote, reopen-quote).
+ */
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
 /**
@@ -312,6 +344,34 @@ export class LoopEngine {
     }
     const baselineTree = gitEnabled ? snapshotTree(workdir) : null;
     let baselineContent: ContentSnapshot | null = null;
+
+    // Honor `workspace.snapshot: "git"` (opt-in): checkpoint the workspace into
+    // dedicated refs so a failed run can be inspected and reset — the behavior
+    // the flag has always promised. Non-destructive: commits are written under
+    // refs/loopgen/<runId>/* via commit-tree, never touching HEAD, the index,
+    // or the working tree. Best-effort — a snapshot failure never fails the run.
+    const preRunRef = `refs/loopgen/${runId}/pre-run`;
+    const latestRef = `refs/loopgen/${runId}/latest`;
+    const wantSnapshot = spec.workspace.snapshot === "git" && gitEnabled && baselineTree !== null;
+    let lastCheckpoint: string | null = null;
+    let checkpoints = 0;
+    if (wantSnapshot) {
+      lastCheckpoint = commitTreeToRef(workdir, preRunRef, baselineTree!, "loopgen: pre-run snapshot", null);
+      if (lastCheckpoint) {
+        base.snapshot = {
+          preRunRef,
+          checkpoints: 0,
+          // `checkout … -- .` restores snapshot paths into the worktree (works
+          // even with no HEAD/initial commit, where `restore --source` doesn't);
+          // `clean -fd` drops files the agent added. Both are non-destructive to
+          // the run refs.
+          resetCommand: `git -C ${shQuote(workdir)} checkout ${preRunRef} -- . && git -C ${shQuote(workdir)} clean -fd`,
+        };
+        log.info(`pre-run snapshot saved at ${preRunRef} (reset with: ${base.snapshot.resetCommand})`);
+      } else {
+        log.warn(`workspace.snapshot: "git" requested but the pre-run snapshot could not be written; this run won't be resettable`);
+      }
+    }
 
     // Spec-integrity guard: if the loop spec lives inside the workspace, the
     // agent can edit its own success criteria. Two independent concerns:
@@ -529,6 +589,22 @@ export class LoopEngine {
       // 2) Compute what actually changed, then evaluate the workspace.
       const treeAfter = gitEnabled ? snapshotTree(workdir) : null;
       lastTree = treeAfter ?? lastTree;
+
+      // Checkpoint this iteration's result (only when it actually changed the
+      // tree) so `latest` chains readable per-turn history back to `pre-run`.
+      if (wantSnapshot && lastCheckpoint && treeAfter && treeAfter !== treeBefore) {
+        const oid = commitTreeToRef(workdir, latestRef, treeAfter, `loopgen: iteration ${i + 1}`, lastCheckpoint);
+        if (oid) {
+          lastCheckpoint = oid;
+          checkpoints += 1;
+          base.snapshot = {
+            ...base.snapshot!,
+            latestRef,
+            checkpoints,
+            inspectCommand: `git -C ${shQuote(workdir)} diff ${preRunRef} ${latestRef}`,
+          };
+        }
+      }
       const gitDiff = diffTrees(workdir, treeBefore, treeAfter, ignoreGlobs);
       const contentAfter = contentFallback ? snapshotContent(workdir, ignoreGlobs) : null;
       if (contentAfter) lastContent = contentAfter;

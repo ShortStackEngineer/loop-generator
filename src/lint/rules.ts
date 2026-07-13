@@ -64,6 +64,73 @@ const workdirNotProject: SpecRule = {
   },
 };
 
+/** `driver.uses` names a driver that isn't registered (a typo the run will reject). */
+const driverUnknown: SpecRule = {
+  id: "SPEC-DRIVER-UNKNOWN",
+  severity: "error",
+  preflight: false,
+  run({ spec, known }) {
+    if (!known) return [];
+    const name = spec.driver.uses;
+    if (known.drivers.has(name)) return [];
+    return [
+      {
+        ruleId: "SPEC-DRIVER-UNKNOWN",
+        severity: "error",
+        message: `driver "${name}" is not a registered driver`,
+        path: "driver.uses",
+        hint: `The run can't resolve it. Available drivers: ${[...known.drivers].sort().join(", ")}.`,
+      },
+    ];
+  },
+};
+
+/** an `evaluators[].uses` names an evaluator type that isn't registered. */
+const evalUnknown: SpecRule = {
+  id: "SPEC-EVAL-UNKNOWN",
+  severity: "error",
+  preflight: false,
+  run({ spec, known }) {
+    if (!known) return [];
+    const findings: LintFinding[] = [];
+    spec.evaluators.forEach((e, i) => {
+      if (known.evaluators.has(e.uses)) return;
+      findings.push({
+        ruleId: "SPEC-EVAL-UNKNOWN",
+        severity: "error",
+        message: `evaluator "${e.as ?? e.uses}" uses "${e.uses}", which is not a registered evaluator type`,
+        path: `evaluators[${i}].uses`,
+        hint: `The run can't resolve it. Available evaluator types: ${[...known.evaluators].sort().join(", ")}.`,
+      });
+    });
+    return findings;
+  },
+};
+
+/**
+ * a spec with no evaluators can never satisfy its success criteria, so the loop
+ * burns every iteration (paying for each agent turn) before ending in
+ * max-iterations. Preflight so the engine fails fast instead of funding the loop.
+ */
+const noEvaluators: SpecRule = {
+  id: "SPEC-NO-EVALUATORS",
+  severity: "error",
+  preflight: true,
+  run({ spec }) {
+    if (spec.evaluators.length > 0) return [];
+    return [
+      {
+        ruleId: "SPEC-NO-EVALUATORS",
+        severity: "error",
+        message:
+          "no evaluators are configured; nothing measures success, so the loop can't converge and will run to max-iterations",
+        path: "evaluators",
+        hint: "Add at least one evaluator (e.g. a `command` check that runs your tests) so success is measurable.",
+      },
+    ];
+  },
+};
+
 /** a command's leading binary is a project-local path that doesn't exist. */
 const evalBinaryMissing: SpecRule = {
   id: "SPEC-EVAL-BINARY-MISSING",
@@ -257,6 +324,9 @@ const baselineRecommended: SpecRule = {
 export const SPEC_RULES: SpecRule[] = [
   workdirMissing,
   workdirNotProject,
+  driverUnknown,
+  evalUnknown,
+  noEvaluators,
   evalBinaryMissing,
   evalFileMissing,
   evalDestructiveEnv,

@@ -61,7 +61,16 @@ export const loopSpecSchema = z
       .object({
         /** Directory the agent edits, relative to the spec file (or --base). */
         dir: z.string().default("."),
-        /** `git`: snapshot before the run so failed runs can be inspected/reset. */
+        /**
+         * `git`: checkpoint the workspace into `refs/loopgen/<run>/*` before the
+         * run and after each iteration (git repos only), so a failed run can be
+         * inspected (`git log <ref>`) and reset (`git checkout <ref> -- .`, then
+         * `git clean -fd` to drop files the agent added). The exact, paste-safe
+         * commands are returned on `LoopReport.snapshot` (reset/inspect) — treat
+         * those as the source of truth. Non-destructive — never moves
+         * HEAD/branches. `none` (default) writes no checkpoints; git-backed
+         * change detection stays on regardless when the workspace is a git repo.
+         */
         snapshot: z.enum(["none", "git"]).default("none"),
         /**
          * Extra glob patterns to exclude from change detection and diffs, on top

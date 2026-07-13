@@ -7,7 +7,7 @@ import type { SuccessCriteria } from "./core/criteria";
 import type { Registry } from "./core/registry";
 import type { Evaluator } from "./evaluators/types";
 import { silentLogger, type Logger } from "./core/logger";
-import { lintSpec, type LintFinding } from "./lint";
+import { lintSpec, defaultKnownPlugins, type LintFinding } from "./lint";
 
 export interface GenerateInput {
   name: string;
@@ -208,7 +208,7 @@ export interface VerifyOptions extends RedCheckOptions {
  * `generate --verify` is a thin wrapper over this.
  */
 export async function verifySpec(spec: LoopSpec, opts: VerifyOptions): Promise<VerifyResult> {
-  const lint = lintSpec(spec, { workdir: opts.workdir, file: opts.file });
+  const lint = lintSpec(spec, { workdir: opts.workdir, file: opts.file, known: defaultKnownPlugins() });
   const lintErrors = lint.filter((f) => f.severity === "error").length;
   const lintWarnings = lint.filter((f) => f.severity === "warn").length;
   const red = await runRedCheck(spec, opts);

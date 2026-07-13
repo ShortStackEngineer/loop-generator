@@ -16,12 +16,26 @@ export interface LintFinding {
   item?: string;
 }
 
+/**
+ * The registered plug-in names a spec resolves against. Supplied so rules can
+ * flag a `driver.uses` / `evaluators[].uses` that names nothing — the most
+ * common spec typo. Optional: when absent (e.g. a caller with a custom registry
+ * that didn't pass its names), the unknown-name rules simply skip rather than
+ * false-flag a legitimately-custom plug-in.
+ */
+export interface KnownPlugins {
+  drivers: ReadonlySet<string>;
+  evaluators: ReadonlySet<string>;
+}
+
 /** Context handed to a spec rule. `workdir` is already resolved to an absolute path. */
 export interface SpecLintContext {
   spec: LoopSpec;
   workdir: string;
   /** Absolute path to the spec file, if it came from disk. */
   file?: string;
+  /** Registered plug-in names, for the unknown-name rules. */
+  known?: KnownPlugins;
 }
 
 export interface SpecRule {

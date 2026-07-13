@@ -87,6 +87,48 @@ export function snapshotTree(dir: string): string | null {
  * agent that merely runs the test suite defeats the no-op guard. Matched as git
  * pathspecs (where `*` also crosses `/`).
  */
+/**
+ * Persist a workspace tree snapshot as a commit reachable from `ref`, without
+ * touching HEAD, the index, or the working tree (same throwaway-plumbing
+ * discipline as {@link snapshotTree}). This is what makes
+ * `workspace.snapshot: "git"` honest: the engine checkpoints the workspace so a
+ * failed run can be inspected (`git log <ref>`) and reset (`git checkout <ref>
+ * -- .` plus `git clean -fd` to drop agent-added files — the exact commands are
+ * on `LoopReport.snapshot`), instead of the flag promising a snapshot it never
+ * takes.
+ *
+ * `parent` chains checkpoints into readable history — pass the previous
+ * checkpoint's OID, or null for the root (pre-run) snapshot. Author/committer
+ * identity and dates are pinned so a given (tree, parent, message) always
+ * yields the same commit: deterministic, and independent of the user's git
+ * config or clock. Returns the new commit OID, or null if any git step fails
+ * (snapshotting is best-effort and never fails a run).
+ */
+export function commitTreeToRef(
+  dir: string,
+  ref: string,
+  tree: string,
+  message: string,
+  parent: string | null,
+): string | null {
+  if (!tree) return null;
+  const args = ["commit-tree", tree, "-m", message];
+  if (parent) args.push("-p", parent);
+  const pinnedDate = "2000-01-01T00:00:00Z";
+  const commit = git(dir, args, {
+    GIT_AUTHOR_NAME: "loopgen",
+    GIT_AUTHOR_EMAIL: "loopgen@localhost",
+    GIT_AUTHOR_DATE: pinnedDate,
+    GIT_COMMITTER_NAME: "loopgen",
+    GIT_COMMITTER_EMAIL: "loopgen@localhost",
+    GIT_COMMITTER_DATE: pinnedDate,
+  });
+  if (!commit.ok) return null;
+  const oid = commit.stdout.trim();
+  if (!oid) return null;
+  return git(dir, ["update-ref", ref, oid]).ok ? oid : null;
+}
+
 export const DEFAULT_IGNORE_GLOBS: string[] = [
   "log",
   "tmp",

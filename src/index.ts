@@ -15,6 +15,7 @@ export type {
   LoopOutcome,
   IterationReport,
   BaselineReport,
+  RunSnapshot,
 } from "./core/engine";
 
 // Spec
@@ -155,6 +156,6 @@ export { otlpObserver, toOtlpTracePayload } from "./observers/otlp";
 export type { OtlpTracePayload } from "./observers/otlp";
 
 // Lint (Layer 0: static pre-execution checks)
-export { lintSpec, lintBatch, lintPath, workspacePreflight } from "./lint";
+export { lintSpec, lintBatch, lintPath, workspacePreflight, defaultKnownPlugins } from "./lint";
 export type { LintResult } from "./lint";
-export type { LintFinding, LintSeverity, SpecRule } from "./lint/types";
+export type { LintFinding, LintSeverity, SpecRule, KnownPlugins } from "./lint/types";
