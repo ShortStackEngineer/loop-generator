@@ -1,8 +1,7 @@
 # Loop Generator Workshop
 
-An interactive course (testingjavascript.com / epicreact.dev style) teaching how `loop-generator`
-works: the engine mechanics, the trust model, how the LLM is prompted initially vs. each iteration,
-and how to design evaluators.
+An interactive course teaching how `loop-generator` works: the engine mechanics, the trust model,
+how the LLM is prompted initially vs. each iteration, and how to design evaluators.
 
 ## Run it
 
@@ -33,7 +32,3 @@ Seven modules, each ending in a quiz (70% marks it complete; progress persists i
 The demos don't call any API: `evaluateCriteria`, `buildFeedback`, and the prompt builders are
 ported verbatim from `src/core/` and `src/tasks/` into `src/sim/`, so everything shown is real
 engine behavior.
-
-`PROJECT-NOTES.md` (this directory) collects findings made while building the course: false
-assumptions in docs/code with suggested corrections, gaps vs. comparable projects, and improvement
-opportunities.
