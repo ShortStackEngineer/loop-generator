@@ -1,4 +1,10 @@
-/** Browser-side mirror of the spec/evaluator shapes the demos need. */
+/**
+ * Course-side shapes. SuccessCriteria/Verdict come straight from the engine
+ * source (via the @src alias) — the course cannot drift from the real types.
+ */
+
+export type { SuccessCriteria } from "@src/core/criteria";
+export type { CriteriaVerdict as Verdict } from "@src/core/criteria";
 
 export interface MiniEvaluator {
   uses: "command" | "experiment";
@@ -16,6 +22,7 @@ export interface MiniSpec {
   evaluators: MiniEvaluator[];
 }
 
+/** A demo evaluation result — the engine's EvaluationResult minus durationMs. */
 export interface EvalResult {
   name: string;
   type: string;
@@ -24,17 +31,4 @@ export interface EvalResult {
   score?: number;
   feedback: string;
   error?: string;
-}
-
-export type SuccessCriteria =
-  | { type: "all-pass" }
-  | { type: "pass"; evaluators: string[] }
-  | { type: "score"; evaluator: string; gte?: number; lte?: number; eq?: number }
-  | { type: "all"; of: SuccessCriteria[] }
-  | { type: "any"; of: SuccessCriteria[] }
-  | { type: "not"; of: SuccessCriteria };
-
-export interface Verdict {
-  satisfied: boolean;
-  reason: string;
 }

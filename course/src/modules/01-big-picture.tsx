@@ -27,7 +27,7 @@ const PARTS: Part[] = [
   {
     id: "driver",
     title: "AgentDriver",
-    color: "var(--green)",
+    color: "var(--blue)",
     body:
       "The coding agent, behind a uniform contract (src/drivers/types.ts): name, optional preflight, and run(invocation) → AgentRunResult. Built-ins: mock (scripted, for offline runs and tests), claude-agent-sdk, grok, github-copilot, opencode. The stopReason (completed | max_turns | aborted | error) lets the engine attach honest warnings to green runs where the agent didn't actually finish.",
   },
@@ -83,8 +83,8 @@ function Diagram(props: { selected: string; onSelect: (id: string) => void }) {
       <line x1="400" y1="160" x2="465" y2="200" stroke="var(--muted)" strokeWidth="1.5" markerEnd="url(#arr)" />
       <line x1="310" y1="185" x2="310" y2="245" stroke="var(--muted)" strokeWidth="1.5" markerEnd="url(#arr)" />
       <g className="hotspot" opacity={sel("driver")} onClick={() => props.onSelect("driver")}>
-        <rect x="470" y="20" width="230" height="50" rx="10" fill="none" stroke="var(--green)" strokeWidth="2" />
-        <text x="585" y="42" textAnchor="middle" fill="var(--green)" fontSize="13" fontWeight="700">AgentDriver</text>
+        <rect x="470" y="20" width="230" height="50" rx="10" fill="none" stroke="var(--blue)" strokeWidth="2" />
+        <text x="585" y="42" textAnchor="middle" fill="var(--blue)" fontSize="13" fontWeight="700">AgentDriver</text>
         <text x="585" y="58" textAnchor="middle" fill="var(--muted)" fontSize="10.5">the coding agent (mock, claude-agent-sdk…)</text>
       </g>
       <g className="hotspot" opacity={sel("evaluators")} onClick={() => props.onSelect("evaluators")}>

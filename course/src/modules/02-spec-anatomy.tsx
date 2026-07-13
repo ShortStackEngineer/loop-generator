@@ -221,10 +221,10 @@ export function SpecAnatomy() {
                 onClick={() => setSel(f.id)}
                 style={{
                   cursor: "pointer",
-                  border: `1px solid ${sel === f.id ? "var(--accent)" : "var(--border)"}`,
-                  borderRadius: 8,
+                  border: `2px solid ${sel === f.id ? "var(--green)" : "transparent"}`,
+                  borderRadius: 10,
                   margin: "6px 0",
-                  background: sel === f.id ? "var(--panel2)" : "#0d1122",
+                  background: "var(--code-bg)",
                 }}
               >
                 <pre
