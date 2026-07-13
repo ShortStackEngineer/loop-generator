@@ -13,6 +13,8 @@ export interface CourseModule {
   subtitle: string;
   lede: string;
   Component: ComponentType;
+  /** Companion reference doc on the main site (resolved relative to /course/). */
+  docs?: { label: string; href: string };
 }
 
 export const MODULES: CourseModule[] = [
@@ -23,6 +25,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "Before touching a single option, build the mental model: a spec describes a task and the tools that measure success; the engine drives an agent against those tools until they pass — or a guard says the green can't be trusted.",
     Component: BigPicture,
+    docs: { label: "Getting started", href: "../docs/getting-started.html" },
   },
   {
     id: "spec-anatomy",
@@ -31,6 +34,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "The spec is the whole contract. Explore a real spec field by field, learn the defaults the schema fills in, and see how success criteria compose.",
     Component: SpecAnatomy,
+    docs: { label: "Authoring a loop", href: "../docs/authoring.html" },
   },
   {
     id: "engine-mechanics",
@@ -39,6 +43,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "LoopEngine.run() is the whole control flow. Step through six scripted runs — including the failure modes — and watch every phase the engine executes.",
     Component: EngineMechanics,
+    docs: { label: "Debugging a run", href: "../docs/debugging.html" },
   },
   {
     id: "prompting",
@@ -47,6 +52,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "The agent sees three kinds of text: a constant system prompt, a rich initial prompt on iteration 0, and from then on — only feedback. Build them live and read exactly what the model reads.",
     Component: Prompting,
+    docs: { label: "Authoring a loop", href: "../docs/authoring.html" },
   },
   {
     id: "trust-model",
@@ -55,6 +61,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "A green run is only meaningful if the checks exercise the requirement and the agent did real work. Play attacker against the engine's five defenses and learn exactly where each one is (and isn't) watching.",
     Component: TrustModel,
+    docs: { label: "Trust model", href: "../docs/trust.html" },
   },
   {
     id: "evaluator-design",
@@ -63,6 +70,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "Evaluators are the loop's sensors — the run can only be as trustworthy as its measurements. Learn the command and experiment evaluators inside out, then judge real checks: RED-able or fake-able?",
     Component: EvaluatorDesign,
+    docs: { label: "Authoring a loop", href: "../docs/authoring.html" },
   },
   {
     id: "capstone",

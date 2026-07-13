@@ -30,12 +30,15 @@ export function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand" onClick={() => navigate("")}>
-          <div className="brand-logo">∞</div>
+          <div className="brand-logo" />
           <div>
-            <h1>Loop Generator</h1>
+            <h1>loop-generator</h1>
             <p>The Feedback Loop Workshop</p>
           </div>
         </div>
+        <a className="docs-link" href="../">
+          ← Docs &amp; trust model
+        </a>
         <div className="progress-summary">
           {doneCount} of {MODULES.length} modules complete
           <div className="progress-bar">
@@ -68,6 +71,11 @@ export function App() {
               </div>
               <h1>{active.title}</h1>
               <p className="lede">{active.lede}</p>
+              {active.docs && (
+                <p style={{ fontSize: 13.5, color: "var(--ink-faint)", margin: "8px 0 0" }}>
+                  Reference doc: <a href={active.docs.href}>{active.docs.label}</a>
+                </p>
+              )}
             </div>
             <active.Component />
             <div className="footer-nav">

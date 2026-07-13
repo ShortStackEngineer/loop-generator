@@ -6,6 +6,7 @@ how the LLM is prompted initially vs. each iteration, and how to design evaluato
 ## Run it
 
 ```bash
+npm install      # repo root first — the course imports engine source from ../src
 cd course
 npm install
 npm run dev      # local dev server
@@ -30,5 +31,12 @@ Seven modules, each ending in a quiz (70% marks it complete; progress persists i
 7. **Capstone** — predict the outcome of six runs, then a final exam.
 
 The demos don't call any API: `evaluateCriteria`, `buildFeedback`, and the prompt builders are
-ported verbatim from `src/core/` and `src/tasks/` into `src/sim/`, so everything shown is real
-engine behavior.
+imported directly from the engine source (`../src`, via the `@src` Vite/TS alias — see
+`src/sim/`), so everything shown is real engine behavior by construction, and the course build
+breaks if those contracts change.
+
+## Deployment
+
+`.github/workflows/pages.yml` builds the course and deploys it at `/course/` alongside the docs
+site in `site/`. The course reuses the docs site's design language (palette, typography, dark code
+blocks) and cross-links with the docs pages.

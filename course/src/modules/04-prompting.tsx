@@ -3,7 +3,7 @@ import { Callout, Section } from "../components/ui";
 import { Quiz } from "../components/Quiz";
 import { buildSystemPrompt, buildInitialPrompt, buildIterationPrompt } from "../sim/prompts";
 import { buildFeedback } from "../sim/feedback";
-import { evaluateCriteria, describeCriteria } from "../sim/criteria";
+import { evaluateCriteria } from "../sim/criteria";
 import type { EvalResult, MiniSpec } from "../sim/types";
 
 type Tab = "system" | "initial" | "iteration";
@@ -55,7 +55,7 @@ export function Prompting() {
     tab === "system"
       ? buildSystemPrompt(spec)
       : tab === "initial"
-        ? buildInitialPrompt(spec, describeCriteria({ type: "all-pass" }))
+        ? buildInitialPrompt(spec)
         : buildIterationPrompt(spec, feedback);
 
   return (
@@ -103,8 +103,9 @@ export function Prompting() {
 
       <Section title="Build the prompts live">
         <p>
-          This is the <em>exact</em> assembly logic from <code>src/tasks/base.ts</code>. Edit the spec;
-          read what the model reads.
+          These are the <em>real</em> assembly functions from <code>src/tasks/base.ts</code> — the
+          course imports them straight from the engine source. Edit the spec; read what the model
+          reads.
         </p>
         <div className="card">
           <div className="two-col">

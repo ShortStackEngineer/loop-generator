@@ -10,7 +10,11 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@src/*": ["../src/*"]
+    }
   },
   "include": ["src"]
 }
