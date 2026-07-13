@@ -152,6 +152,8 @@ npm run loopgen -- verify-driver mock</code></pre>
   <span class="k">packageManager:</span> npm
 <span class="k">workspace:</span>
   <span class="k">dir:</span> ./target          <span class="c"># the directory the agent edits (relative to this file)</span>
+  <span class="k">snapshot:</span> none         <span class="c"># none (default) | git — git writes checkpoint refs under refs/loopgen/&lt;run&gt;/ for inspect/reset</span>
+  <span class="k">ignore:</span> []             <span class="c"># extra globs excluded from change detection, on top of the built-in artifact defaults</span>
 <span class="k">requirements:</span> <span class="s">|
   Add exponential backoff (max 3 retries) to fetchUser(). Keep the signature.</span>
 <span class="k">driver:</span>

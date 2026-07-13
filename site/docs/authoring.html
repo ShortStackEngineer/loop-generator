@@ -140,14 +140,18 @@
     <p>
       The engine audits the run; these skills produce checks worth auditing.
       The repo ships Claude Code skills (<code>.claude/skills/</code>) that
-      load automatically when you open it in Claude Code — two of them form
-      the authoring pipeline, from one request down to a runnable loop:
+      load automatically when you open it in Claude Code — three of them form
+      the authoring pipeline, from a whole app spec down to a runnable loop:
     </p>
-    <pre><code>frame-checks ──► author-loop ──► loopgen run
-one request       one verified     (debug-loop when a run
-into falsifiable  .loop.yaml,      goes sideways)
-acceptance checks proven RED</code></pre>
+    <pre><code>frame-app ─────► frame-checks ────► author-loop ──► loopgen run
+whole app into    one request into    one verified     (debug-loop when a
+RED-able slices   falsifiable         .loop.yaml,      run goes sideways)
+(a .batch.yaml)   acceptance checks   proven RED</code></pre>
     <ul>
+      <li><strong><code>frame-app</code></strong> — decompose a whole app spec
+        into a dependency-ordered DAG of RED-able vertical slices (a "loop of
+        loops"), feeding each buildable frontier to <code>frame-checks</code>
+        and promoting verified loops into a <code>.batch.yaml</code>.</li>
       <li><strong><code>frame-checks</code></strong> — turn one request into
         falsifiable acceptance checks: each RED now, for the right reason, and
         hard to fake.</li>
@@ -185,8 +189,9 @@ acceptance checks proven RED</code></pre>
         success: a failing test that should pass, a metric that should move, a
         build that should stay green.</li>
       <li><strong>Which driver</strong> — <code>claude-agent-sdk</code>
-        (default), <code>grok</code>, <code>github-copilot</code>, or
-        <code>mock</code> (the offline demo). Real drivers need credentials.</li>
+        (default), <code>grok</code>, <code>github-copilot</code>,
+        <code>opencode</code>, or <code>mock</code> (the offline demo). Real
+        drivers need credentials (opencode runs against local models).</li>
     </ul>
     <p>
       If the goal is too vague to write a check for, resolve that

@@ -52,7 +52,7 @@ const PREDICTIONS: Prediction[] = [
       "driver.uses: \"claud-agent-sdk\" (note the typo). The workspace and evaluators are all valid.",
     answer: "error",
     explain:
-      "Plug-in resolution happens up front, before preflight: an unknown driver name throws during registry lookup and the run returns outcome error with the registry's message. (Note: Layer-0 lint validates workspaces and commands, but not plug-in names — only the run itself catches this today.)",
+      "Plug-in resolution happens up front, before preflight: an unknown driver name throws during registry lookup and the run returns outcome error with the registry's message. (`loopgen lint` would have caught the typo statically via SPEC-DRIVER-UNKNOWN — but that rule isn't part of the engine's run-path preflight, so inside a run it's the registry lookup that fails.)",
   },
   {
     id: "p5",
@@ -223,7 +223,8 @@ export function Capstone() {
         <span style={{ fontSize: 26 }}>🏁</span>
         <div>
           <strong>Where to go next:</strong> run the offline demo (
-          <code>npm run dev -- run examples/building-blocks/mock-demo.loop.yaml</code>), author a real
+          <code>npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code>, from the repo
+          root), author a real
           loop with the <code>author-loop</code> skill, then read <code>src/core/engine.ts</code> top to
           bottom — after this course, it reads like the course did.
         </div>
