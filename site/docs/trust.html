@@ -63,10 +63,13 @@
       no files is flagged as likely vacuous. Build and runtime artifacts (logs,
       databases, compile caches, generated assets) are excluded so that merely
       running the test suite can't masquerade as "the agent did work"; add your
-      own globs with <code>workspace.ignore</code>. It falls back to
-      driver-reported files when the workspace isn't a git repo (or is
-      git-ignored) — and then the run carries a persistent warning that the
-      change list can't be independently verified.
+      own globs with <code>workspace.ignore</code>. When the workspace isn't a
+      git repo (or is git-ignored), it falls back to an independent
+      content-hash walk of the working tree — so a driver that omits (or
+      fabricates) <code>changedFiles</code> still can't silence the
+      vacuous-success guard; driver-reported files are only consulted as a
+      secondary signal when the walk hits its file cap. The run then carries a
+      persistent caveat: no unified diff, and very large trees are capped.
     </p>
 
     <h3>Baseline evaluation</h3>

@@ -193,5 +193,6 @@ The verification layer is the point; the loop is the chassis it rides on. v1 is
 the full framework: a working engine, the four extension points, the conformance
 harness, five drivers (`mock`, `claude-agent-sdk`, `grok`, `github-copilot`,
 `opencode`), the `command` + `experiment` evaluators, the `jsonl` + `otlp`
-observers, and four task types. Task types beyond `function` ship with prompt
+observers, and five task types (`function`, `api`, `webapp`, `experiment`,
+`generic`). Task types beyond `function` ship with prompt
 scaffolding and recommended evaluators; deepen them as you go.

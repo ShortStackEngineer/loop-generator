@@ -251,9 +251,11 @@ export function SpecAnatomy() {
           <code>all-pass</code> with an empty evaluator list is <em>never</em> satisfied ("no evaluators
           were configured") — and since <code>evaluators</code> defaults to <code>[]</code> and{" "}
           <code>success</code> defaults to <code>all-pass</code>, a spec that simply forgets its
-          evaluators will drive the agent for all 5 iterations and end as{" "}
-          <code>max-iterations</code>, spending real tokens the whole way. No lint rule currently
-          catches this shape — check your evaluator list before you check anything else.
+          evaluators can never converge. The <code>SPEC-NO-EVALUATORS</code> lint rule catches this as
+          an error, and because it's a preflight rule the engine also fails fast at run time
+          (<code>preflight-failed</code>, zero agent spend) — unless you run with{" "}
+          <code>--skip-preflight</code>, in which case the loop burns all 5 iterations and ends as{" "}
+          <code>max-iterations</code>.
         </Callout>
       </Section>
 

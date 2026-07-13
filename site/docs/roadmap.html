@@ -52,14 +52,12 @@
 
     <h2 id="tier1">Tier 1 — near-term, high leverage, low cost</h2>
 
-    <h3>Filesystem-walk change detection for non-git workspaces <span class="pill amber">exploring</span></h3>
     <p>
-      Change detection is git-based today; off-git it falls back to the driver's
-      self-reported file list (honestly labeled with a persistent warning). An
-      independent mtime/hash snapshot before and after each iteration would
-      extend <em>real</em> change detection — and the vacuous-success guard — to
-      workspaces where git is unavailable, removing the weakest link in the
-      trust story.
+      Nothing open right now. The previous Tier 1 item — filesystem-walk change
+      detection for non-git workspaces — shipped as the content-hash fallback
+      (an independent hash walk of the working tree, with driver-reported files
+      demoted to a secondary signal) and is documented in the
+      <a href="trust.html#trust">trust model</a>.
     </p>
 
     <h2 id="tier2">Tier 2 — medium-term, needs design</h2>
