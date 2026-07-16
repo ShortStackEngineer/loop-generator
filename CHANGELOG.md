@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/ShortStackEngineer/loop-generator/compare/v0.1.1...v0.1.2) (2026-07-13)
+
+
+### Features
+
+* git run checkpoints and plug-in-resolution lint rules ([#37](https://github.com/ShortStackEngineer/loop-generator/issues/37)) ([f6d1a2a](https://github.com/ShortStackEngineer/loop-generator/commit/f6d1a2aaf3da9546641a3bd8f399ab0a59ac6701))
+
 ## [0.1.1](https://github.com/ShortStackEngineer/loop-generator/compare/v0.1.0...v0.1.1) (2026-07-10)
 
 
