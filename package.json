@@ -1,6 +1,6 @@
 {
   "name": "loop-generator",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "The loop runner that doesn't believe the agent: drive a coding agent against your checks and get a verifiable report — with spec/test tamper guards, baseline checks, and budget ceilings.",
   "type": "module",
   "bin": {
