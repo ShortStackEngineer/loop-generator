@@ -41,6 +41,7 @@ green as a claim to audit.
 | Rewrite its own success criteria | Spec-integrity guard (hash-watched) | `spec-tampered` |
 | Pass checks that were already green | Baseline evaluation (`baseline: strict`) | `baseline-vacuous` |
 | Report "done" without changing anything | Workspace change detection (git-index diff) | vacuous-success warning |
+| Read the graders and teach to the visible test | Holdout graders (`evaluators[].holdout`) | grader out of reach; failure text only |
 | Grind the budget instead of converging | Cost / token ceilings | `budget-exceeded` |
 | Crash while the checks happen to pass | Honest `stopReason` reporting | warning on the report |
 
@@ -123,6 +124,42 @@ explicitly — hardening the defaults is on the
 [roadmap](https://shortstackengineer.github.io/loop-generator/docs/roadmap.html).
 Every field, evaluator option, and success rule is documented in
 [the spec reference](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#spec).
+
+## The two loops (and holdout graders)
+
+A capable agentic driver runs your checks *itself* during its turn — it reads
+the test files in the workspace, iterates red→green inside its own session, and
+returns already-green. That inner loop is fine (and fast), and the report makes
+it visible: `iterations[].selfEvalRuns` counts how many times the agent ran
+each evaluator's command inside its own trajectory. For such drivers on
+self-runnable checks, **one engine iteration is the expected healthy outcome** —
+the engine's own loop is the *independent* layer around it: it re-measures with
+your evaluators (never the agent's word), attaches the guards, and is the
+recovery path when the driver stops while still red (turn budget, crash, a
+check the agent can't run itself).
+
+To take the graders out of the agent's reach entirely — so it can't teach to a
+visible test and repair happens only through the engine's feedback — keep the
+test file **next to the spec** instead of in the workspace and declare it as a
+holdout:
+
+```yaml
+evaluators:
+  - uses: command
+    as: tests
+    options: { command: npx vitest run test/acceptance.test.ts }
+    holdout:
+      - from: ./graders/acceptance.test.ts   # relative to this spec file
+        to: test/acceptance.test.ts          # workspace path, exists ONLY while checks run
+```
+
+The grader is materialized at `to` for each evaluation pass (baseline included)
+and removed before the next agent turn; the agent's only signal is the failure
+text in feedback. The source is hash-watched under `evaluatorGuard` like any
+other check dependency, a missing source fails the run before any agent spend,
+and `loopgen lint` flags a `from` the agent could read or a `to` escaping the
+workspace. Honest limit: an agent with unrestricted shell access can still read
+elsewhere on disk — the same trust level as the spec file itself.
 
 ## When to use it
 

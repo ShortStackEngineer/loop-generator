@@ -27,6 +27,26 @@ export const specEvaluatorSchema = z.object({
    * check's contract isn't obvious from the command alone.
    */
   guard: z.array(z.string()).optional(),
+  /**
+   * Holdout graders: files kept OUTSIDE the workspace (`from`, resolved against
+   * the spec file's directory) that are copied to a workspace path (`to`) only
+   * while evaluators run, then removed before the next agent turn. The agent
+   * never sees the grader — its only signal is the failure text in feedback —
+   * so it cannot teach to the test or satisfy the check inside its own session.
+   * Sources are hash-watched under `limits.evaluatorGuard` like any other
+   * evaluator dependency. A missing source or a `to` escaping the workspace
+   * fails the run before any agent spend.
+   */
+  holdout: z
+    .array(
+      z.object({
+        /** Grader source, relative to the spec file's directory (or absolute). */
+        from: z.string().min(1),
+        /** Workspace-relative destination the grader is materialized at. */
+        to: z.string().min(1),
+      }),
+    )
+    .optional(),
 });
 
 export const specObserverSchema = z.object({

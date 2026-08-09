@@ -28,6 +28,7 @@ import {
   type TreeDiff,
 } from "./workspace";
 import { resolveGuardedFiles } from "./evaluator-guard";
+import { resolveHoldouts, materializeHoldouts, type HoldoutMapping } from "./holdout";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
 
@@ -53,6 +54,15 @@ export interface IterationReport {
   changedFiles?: string[];
   /** `git diff --stat` for this iteration. */
   diffStat?: string;
+  /**
+   * How many times the agent ran each evaluator's command itself during this
+   * iteration (evaluator name → count), detected from `tool-call` trajectory
+   * events whose command matches. A capable agentic driver typically self-runs
+   * the graders and converges in one engine iteration — this field makes that
+   * inner loop visible. Best-effort: only drivers that emit tool-call events
+   * with a command-like input are counted; absent when nothing matched.
+   */
+  selfEvalRuns?: Record<string, number>;
   /** Honest caveats about this iteration (incomplete agent, no-op success, …). */
   warnings: string[];
 }
@@ -172,6 +182,26 @@ function shQuote(s: string): string {
 }
 
 /**
+ * Pull a command string out of a `tool-call` event's input, if it has one.
+ * Recognizes the common shapes drivers emit (`command`, `cmd`, `script`, or a
+ * string-array `args`). Deliberately conservative: a file-write input carrying
+ * a command inside file *content* has none of these keys, so it never counts.
+ */
+export function extractCommandText(input: unknown): string | null {
+  if (typeof input === "string") return input;
+  if (input === null || typeof input !== "object") return null;
+  const o = input as Record<string, unknown>;
+  for (const key of ["command", "cmd", "script", "commandLine"]) {
+    if (typeof o[key] === "string") return o[key] as string;
+  }
+  const args = o["args"];
+  if (Array.isArray(args) && args.length > 0 && args.every((a) => typeof a === "string")) {
+    return (args as string[]).join(" ");
+  }
+  return null;
+}
+
+/**
  * If cumulative usage has exceeded a configured budget, return a human-readable
  * reason; otherwise null. Cost is checked first, then combined input+output
  * tokens. A missing usage field counts as 0, so an un-instrumented driver
@@ -284,6 +314,16 @@ export class LoopEngine {
     } catch (err) {
       return { ...base, reason: (err as Error).message, error: (err as Error).message };
     }
+
+    // Holdout graders: validate every `evaluators[].holdout` mapping before any
+    // agent spend — an evaluator whose grader can't be materialized measures
+    // nothing, so a bad mapping is a hard config error, not a mid-run surprise.
+    const holdouts = resolveHoldouts(spec, baseDir, workdir);
+    if (holdouts.errors.length) {
+      const reason = `holdout configuration invalid:\n${holdouts.errors.map((e) => `  • ${e}`).join("\n")}`;
+      return { ...base, reason, error: reason, durationMs: Date.now() - start };
+    }
+    for (const w of holdouts.warnings) log.warn(w);
 
     if (!existsSync(workdir)) {
       mkdirSync(workdir, { recursive: true });
@@ -402,6 +442,16 @@ export class LoopEngine {
       const hash = hashFileSafe(path.resolve(workdir, rel));
       if (hash) evaluatorWatch.push({ rel, hash });
     }
+    // Holdout sources are evaluator dependencies too: they live outside the
+    // workspace, but an agent with shell access can still reach them, so they
+    // are hash-watched under the same policy (label keeps messages readable).
+    const holdoutWatch: { label: string; abs: string; hash: string }[] = [];
+    if (evaluatorGuard !== "off") {
+      for (const m of holdouts.mappings) {
+        const hash = hashFileSafe(m.from);
+        if (hash) holdoutWatch.push({ label: `${m.to} (holdout source)`, abs: m.from, hash });
+      }
+    }
 
     const ignoreGlobs = [
       ...DEFAULT_IGNORE_GLOBS,
@@ -411,9 +461,12 @@ export class LoopEngine {
       ...(specRel ? [specRel] : []),
       // Likewise, guarded evaluator files: editing the checks isn't "work".
       ...guardedRels,
+      // Holdout destinations are only present while evaluators run, but exclude
+      // them anyway so a stray leftover can never count as agent work.
+      ...holdouts.mappings.map((m) => m.to),
     ];
 
-    const runWarnings: string[] = [];
+    const runWarnings: string[] = [...holdouts.warnings];
     // Off-git: content-hash detection is independent of the driver, but lacks
     // unified diffs and respects a file-count cap — still flag it so a green
     // run never *looks* identical to a git-backed one.
@@ -447,11 +500,16 @@ export class LoopEngine {
     // Re-hash guarded evaluator files and flag tampering — same lifecycle as
     // checkSpecTamper. A watched file that changed (or went missing) is tampering.
     const checkEvaluatorTamper = (): void => {
-      if (!evaluatorWatch.length) return;
+      if (!evaluatorWatch.length && !holdoutWatch.length) return;
       const changed: string[] = [];
       for (const w of evaluatorWatch) {
         const now = hashFileSafe(path.resolve(workdir, w.rel));
         if (now !== w.hash) changed.push(w.rel);
+      }
+      for (const w of holdoutWatch) {
+        // A source that changed or went missing mid-run is tampering either way.
+        const now = hashFileSafe(w.abs);
+        if (now !== w.hash) changed.push(w.label);
       }
       if (changed.length) {
         evaluatorTampered = true;
@@ -460,6 +518,14 @@ export class LoopEngine {
         if (!runWarnings.includes(msg)) runWarnings.push(msg);
       }
     };
+    // Self-verification telemetry: evaluator commands to look for inside the
+    // agent's own trajectory. A tool-call whose command contains one of these
+    // means the agent ran the grader itself — the inner loop the engine's
+    // 1-iteration convergence otherwise hides.
+    const evalCommands = evaluators.flatMap((e) => {
+      const command = e.options?.command;
+      return typeof command === "string" && command.trim() ? [{ name: e.name, command: command.trim() }] : [];
+    });
     const systemPrompt = spec.prompts?.system ?? taskType.buildSystemPrompt(spec);
     const iterations: IterationReport[] = [];
     let totalUsage: AgentUsage = {};
@@ -487,6 +553,8 @@ export class LoopEngine {
         concurrency: spec.evaluation.concurrency,
         signal: opts.signal,
         log: log.child("baseline"),
+        holdouts: holdouts.mappings,
+        onHoldoutNotes: (notes) => runWarnings.push(...notes.filter((n) => !runWarnings.includes(n))),
       });
       const baseVerdict = evaluateCriteria(spec.success, baseEvals);
       baseline = { satisfied: baseVerdict.satisfied, reason: baseVerdict.reason, evaluations: baseEvals };
@@ -543,6 +611,7 @@ export class LoopEngine {
 
       // 1) Drive the agent. Offer the previous session for resume after an
       //    incomplete (max_turns) stop; drivers opt in to actually using it.
+      const selfEvalCounts = new Map<string, number>();
       let agent: AgentRunResult;
       try {
         agent = await driver.run({
@@ -556,8 +625,20 @@ export class LoopEngine {
           options: spec.driver.options,
           signal,
           emit:
-            opts.onAgentEvent || observerSessions.length
+            opts.onAgentEvent || observerSessions.length || evalCommands.length
               ? (event) => {
+                  // Count the agent running a grader command itself (inner-loop
+                  // self-verification) before forwarding to sinks.
+                  if (event.kind === "tool-call" && evalCommands.length) {
+                    const text = extractCommandText(event.input);
+                    if (text) {
+                      for (const ec of evalCommands) {
+                        if (text.includes(ec.command)) {
+                          selfEvalCounts.set(ec.name, (selfEvalCounts.get(ec.name) ?? 0) + 1);
+                        }
+                      }
+                    }
+                  }
                   // An observability sink must never break a run; each consumer
                   // is isolated so a throw can't fail the iteration.
                   if (opts.onAgentEvent) {
@@ -652,6 +733,8 @@ export class LoopEngine {
         concurrency: spec.evaluation.concurrency,
         signal,
         log: iterLog.child("eval"),
+        holdouts: holdouts.mappings,
+        onHoldoutNotes: (notes) => runWarnings.push(...notes.filter((n) => !runWarnings.includes(n))),
       });
 
       // 3) Check criteria and build feedback for the next turn. When git change
@@ -698,6 +781,15 @@ export class LoopEngine {
       }
       for (const w of iterWarnings) iterLog.warn(w);
 
+      const selfEvalRuns = selfEvalCounts.size ? Object.fromEntries(selfEvalCounts) : undefined;
+      if (selfEvalRuns) {
+        iterLog.info(
+          `agent self-ran grader command(s) during its turn: ${[...selfEvalCounts]
+            .map(([n, c]) => `${n} ×${c}`)
+            .join(", ")} — inner-loop verification, not the engine's feedback loop`,
+        );
+      }
+
       const report: IterationReport = {
         iteration: i,
         agent,
@@ -708,6 +800,7 @@ export class LoopEngine {
         changed,
         changedFiles,
         diffStat: iterDiffStat || undefined,
+        selfEvalRuns,
         warnings: iterWarnings,
       };
       iterations.push(report);
@@ -890,6 +983,54 @@ export class LoopEngine {
   }
 
   private async runEvaluators(
+    evaluators: { name: string; type: string; evaluator: Evaluator; options: Record<string, unknown> }[],
+    ctx: {
+      runId: string;
+      iteration: number;
+      workdir: string;
+      concurrency: number;
+      signal?: AbortSignal;
+      log: Logger;
+      /** Holdout graders to materialize for the duration of this pass. */
+      holdouts?: HoldoutMapping[];
+      /** Sink for restore caveats (a displaced destination file, a failed restore). */
+      onHoldoutNotes?: (notes: string[]) => void;
+    },
+  ): Promise<EvaluationResult[]> {
+    // Holdout graders exist in the workspace only for the duration of this
+    // evaluation pass — materialize before, restore in `finally` so the next
+    // agent turn (and every workspace snapshot) never sees them.
+    let materialized: ReturnType<typeof materializeHoldouts> | undefined;
+    if (ctx.holdouts?.length) {
+      try {
+        materialized = materializeHoldouts(ctx.holdouts, ctx.workdir);
+      } catch (err) {
+        // Running the checks without their graders would measure nothing —
+        // report every evaluator as failed infrastructure, not as a red check.
+        const message = (err as Error).message;
+        ctx.log.warn(message);
+        return evaluators.map((e) => ({
+          name: e.name,
+          type: e.type,
+          ok: false,
+          passed: false,
+          feedback: `holdout grader could not be materialized: ${message}`,
+          error: message,
+          durationMs: 0,
+        }));
+      }
+    }
+    try {
+      return await this.evaluateAll(evaluators, ctx);
+    } finally {
+      if (materialized) {
+        const notes = materialized.restore();
+        if (notes.length) ctx.onHoldoutNotes?.(notes);
+      }
+    }
+  }
+
+  private async evaluateAll(
     evaluators: { name: string; type: string; evaluator: Evaluator; options: Record<string, unknown> }[],
     ctx: { runId: string; iteration: number; workdir: string; concurrency: number; signal?: AbortSignal; log: Logger },
   ): Promise<EvaluationResult[]> {

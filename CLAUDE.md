@@ -136,6 +136,23 @@ engine, preserve them:
   excluded from the work diff, and `error` mode turns a mid-run edit of them into
   an `evaluator-tampered` failure (`warn` just surfaces it; spec-tamper takes
   precedence when both fire).
+- **Holdout graders** (`evaluators[].holdout: [{from, to}]`,
+  `src/core/holdout.ts`): graders kept outside the workspace (`from` resolves
+  against the spec file's dir) and materialized at the workspace path `to` only
+  while evaluators run — baseline included — then removed before the next agent
+  turn, so the agent's only signal is failure text in feedback. A pre-existing
+  file at `to` is parked and restored (surfaced as a warning). Sources are
+  hash-watched under `evaluatorGuard` (an out-of-workspace edit still flags
+  `evaluator-tampered`); a missing source or an escaping `to` fails the run
+  before any agent spend; destinations are excluded from the work diff. Lint
+  rules: `SPEC-HOLDOUT-DEST-ESCAPES` / `SOURCE-MISSING` / `SOURCE-VISIBLE`.
+- **Self-verification telemetry** (`IterationReport.selfEvalRuns`): the engine
+  counts `tool-call` trajectory events whose command contains an evaluator's
+  `command` (evaluator name → count). Capable agentic drivers run the graders
+  inside their own session and converge in one engine iteration — that is the
+  *expected* healthy outcome, not a failed feedback loop; the engine's loop is
+  the independent-verification + recovery layer (it engages when a driver stops
+  while red). Best-effort: drivers that emit no tool-call events count nothing.
 
 ### Cost/token budget ceiling
 

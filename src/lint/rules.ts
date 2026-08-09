@@ -301,6 +301,86 @@ const reqUnverifiedArtifact: SpecRule = {
   },
 };
 
+/** True if `abs` resolves inside `root` (not equal, no `..` escape). */
+function insideDir(root: string, abs: string): boolean {
+  const rel = path.relative(root, abs);
+  return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
+/** a holdout destination escapes the workspace — the engine will refuse to run it. */
+const holdoutDestEscapes: SpecRule = {
+  id: "SPEC-HOLDOUT-DEST-ESCAPES",
+  severity: "error",
+  preflight: true,
+  run({ spec, workdir }) {
+    const findings: LintFinding[] = [];
+    spec.evaluators.forEach((e, i) => {
+      for (const h of e.holdout ?? []) {
+        if (insideDir(workdir, path.resolve(workdir, h.to))) continue;
+        findings.push({
+          ruleId: "SPEC-HOLDOUT-DEST-ESCAPES",
+          severity: "error",
+          message: `evaluator "${e.as ?? e.uses}": holdout destination "${h.to}" escapes the workspace`,
+          path: `evaluators[${i}].holdout`,
+          hint: "`to` must be a workspace-relative path; the grader is materialized inside the workspace only while evaluators run.",
+        });
+      }
+    });
+    return findings;
+  },
+};
+
+/** a holdout source file doesn't exist where the spec says it does. */
+const holdoutSourceMissing: SpecRule = {
+  id: "SPEC-HOLDOUT-SOURCE-MISSING",
+  severity: "error",
+  preflight: false,
+  run({ spec, file }) {
+    if (!file) return []; // in-memory spec: sources resolve against the spec file, so skip
+    const baseDir = path.dirname(file);
+    const findings: LintFinding[] = [];
+    spec.evaluators.forEach((e, i) => {
+      for (const h of e.holdout ?? []) {
+        const abs = path.resolve(baseDir, h.from);
+        if (existsSync(abs)) continue;
+        findings.push({
+          ruleId: "SPEC-HOLDOUT-SOURCE-MISSING",
+          severity: "error",
+          message: `evaluator "${e.as ?? e.uses}": holdout source "${h.from}" not found at ${abs}`,
+          path: `evaluators[${i}].holdout`,
+          hint: "`from` resolves against the spec file's directory. The run fails before any agent spend when a grader is missing.",
+        });
+      }
+    });
+    return findings;
+  },
+};
+
+/** a holdout source lives inside the workspace, where the agent can read it. */
+const holdoutSourceVisible: SpecRule = {
+  id: "SPEC-HOLDOUT-SOURCE-VISIBLE",
+  severity: "warn",
+  preflight: false,
+  run({ spec, workdir, file }) {
+    if (!file) return [];
+    const baseDir = path.dirname(file);
+    const findings: LintFinding[] = [];
+    spec.evaluators.forEach((e, i) => {
+      for (const h of e.holdout ?? []) {
+        if (!insideDir(workdir, path.resolve(baseDir, h.from))) continue;
+        findings.push({
+          ruleId: "SPEC-HOLDOUT-SOURCE-VISIBLE",
+          severity: "warn",
+          message: `evaluator "${e.as ?? e.uses}": holdout source "${h.from}" resolves inside the workspace — the agent can read it, which defeats the holdout`,
+          path: `evaluators[${i}].holdout`,
+          hint: "Keep grader sources next to the spec (outside workspace.dir), not in the agent's workspace.",
+        });
+      }
+    });
+    return findings;
+  },
+};
+
 /** a spec with a smoke but no baseline can't detect vacuous checks. */
 const baselineRecommended: SpecRule = {
   id: "SPEC-BASELINE-RECOMMENDED",
@@ -334,6 +414,9 @@ export const SPEC_RULES: SpecRule[] = [
   evalCwdMixed,
   smokeSelfFulfilling,
   reqUnverifiedArtifact,
+  holdoutDestEscapes,
+  holdoutSourceMissing,
+  holdoutSourceVisible,
   baselineRecommended,
 ];
 

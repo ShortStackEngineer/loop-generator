@@ -103,6 +103,8 @@ export {
 } from "./core/workspace";
 export type { TreeDiff, ContentSnapshot } from "./core/workspace";
 export { resolveGuardedFiles, isTestLikePath } from "./core/evaluator-guard";
+export { resolveHoldouts, materializeHoldouts } from "./core/holdout";
+export type { HoldoutMapping, ResolvedHoldouts, MaterializedHoldouts } from "./core/holdout";
 export { applyDriverOverride, validateDriverName } from "./core/driver-override";
 export { unknownOptionKeys, unknownOptionWarnings } from "./drivers/options";
 export {
