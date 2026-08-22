@@ -4,7 +4,7 @@
  *
  * RED until implemented (see loops/instances/mock-structured-feedback-e2e.loop.yaml).
  */
-import { describe, it } from "vitest";
+import { describe, it, expect } from "vitest";
 
 describe("mock structured feedback e2e (dog-food repro)", () => {
   it("mock driver fixes answer.txt from feedback.evaluations details.files via LoopEngine", () => {
