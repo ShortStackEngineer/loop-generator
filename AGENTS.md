@@ -33,3 +33,6 @@ Non-obvious notes:
 - `npm run coverage` (85% lines/functions/statements, 80% branches) and
   `npm run mutation` (Stryker) are the CI gates; the plain `npm test` is the
   fast inner loop.
+- **Dog-food loops** live under `loops/` — archetype templates (`bug`, `greenfield`,
+  `refactor`), `loops/invariants/regression.loop.yaml`, and per-ticket specs in
+  `loops/instances/`. Scaffold with `./loops/new <kind> <slug>`; see `loops/README.md`.

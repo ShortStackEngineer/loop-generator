@@ -1,0 +1,54 @@
+# Bug-fix archetype — copy with: ./loops/new bug <slug>
+#
+# Before running:
+#   1. frame-checks: write a repro test that fails on current main (RED).
+#   2. Replace __REPRO_TEST__ and the requirements block below.
+#   3. lint + baseline: new repro must fail; npm test/typecheck for unrelated regressions.
+#
+#   npm run loopgen -- lint loops/instances/<slug>.loop.yaml
+#   npm run loopgen -- run  loops/instances/<slug>.loop.yaml
+version: 1
+name: __SLUG__
+description: Bug fix — repro test turns green without breaking regression.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ../..
+requirements: |
+  <!-- Replace this block after frame-checks. Example:
+  Fix <symbol> in <file> so that <observable behavior>.
+  The repro in __REPRO_TEST__ must pass without weakening assertions.
+  Do not modify guarded test files. -->
+  TODO: describe the bug as an observable outcome and point at the repro test.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-sonnet-5
+    maxTurns: 24
+evaluators:
+  - uses: command
+    as: repro
+    options:
+      command: npx vitest run __REPRO_TEST__
+    guard:
+      - __REPRO_TEST__
+  - uses: command
+    as: regression
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 6
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  specGuard: error
+  evaluatorGuard: error
+  maxCostUsd: 5.0

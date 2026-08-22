@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+
+usage() {
+  cat <<'EOF'
+Usage: loops/new <bug|greenfield|refactor> <slug> [--repro <vitest-path>] [--acceptance <vitest-path>]
+
+Copy a template into loops/instances/<slug>.loop.yaml and substitute __SLUG__.
+
+  bug         — repro test path via --repro (default: test/repro/<slug>.test.ts)
+  greenfield  — acceptance test via --acceptance (default: test/<slug>.test.ts)
+  refactor    — no extra test path
+
+Then edit requirements, run frame-checks if needed, and prove RED baseline:
+
+  npm run loopgen -- lint loops/instances/<slug>.loop.yaml
+  npm run loopgen -- run  loops/instances/<slug>.loop.yaml
+EOF
+}
+
+if [[ $# -lt 2 ]]; then
+  usage
+  exit 1
+fi
+
+kind="$1"
+slug="$2"
+shift 2
+
+repro_path="test/repro/${slug}.test.ts"
+acceptance_path="test/${slug}.test.ts"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repro)
+      repro_path="${2:?missing path after --repro}"
+      shift 2
+      ;;
+    --acceptance)
+      acceptance_path="${2:?missing path after --acceptance}"
+      shift 2
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+case "$kind" in
+  bug | greenfield | refactor) ;;
+  *)
+    echo "Unknown kind: $kind (expected bug, greenfield, or refactor)" >&2
+    exit 1
+    ;;
+esac
+
+template="loops/templates/${kind}.loop.yaml"
+dest="loops/instances/${slug}.loop.yaml"
+
+if [[ ! -f "$template" ]]; then
+  echo "Missing template: $template" >&2
+  exit 1
+fi
+
+if [[ -f "$dest" ]]; then
+  echo "Already exists: $dest" >&2
+  exit 1
+fi
+
+mkdir -p loops/instances
+
+sed \
+  -e "s/__SLUG__/${slug}/g" \
+  -e "s|__REPRO_TEST__|${repro_path}|g" \
+  -e "s|__ACCEPTANCE_TEST__|${acceptance_path}|g" \
+  "$template" >"$dest"
+
+echo "Created $dest"
+echo ""
+echo "Next:"
+echo "  1. Edit requirements and confirm test paths"
+echo "  2. npm run loopgen -- lint $dest"
+if [[ "$kind" == bug || "$kind" == greenfield ]]; then
+  echo "  3. Write the test file (RED on main), then prove baseline fails"
+fi
+echo "  4. npm run loopgen -- run $dest"
