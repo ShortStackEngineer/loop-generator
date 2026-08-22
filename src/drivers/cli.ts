@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import type { FeedbackSummary } from "./types";
+import { augmentPromptWithStructuredFeedback } from "./structured-feedback";
 
 /**
  * Shared plumbing for the "thin agentic CLI" drivers (grok, github-copilot,
@@ -107,6 +109,18 @@ export function tail(text: string, max = 2000): string {
 /** Fold an optional system prompt in front of the concrete instruction. */
 export function foldPrompt(systemPrompt: string | undefined, prompt: string): string {
   return systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt;
+}
+
+/** Fold system + task prompt and append structured evaluator results when present. */
+export function buildDriverPrompt(invocation: {
+  systemPrompt?: string;
+  prompt: string;
+  feedback?: FeedbackSummary;
+}): string {
+  return augmentPromptWithStructuredFeedback(
+    foldPrompt(invocation.systemPrompt, invocation.prompt),
+    invocation.feedback,
+  );
 }
 
 // ─── Binary resolution ───────────────────────────────────────────────────────

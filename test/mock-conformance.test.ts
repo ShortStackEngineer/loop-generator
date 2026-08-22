@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { mockDriver } from "../src/drivers/mock";
@@ -63,6 +63,32 @@ describe("mock driver", () => {
   it("falls back to defaultSummary when a step has none", async () => {
     const r = await mockDriver.run(inv({ steps: [{ files: { "a.txt": "x" } }], defaultSummary: "FALLBACK" }));
     expect(r.summary).toBe("FALLBACK");
+  });
+
+  it("applies structured feedback details.files when enabled", async () => {
+    writeFileSync(path.join(workdir, "OUT.txt"), "WRONG");
+    const r = await mockDriver.run({
+      ...inv({ useStructuredFeedback: true, steps: [] }, 1),
+      feedback: {
+        passed: false,
+        reason: "wrong contents",
+        text: "fix OUT.txt",
+        evaluations: [
+          {
+            name: "contents",
+            type: "command",
+            passed: false,
+            ok: true,
+            feedback: "expected TOKEN",
+            details: { files: { "OUT.txt": "TOKEN" } },
+            durationMs: 0,
+          },
+        ],
+      },
+    });
+    expect(r.ok).toBe(true);
+    expect(r.summary).toMatch(/structured feedback/);
+    expect(readFileSync(path.join(workdir, "OUT.txt"), "utf8")).toBe("TOKEN");
   });
 });
 

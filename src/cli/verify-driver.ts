@@ -30,7 +30,7 @@ export function registerVerifyDriver(program: Command): void {
 
       const report = await runDriverConformance({
         makeDriver: () => driver,
-        optionsFor: scripted ? (scenario, token) => scriptedMockOptionsFor(scenario, token) : undefined,
+        optionsFor: scripted ? (scenario, token, iteration) => scriptedMockOptionsFor(scenario, token, iteration) : undefined,
         skip: flags.skip?.split(",").map((s) => s.trim()).filter(Boolean),
         log,
       });

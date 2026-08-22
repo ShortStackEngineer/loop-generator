@@ -3,6 +3,7 @@ import { z } from "zod";
 import { preflightFail, preflightOk } from "../core/preflight";
 import type { PreflightResult } from "../core/preflight";
 import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsage } from "./types";
+import { augmentPromptWithStructuredFeedback, emitStructuredFeedbackEvents } from "./structured-feedback";
 import { unknownOptionWarnings } from "./options";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk";
@@ -157,9 +158,11 @@ export const claudeAgentSdkDriver: AgentDriver = {
     let stopReason: AgentRunResult["stopReason"] = "completed";
     const transcript: SdkMessage[] = [];
     const turnState = { turn: 0 };
+    const agentPrompt = augmentPromptWithStructuredFeedback(invocation.prompt, invocation.feedback);
+    emitStructuredFeedbackEvents(invocation.emit, invocation.feedback);
 
     try {
-      for await (const message of sdk.query({ prompt: invocation.prompt, options: queryOptions })) {
+      for await (const message of sdk.query({ prompt: agentPrompt, options: queryOptions })) {
         transcript.push(message);
         if (invocation.emit) emitSdkEvents(message, invocation.emit, turnState);
         if (message.type === "system" && message.subtype === "init" && message.session_id) {

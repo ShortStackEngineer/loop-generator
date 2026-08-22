@@ -5,7 +5,7 @@ import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsa
 import {
   asString,
   cleanSummary,
-  foldPrompt,
+  buildDriverPrompt,
   isObject,
   lastMeaningfulLine,
   numberOr,
@@ -141,7 +141,7 @@ export const opencodeDriver: AgentDriver = {
     // Fold systemPrompt (if any) in front of the concrete ask. OpenCode also
     // picks up AGENTS.md / project rules from the workspace on its own. The
     // prompt is passed as the positional `message` to `opencode run`.
-    const effectivePrompt = foldPrompt(invocation.systemPrompt, invocation.prompt);
+    const effectivePrompt = buildDriverPrompt(invocation);
 
     const args: string[] = [
       "run",

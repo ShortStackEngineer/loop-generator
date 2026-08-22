@@ -72,14 +72,15 @@
       higher-stakes or expensive runs.
     </p>
 
-    <h3>Resolve the structured-feedback dead affordance <span class="pill amber">exploring</span></h3>
+    <h3>Resolve the structured-feedback dead affordance <span class="pill green">shipped</span></h3>
     <p>
       <code>FeedbackSummary.evaluations</code> is passed to
-      <code>driver.run</code> via <code>invocation.feedback</code>, but no
-      built-in driver reads it — every driver consumes only the rendered
-      <code>feedback.text</code> already embedded in the prompt. Either wire at
-      least one driver to consume the structured channel or remove the field: a
-      dead affordance in a public contract erodes trust in the contract.
+      <code>driver.run</code> via <code>invocation.feedback</code>. Built-in
+      drivers now consume it: CLI and SDK drivers append a machine-readable JSON
+      block to the agent prompt; the mock driver can apply
+      <code>details.files</code> fixes when
+      <code>useStructuredFeedback</code> is set. Custom drivers can reuse
+      <code>augmentPromptWithStructuredFeedback</code> from the public API.
     </p>
 
     <h3>A native coverage evaluator <span class="pill amber">exploring</span></h3>

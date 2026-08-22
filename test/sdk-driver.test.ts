@@ -7,6 +7,7 @@ import {
   extractChangedFilesFromTranscript,
   __setSdkLoaderForTests,
 } from "../src/drivers/claude-agent-sdk";
+import { STRUCTURED_FEEDBACK_MARKER } from "../src/drivers/structured-feedback";
 import { silentLogger } from "../src/core/logger";
 import type { AgentInvocation } from "../src/drivers/types";
 
@@ -107,6 +108,32 @@ describe("claude-agent-sdk driver", () => {
     __setSdkLoaderForTests(async () => fakeSdk([]));
     const pf = await claudeAgentSdkDriver.preflight!({ workdir: ".", options: { model: "claude-opus-4-8" } });
     expect(pf.ok).toBe(true);
+  });
+
+  it("appends structured feedback evaluations to the SDK prompt", async () => {
+    __setSdkLoaderForTests(async () => fakeSdk([{ type: "result", subtype: "success", result: "ok" }]));
+    const inv = invocation({
+      feedback: {
+        passed: false,
+        reason: "not yet",
+        text: "prose only",
+        evaluations: [
+          {
+            name: "tests",
+            type: "command",
+            passed: false,
+            ok: true,
+            feedback: "failed",
+            durationMs: 1,
+          },
+        ],
+      },
+    });
+    await claudeAgentSdkDriver.run(inv);
+    rmSync(inv.workdir, { recursive: true, force: true });
+    expect(captured!.prompt).toContain("do it");
+    expect(captured!.prompt).toContain(STRUCTURED_FEEDBACK_MARKER);
+    expect(captured!.prompt).toContain('"name": "tests"');
   });
 
   it("maps spec options into the query() options", async () => {
