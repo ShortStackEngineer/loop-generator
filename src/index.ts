@@ -106,6 +106,15 @@ export { resolveGuardedFiles, isTestLikePath } from "./core/evaluator-guard";
 export { applyDriverOverride, validateDriverName } from "./core/driver-override";
 export { unknownOptionKeys, unknownOptionWarnings } from "./drivers/options";
 export {
+  STRUCTURED_FEEDBACK_MARKER,
+  augmentPromptWithStructuredFeedback,
+  structuredFeedbackPayload,
+  emitStructuredFeedbackEvents,
+  applyStructuredFileFixes,
+} from "./drivers/structured-feedback";
+export type { StructuredFeedbackPayload } from "./drivers/structured-feedback";
+export { buildDriverPrompt, foldPrompt } from "./drivers/cli";
+export {
   initTarget,
   listTargetTemplates,
   resolveTargetTemplate,

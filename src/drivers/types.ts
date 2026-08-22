@@ -54,7 +54,7 @@ export interface FeedbackSummary {
   reason: string;
   /** Rendered, agent-facing feedback block. */
   text: string;
-  /** Per-evaluator breakdown for drivers that want structured access. */
+  /** Per-evaluator breakdown for drivers that consume the structured channel (built-in drivers append JSON and/or apply `details.files`). */
   evaluations: EvaluationResult[];
 }
 

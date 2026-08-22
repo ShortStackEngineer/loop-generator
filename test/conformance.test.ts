@@ -7,7 +7,7 @@ describe("driver conformance harness", () => {
     const report = await runDriverConformance({
       makeDriver: () => mockDriver,
       // The mock is scripted, so map each scenario's goal to file-writing steps.
-      optionsFor: (scenario, token) => scriptedMockOptionsFor(scenario, token),
+      optionsFor: (scenario, token, iteration) => scriptedMockOptionsFor(scenario, token, iteration),
     });
 
     expect(report.driver).toBe("mock");

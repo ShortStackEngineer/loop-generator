@@ -6,7 +6,7 @@ import type { AgentDriver, AgentEvent, AgentInvocation, AgentRunResult, AgentUsa
 import {
   asString,
   cleanSummary,
-  foldPrompt,
+  buildDriverPrompt,
   isObject,
   lastMeaningfulLine,
   parseJsonl,
@@ -126,7 +126,7 @@ export const githubCopilotDriver: AgentDriver = {
 
     // Fold systemPrompt (if any) in front of the concrete ask. Copilot also picks
     // up AGENTS.md / custom instructions from the workspace on its own.
-    const effectivePrompt = foldPrompt(invocation.systemPrompt, invocation.prompt);
+    const effectivePrompt = buildDriverPrompt(invocation);
 
     const args: string[] = [
       "-p",

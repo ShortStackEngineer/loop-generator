@@ -161,7 +161,13 @@ describe("conformance: invocation wiring (runId, iteration, prompt, feedback)", 
     expect(iterOne!.feedback).toBeDefined();
     expect(iterOne!.feedback!.passed).toBe(false);
     expect(iterOne!.feedback!.reason).toBe("contents incorrect");
-    expect(iterOne!.feedback!.evaluations).toEqual([]);
+    expect(iterOne!.feedback!.evaluations).toEqual([
+      expect.objectContaining({
+        name: "contents",
+        passed: false,
+        details: { files: { [TARGET_FILE]: expect.any(String) } },
+      }),
+    ]);
     const token = iterOne!.prompt.match(/exactly: (\S+)$/)![1]!;
     expect(iterOne!.feedback!.text).toBe(
       `The file ${TARGET_FILE} must contain exactly: ${token}`,
@@ -619,9 +625,13 @@ describe("scriptedMockOptionsFor", () => {
     });
   });
 
-  it("maps applies-feedback to a WRONG-then-token two-step script", () => {
-    expect(scriptedMockOptionsFor(scenario("applies-feedback"), "TOK")).toEqual({
-      steps: [{ files: { [TARGET_FILE]: "WRONG" } }, { files: { [TARGET_FILE]: "TOK" } }],
+  it("maps applies-feedback to a WRONG first step and structured feedback on iteration 1", () => {
+    expect(scriptedMockOptionsFor(scenario("applies-feedback"), "TOK", 0)).toEqual({
+      steps: [{ files: { [TARGET_FILE]: "WRONG" } }],
+    });
+    expect(scriptedMockOptionsFor(scenario("applies-feedback"), "TOK", 1)).toEqual({
+      useStructuredFeedback: true,
+      steps: [],
     });
   });
 

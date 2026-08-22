@@ -3,6 +3,7 @@ import path from "node:path";
 import { z } from "zod";
 import { runCommand } from "../core/exec";
 import { preflightOk } from "../core/preflight";
+import { applyStructuredFileFixes } from "./structured-feedback";
 import type { AgentDriver, AgentInvocation, AgentRunResult } from "./types";
 
 const stepSchema = z.object({
@@ -17,6 +18,11 @@ const stepSchema = z.object({
 });
 
 const optionsSchema = z.object({
+  /**
+   * When true, iteration 1+ applies `details.files` from failing
+   * `invocation.feedback.evaluations` before scripted steps (structured channel).
+   */
+  useStructuredFeedback: z.boolean().default(false),
   /**
    * Ordered steps. On iteration i the driver applies steps[min(i, len-1)], so a
    * two-step script can model "first attempt fails, second attempt fixes it".
@@ -43,6 +49,19 @@ export const mockDriver: AgentDriver = {
 
   async run(invocation: AgentInvocation): Promise<AgentRunResult> {
     const opts = optionsSchema.parse(invocation.options);
+
+    if (opts.useStructuredFeedback && invocation.feedback?.evaluations?.length) {
+      const structured = applyStructuredFileFixes(invocation.feedback.evaluations, invocation.workdir);
+      if (structured.applied) {
+        return {
+          ok: true,
+          stopReason: "completed",
+          summary: `mock driver applied structured feedback (${structured.changedFiles.length} file(s))`,
+          changedFiles: structured.changedFiles,
+        };
+      }
+    }
+
     const { steps } = opts;
 
     if (steps.length === 0) {

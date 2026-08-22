@@ -190,7 +190,17 @@ async function runScenario(
         passed: false,
         reason: "contents incorrect",
         text: `The file ${TARGET_FILE} must contain exactly: ${token}`,
-        evaluations: [],
+        evaluations: [
+          {
+            name: "contents",
+            type: "command",
+            passed: false,
+            ok: true,
+            feedback: `The file ${TARGET_FILE} must contain exactly: ${token}`,
+            details: { files: { [TARGET_FILE]: token } },
+            durationMs: 0,
+          },
+        ],
       };
       const second = await driver.run(
         makeInvocation(
@@ -254,12 +264,16 @@ async function runScenario(
 export function scriptedMockOptionsFor(
   scenario: ConformanceScenario,
   token: string,
+  iteration = 0,
 ): Record<string, unknown> | undefined {
   switch (scenario.name) {
     case "creates-file":
       return { steps: [{ files: { [TARGET_FILE]: token } }] };
     case "applies-feedback":
-      return { steps: [{ files: { [TARGET_FILE]: "WRONG" } }, { files: { [TARGET_FILE]: token } }] };
+      if (iteration === 0) {
+        return { steps: [{ files: { [TARGET_FILE]: "WRONG" } }] };
+      }
+      return { useStructuredFeedback: true, steps: [] };
     default:
       return undefined;
   }

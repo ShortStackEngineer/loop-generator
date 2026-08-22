@@ -5,7 +5,7 @@ import type { AgentDriver, AgentInvocation, AgentRunResult, AgentUsage } from ".
 import {
   asString,
   cleanSummary,
-  foldPrompt,
+  buildDriverPrompt,
   isObject,
   lastMeaningfulLine as cliLastMeaningfulLine,
   numberOr,
@@ -112,7 +112,7 @@ export const grokDriver: AgentDriver = {
 
     // Fold systemPrompt (if any) at the front so the agent receives role framing
     // + the concrete ask. Grok Build also picks up AGENTS.md etc.
-    const effectivePrompt = foldPrompt(invocation.systemPrompt, invocation.prompt);
+    const effectivePrompt = buildDriverPrompt(invocation);
 
     const args: string[] = [
       "-p",
