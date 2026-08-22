@@ -36,6 +36,9 @@ loops/
 4. **Edit** `loops/instances/<slug>.loop.yaml`:
    - Fill in `requirements` (concrete paths, symbols, expected behavior).
    - Set evaluator paths (`repro`, `acceptance`) and `guard:` lists to match real test files.
+   - Intentionally RED repro tests under `test/repro/` may be excluded from `npm test`
+     (see `vitest.config.ts`); run them with `npx vitest run --config vitest.repro.config.ts`
+     or via the loop instance acceptance evaluator.
    - Confirm the **new** checks are RED: `npm run loopgen -- lint loops/instances/<slug>.loop.yaml`
      then `npm run loopgen -- run loops/instances/<slug>.loop.yaml --driver mock` only after
      you have a scripted mock path — for real work use the default driver or `-d claude-agent-sdk`.
