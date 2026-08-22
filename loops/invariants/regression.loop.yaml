@@ -1,0 +1,39 @@
+# Invariant regression gate for the loop-generator monorepo.
+# Expects checks to be GREEN on a healthy main branch — not a feature loop.
+#
+#   npm run loopgen -- lint loops/invariants/regression.loop.yaml
+#   npm run loopgen -- run  loops/invariants/regression.loop.yaml
+version: 1
+name: loop-generator-invariants
+description: Typecheck + unit tests must pass on the repo root (no agent work).
+task:
+  type: generic
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ../..
+requirements: |
+  No code changes requested. This loop only verifies the repository invariant suite:
+  TypeScript typechecks cleanly and the vitest suite passes.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-sonnet-5
+    maxTurns: 1
+evaluators:
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+  - uses: command
+    as: test
+    options:
+      command: npm test
+success:
+  type: all-pass
+limits:
+  maxIterations: 1
+  iterationTimeoutMs: 600000
+  baseline: false
+  specGuard: error

@@ -1,0 +1,49 @@
+# Refactor archetype — copy with: ./loops/new refactor <slug>
+#
+# Contract: observable behavior unchanged; full suite + typecheck + build stay green.
+# No new RED acceptance test — baseline stays false because existing checks already pass.
+#
+#   npm run loopgen -- lint loops/instances/<slug>.loop.yaml
+#   npm run loopgen -- run  loops/instances/<slug>.loop.yaml
+version: 1
+name: __SLUG__
+description: Internal refactor — behavior unchanged, invariants stay green.
+task:
+  type: generic
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ../..
+requirements: |
+  <!-- Replace after scoping. Example:
+  Refactor <module> to <structural goal> without changing public API or test-visible behavior.
+  Do not edit test files. Prefer smaller commits within the workspace diff. -->
+  TODO: name the refactor target, constraints, and files in scope.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-sonnet-5
+    maxTurns: 20
+evaluators:
+  - uses: command
+    as: test
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+  - uses: command
+    as: build
+    options:
+      command: npm run build
+success:
+  type: all-pass
+limits:
+  maxIterations: 5
+  iterationTimeoutMs: 1200000
+  baseline: false
+  specGuard: error
+  evaluatorGuard: error
+  maxCostUsd: 5.0

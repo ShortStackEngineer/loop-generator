@@ -1,0 +1,58 @@
+# Greenfield / feature archetype — copy with: ./loops/new greenfield <slug>
+#
+# Before running:
+#   1. frame-checks: acceptance tests that are RED on main (new behavior only).
+#   2. Replace __ACCEPTANCE_TEST__ and requirements.
+#   3. lint + baseline: acceptance fails; full suite + typecheck still pass (invariants).
+#
+#   npm run loopgen -- lint loops/instances/<slug>.loop.yaml
+#   npm run loopgen -- run  loops/instances/<slug>.loop.yaml
+version: 1
+name: __SLUG__
+description: New feature — acceptance tests turn green; regression stays green.
+task:
+  type: function
+stack:
+  language: typescript
+  packageManager: npm
+workspace:
+  dir: ../..
+requirements: |
+  <!-- Replace after frame-checks. Example:
+  Add <export> in <module> so that <observable behavior>.
+  Acceptance coverage lives in __ACCEPTANCE_TEST__.
+  Preserve existing public API unless the task explicitly allows breaks. -->
+  TODO: describe the new behavior and list files the agent may create or edit.
+driver:
+  uses: claude-agent-sdk
+  options:
+    model: claude-sonnet-5
+    maxTurns: 30
+evaluators:
+  - uses: command
+    as: acceptance
+    options:
+      command: npx vitest run __ACCEPTANCE_TEST__
+    guard:
+      - __ACCEPTANCE_TEST__
+  - uses: command
+    as: regression
+    options:
+      command: npm test
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+  - uses: command
+    as: build
+    options:
+      command: npm run build
+success:
+  type: all-pass
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1800000
+  baseline: strict
+  specGuard: error
+  evaluatorGuard: error
+  maxCostUsd: 8.0
