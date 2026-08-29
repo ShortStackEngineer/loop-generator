@@ -79,11 +79,15 @@ model-server driver must parse the token out itself and write the file.
    detect completion via a `result` message. Template:
    `src/drivers/claude-agent-sdk.ts`.
 3. **Model server** (LM Studio, Ollama, raw OpenAI-compatible endpoint): pure
-   inference, **no filesystem or tools**. The *driver* must supply the agent
-   scaffolding — ask the model for file contents, parse, and write them itself;
-   fold `feedback.text` into the next prompt. More code, but conformance is cheap
-   and deterministic (no agentic tool loop needed for the harness's file tasks).
-   Skeleton below.
+   inference, **no filesystem or tools**. **First choice: do not write a
+   driver.** Use the built-in `opencode` driver with
+   `model: lmstudio/<id>` (or `ollama/<id>`). OpenCode already owns the tool
+   loop. Skeleton B below is only if you are building a *new coding agent*
+   that happens to call a model server — you must supply the scaffolding
+   (ask the model for file contents, parse, write under `inv.workdir`, fold
+   `feedback.text`). That is an agent, not an adapter; loop-generator will
+   not grow an in-tree HTTP coding agent. Conformance is cheap and
+   deterministic (no agentic tool loop needed for the harness's file tasks).
 
 ## How `verify-driver` treats your driver (cost!)
 

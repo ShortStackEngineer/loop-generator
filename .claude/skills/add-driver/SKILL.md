@@ -4,10 +4,11 @@ description: >-
   Scaffold a new loop-generator agent backend (an AgentDriver) and drive it to
   green against the conformance harness — implement name/preflight/run, register
   it, then loop on `loopgen verify-driver <name>` fixing one failing scenario at a
-  time until all four pass. Use when someone wants to add or integrate a new agent
-  or model backend (e.g. LM Studio, Ollama, Codex, Aider, Cursor, a custom CLI or
-  OpenAI-compatible endpoint), write a custom AgentDriver, or when `verify-driver`
-  / driver conformance is failing.
+  time until all four pass. Use when someone wants to add or integrate a new
+  agentic CLI/SDK (e.g. Codex, Aider, Cursor). For LM Studio / Ollama / a local
+  OpenAI-compatible server, use the existing `opencode` driver first — those
+  are model servers, not agents. Also use when `verify-driver` / driver
+  conformance is failing.
 ---
 
 # add-driver
@@ -28,16 +29,22 @@ copy-paste skeletons live in `reference.md`. CLI is `npm run loopgen -- <args>`.
 Before writing anything, determine which of three shapes the backend is (full
 descriptions in `reference.md` → "Three backend shapes"):
 
-- **Agentic CLI** (e.g. grok) — already edits files and runs tools. Driver just
-  spawns it. Template: `src/drivers/grok.ts`. **Skeleton A.**
+- **Agentic CLI** (e.g. grok, opencode) — already edits files and runs tools.
+  Driver just spawns it. Template: `src/drivers/grok.ts`. **Skeleton A.**
 - **Agentic SDK** (e.g. claude-agent-sdk) — streaming library that edits files.
   Dynamic-import it as an optional dep. Template: `src/drivers/claude-agent-sdk.ts`.
-- **Model server** (e.g. LM Studio / Ollama / OpenAI-compatible) — pure
-  inference, **no filesystem or tools**. The *driver* must write files itself.
-  More code. **Skeleton B.**
+- **Model server** (LM Studio / Ollama / OpenAI-compatible) — pure inference,
+  **no filesystem or tools**. Do **not** write a new driver for this. Point the
+  existing `opencode` driver at the local server
+  (`model: lmstudio/<id>` or `ollama/<id>`). See getting-started → Local models
+  and `examples/building-blocks/opencode-feature.loop.yaml`. **Skeleton B** is
+  only for someone building a *new coding agent* that happens to call a model
+  server — you would be implementing the tool loop, not a thin adapter.
 
 If it isn't obvious from the request, ask: *does this backend edit files on its
-own, or does it only return text?* That answer is the whole design.
+own, or does it only return text?* That answer is the whole design. If they
+want LM Studio / Ollama / a local OpenAI-compatible endpoint, the answer is
+`opencode` (or another agentic CLI), not a new driver.
 
 ## Step 2 — scaffold `src/drivers/<name>.ts`
 

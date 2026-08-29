@@ -29,6 +29,19 @@ export interface GenerateInput {
 }
 
 /**
+ * Headless-safe option seeds written into a generated spec so the YAML shows
+ * the flags an unattended loop actually needs. Unknown drivers get `{}`.
+ */
+export function defaultDriverOptions(driver: string): Record<string, unknown> {
+  switch (driver) {
+    case "opencode":
+      return { dangerouslySkipPermissions: true };
+    default:
+      return {};
+  }
+}
+
+/**
  * Produce a validated LoopSpec from high-level inputs. Evaluators default to the
  * task type's recommendations for the chosen language, so the generated loop is
  * runnable with minimal input.
@@ -54,7 +67,10 @@ export function generateSpec(input: GenerateInput): LoopSpec {
     requirements: input.requirements,
     driver: {
       uses: input.driver ?? "claude-agent-sdk",
-      options: input.driverOptions ?? {},
+      options: {
+        ...defaultDriverOptions(input.driver ?? "claude-agent-sdk"),
+        ...(input.driverOptions ?? {}),
+      },
     },
     evaluators:
       input.evaluators ??

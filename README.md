@@ -63,6 +63,27 @@ export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive 
 # opencode: install the `opencode` CLI; runs against local models, no key needed
 ```
 
+### Local models (LM Studio / Ollama)
+
+LM Studio and Ollama are inference servers, not coding agents. Use the
+existing `opencode` driver and point `driver.options.model` at a
+**tool-calling** local model in `provider/model` form:
+
+```yaml
+driver:
+  uses: opencode
+  options:
+    model: lmstudio/qwen/qwen3-coder-next   # prefix required
+    dangerouslySkipPermissions: true
+```
+
+Confirm ids with `curl http://127.0.0.1:1234/v1/models` and `opencode models`,
+then run `examples/building-blocks/opencode-feature.loop.yaml` (after
+`loopgen init-target opencode-feature`). A missing prefix or a stopped LM
+Studio shows up as a preflight warning. loop-generator will not grow an
+in-tree HTTP coding agent — if you need to own the tool loop, that is a
+separate project.
+
 ## Quick start
 
 Run the offline demo (no API key needed; it uses the scripted `mock` driver):

@@ -126,7 +126,7 @@ export type {
 } from "./scaffold/init-target";
 
 // Generation
-export { generateSpec, specToYaml } from "./generate";
+export { generateSpec, specToYaml, defaultDriverOptions } from "./generate";
 export type { GenerateInput } from "./generate";
 
 // Batch
