@@ -31,7 +31,7 @@ The patterns people reach for once they trust a loop:
   coverage, zero warnings, a tighter p95) and run the same loops again.
 - **Dynamic batch generation** — after a batch finishes, parse the report,
   generate N new specs for the remaining issues, run a new batch.
-- **Dogfooding** — point loops at loop-generator itself, or the user's CI/CD and
+- **In-repo application** — point loops at loop-generator itself, or the user's CI/CD and
   test framework, and let them recursively improve the improvement engine.
 - **Hierarchical / nightly** — a top loop scans the codebase, emits a
   `.batch.yaml`, runs it, reviews the report, and repeats on a schedule.

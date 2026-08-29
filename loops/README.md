@@ -1,4 +1,4 @@
-# loop-generator dog-food library
+# In-repo loops library
 
 Reusable loop specs for driving **all** changes to this monorepo through loop-generator.
 Specs live **outside** `workspace.dir` (the repo root) so `specGuard` and `evaluatorGuard`

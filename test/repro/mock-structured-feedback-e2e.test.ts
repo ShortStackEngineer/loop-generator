@@ -1,5 +1,5 @@
 /**
- * Dog-food e2e: LoopEngine + mock `useStructuredFeedback` converges when a
+ * In-repo e2e: LoopEngine + mock `useStructuredFeedback` converges when a
  * failing evaluator attaches `details.files` on `feedback.evaluations`.
  *
  * See `loops/instances/mock-structured-feedback-e2e.loop.yaml`.
@@ -14,7 +14,7 @@ import { createDefaultRegistries } from "../../src/registry";
 import { silentLogger } from "../../src/core/logger";
 import type { Evaluator } from "../../src/evaluators/types";
 
-describe("mock structured feedback e2e (dog-food repro)", () => {
+describe("mock structured feedback e2e (in-repo repro)", () => {
   let workdir: string;
 
   beforeEach(() => {

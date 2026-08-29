@@ -1,7 +1,7 @@
 import { defineConfig } from "vitest/config";
 
 /**
- * Run intentionally RED dog-food repro/acceptance tests without pulling them
+ * Run intentionally RED in-repo repro/acceptance tests without pulling them
  * into `npm test`. Keep `include` in sync with `vitest.config.ts` → `test.exclude`
  * (see loops/README.md). Add a path while baseline:strict; remove it once green.
  */
