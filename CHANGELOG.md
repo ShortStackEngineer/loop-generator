@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.4](https://github.com/ShortStackEngineer/loop-generator/compare/v0.1.3...v0.1.4) (2026-08-29)
+
+
+### Features
+
+* add loops/ dog-food library for bug, greenfield, and refactor work ([#45](https://github.com/ShortStackEngineer/loop-generator/issues/45)) ([8ff5eef](https://github.com/ShortStackEngineer/loop-generator/commit/8ff5eeffb5f266f817603c79dc5e0f78b1fdec29))
+* make local inference a first-class OpenCode path ([#48](https://github.com/ShortStackEngineer/loop-generator/issues/48)) ([45e6d0e](https://github.com/ShortStackEngineer/loop-generator/commit/45e6d0e9a35da06b6354dbafe08d8cd4df2ef678))
+* wire built-in drivers to consume structured feedback evaluations ([#46](https://github.com/ShortStackEngineer/loop-generator/issues/46)) ([feee6f4](https://github.com/ShortStackEngineer/loop-generator/commit/feee6f4729c4ee24be856674b7778a431ccfe0a4))
+
 ## [0.1.3](https://github.com/ShortStackEngineer/loop-generator/compare/v0.1.2...v0.1.3) (2026-07-16)
 
 
