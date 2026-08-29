@@ -36,6 +36,11 @@ loops/
 4. **Edit** `loops/instances/<slug>.loop.yaml`:
    - Fill in `requirements` (concrete paths, symbols, expected behavior).
    - Set evaluator paths (`repro`, `acceptance`) and `guard:` lists to match real test files.
+   - While a new check is **RED**, keep it out of `npm test` so `regression` stays
+     green under `baseline: strict`: add the path to `vitest.config.ts` → `test.exclude`
+     **and** `vitest.repro.config.ts` → `test.include`, and point the new evaluator at
+     `npx vitest run --config vitest.repro.config.ts`. Remove the path from both lists
+     once the stub goes green (then `npx vitest run <file>` is enough).
    - Confirm the **new** checks are RED: `npm run loopgen -- lint loops/instances/<slug>.loop.yaml`
      then `npm run loopgen -- run loops/instances/<slug>.loop.yaml --driver mock` only after
      you have a scripted mock path — for real work use the default driver or `-d claude-agent-sdk`.
@@ -48,8 +53,10 @@ loops/
    npm run loopgen -- run loops/instances/<slug>.loop.yaml --trace loops/.loopgen/<slug>.jsonl
    ```
 
-7. **Archive** — keep the instance spec and `LoopReport` as the audit trail. Promote patterns
-   back into `templates/` only after the same archetype worked twice.
+7. **Archive** — keep the instance spec **as-run** (driver, limits, requirements, evaluators)
+   and the `LoopReport` as the audit trail. Add a short "COMPLETED" header comment; do not
+   rewrite the spec into a green no-op. Promote patterns back into `templates/` only after
+   the same archetype worked twice.
 
 ## Archetypes
 

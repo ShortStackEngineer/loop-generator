@@ -1,11 +1,10 @@
-# Dog-food instance (completed): mock useStructuredFeedback e2e.
-#
-# Acceptance landed in test/repro/mock-structured-feedback-e2e.test.ts.
-# Re-run as a regression check (baseline off — the suite is already green):
+# COMPLETED — acceptance landed in test/repro/mock-structured-feedback-e2e.test.ts.
+# Kept as-run for the audit trail (do not rewrite into a green no-op). Re-running
+# with baseline:strict will fail baseline-vacuous now that the check is green.
 #
 #   npm run loopgen -- lint loops/instances/mock-structured-feedback-e2e.loop.yaml
 #   npx vitest run test/repro/mock-structured-feedback-e2e.test.ts
-#   npm run loopgen -- run loops/instances/mock-structured-feedback-e2e.loop.yaml -d mock
+#   npm run loopgen -- run loops/instances/mock-structured-feedback-e2e.loop.yaml
 version: 1
 name: mock-structured-feedback-e2e
 description: Integration test — mock driver consumes feedback.evaluations details.files through LoopEngine.
@@ -17,20 +16,24 @@ stack:
 workspace:
   dir: ../..
 requirements: |
-  Keep `test/repro/mock-structured-feedback-e2e.test.ts` green.
+  Implement `test/repro/mock-structured-feedback-e2e.test.ts` so it passes.
 
-  The test proves this end-to-end contract:
-  - A custom evaluator (`structured-gate`) fails while `answer.txt` is not `42`
-    and returns `details.files: { "answer.txt": "42" }` on failure.
-  - `LoopEngine` runs the `mock` driver with `useStructuredFeedback: true` and a
-    single scripted step that writes `wrong` on iteration 0.
-  - On iteration 1 the mock driver applies the structured fix from
+  The test must prove this end-to-end contract on the repo root:
+  - Register a custom evaluator (`structured-gate`) that fails while `answer.txt`
+    is not `42` and returns `details.files: { "answer.txt": "42" }` on failure.
+  - Run `LoopEngine` with the `mock` driver (`useStructuredFeedback: true`) and
+    a single scripted step that writes `wrong` on iteration 0.
+  - On iteration 1 the mock driver must apply the structured fix from
     `invocation.feedback.evaluations` (not a second scripted step).
   - The loop ends `success` with `answer.txt` containing `42`.
+
+  Do not weaken assertions. Do not modify guarded test files. Keep the existing
+  structured-feedback driver helpers behavior intact.
 driver:
-  uses: mock
+  uses: claude-agent-sdk
   options:
-    steps: []
+    model: claude-sonnet-5
+    maxTurns: 20
 evaluators:
   - uses: command
     as: acceptance
@@ -49,8 +52,9 @@ evaluators:
 success:
   type: all-pass
 limits:
-  maxIterations: 1
+  maxIterations: 6
   iterationTimeoutMs: 1200000
-  baseline: false
+  baseline: strict
   specGuard: error
   evaluatorGuard: error
+  maxCostUsd: 5.0

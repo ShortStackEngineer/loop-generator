@@ -67,7 +67,7 @@ describe("mock structured feedback e2e (dog-food repro)", () => {
 
     expect(report.success).toBe(true);
     expect(report.outcome).toBe("success");
-    expect(report.iterations.length).toBeGreaterThanOrEqual(2);
+    expect(report.iterations.length).toBe(2);
     expect(readFileSync(path.join(workdir, "answer.txt"), "utf8")).toBe("42");
 
     // Iteration 0 wrote "wrong" via the scripted step; iteration 1 applied
