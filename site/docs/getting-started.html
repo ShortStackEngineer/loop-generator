@@ -29,6 +29,7 @@
   <aside class="docs-toc">
     <div class="toc-title">On this page</div>
     <a href="#install">Install</a>
+    <a href="#local-models">Local models</a>
     <a href="#quickstart">Quick start</a>
     <a href="#concepts">Concepts</a>
     <a href="#spec">The spec</a>
@@ -70,8 +71,47 @@
     <div class="callout">
       No key? No problem. The <code>mock</code> driver is scripted and fully
       offline — everything on this page except a real agent run works without
-      any credentials.
+      any credentials. For a real agent with no API key, use
+      <code>opencode</code> against a local model (below).
     </div>
+
+    <h2 id="local-models">Local models (LM Studio / Ollama)</h2>
+    <p>
+      LM Studio and Ollama are <em>inference servers</em> — they return tokens.
+      They do not edit files or run tools. loop-generator does not ship an
+      HTTP coding-agent driver; local inference goes through the existing
+      <code>opencode</code> driver. OpenCode owns the tool loop; you point it
+      at a local provider.
+    </p>
+    <ol>
+      <li>Install the <code>opencode</code> CLI and load a
+        <strong>tool-calling</strong> model in LM Studio (or Ollama). A
+        chat-only GGUF will answer in prose and write nothing.</li>
+      <li>Confirm the ids match:
+        <code>curl http://127.0.0.1:1234/v1/models</code> (what LM Studio has
+        loaded) and <code>opencode models</code> (what OpenCode will accept).
+        The spec's <code>model</code> must be <code>provider/model</code> —
+        without the <code>lmstudio/</code> (or <code>ollama/</code>) prefix
+        OpenCode mis-resolves the id.</li>
+      <li>Write the driver block:
+<pre><code>driver:
+  uses: opencode
+  options:
+    model: lmstudio/qwen/qwen3-coder-next
+    dangerouslySkipPermissions: true</code></pre>
+      </li>
+      <li>Scaffold a RED target and run the building-block example:
+<pre><code>npm run loopgen -- init-target opencode-feature
+npm run loopgen -- run examples/building-blocks/opencode-feature.loop.yaml</code></pre>
+      </li>
+    </ol>
+    <p>
+      Preflight warns (does not fail) if <code>model</code> is omitted, lacks a
+      provider prefix, or an <code>lmstudio/</code> model can't reach
+      <code>http://127.0.0.1:1234/v1/models</code>. If you need to own the tool
+      loop yourself, that is a separate coding-agent project — loop-generator
+      will not grow an in-tree HTTP agent.
+    </p>
 
     <h2 id="quickstart">Quick start</h2>
     <p>Run the offline demo:</p>

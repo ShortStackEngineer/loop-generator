@@ -97,6 +97,7 @@ export function registerGenerate(program: Command): void {
       let driver = flags.driver ?? "claude-agent-sdk";
       let requirements = flags.requirements;
       let maxIterations = flags.maxIterations ? Number(flags.maxIterations) : undefined;
+      let driverOptions: Record<string, unknown> | undefined;
 
       if (wantInteractive && isTTY) {
         name ??= await input({ message: "Loop name:", validate: (v) => v.trim() !== "" || "required" });
@@ -111,6 +112,17 @@ export function registerGenerate(program: Command): void {
           choices: drivers.keys().map((k) => ({ name: k, value: k })),
           default: driver,
         });
+        if (driver === "opencode") {
+          const model = (
+            await input({
+              message: "OpenCode model (provider/model, e.g. lmstudio/<id>; empty to omit):",
+              default: "",
+            })
+          ).trim();
+          if (model) {
+            driverOptions = { model };
+          }
+        }
         requirements ??= await input({
           message: "Requirements (what should the agent build?):",
           validate: (v) => v.trim() !== "" || "required",
@@ -137,6 +149,7 @@ export function registerGenerate(program: Command): void {
         framework: framework || undefined,
         requirements: requirements!,
         driver,
+        driverOptions,
         maxIterations,
       };
 

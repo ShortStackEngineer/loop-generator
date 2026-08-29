@@ -22,6 +22,31 @@ import { unknownOptionWarnings } from "./options";
 // Re-export the shared helpers the opencode tests import from this module.
 export { cleanSummary, parseJsonl, lastMeaningfulLine };
 
+/** Default OpenAI-compatible models URL for a stock LM Studio install. */
+export const LMSTUDIO_MODELS_URL = "http://127.0.0.1:1234/v1/models";
+const LMSTUDIO_PROBE_MS = 1500;
+
+type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number }>;
+
+async function probeLmStudio(url: string, signal: AbortSignal): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await lmStudioFetch(url, { signal });
+    if (!res.ok) return { ok: false, error: `returned ${res.status}` };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// Test seam: preflight's LM Studio probe hits the network; tests swap this so
+// CI never needs a running server.
+let lmStudioFetch: FetchLike = globalThis.fetch as FetchLike;
+
+/** @internal — for tests only. Pass null to restore the real fetch. */
+export function __setLmStudioFetchForTests(fn: FetchLike | null): void {
+  lmStudioFetch = fn ?? (globalThis.fetch as FetchLike);
+}
+
 /** Known `driver.options` keys (unknowns → preflight warnings). */
 export const OPENCODE_OPTION_KEYS = [
   "model",
@@ -111,6 +136,24 @@ export const opencodeDriver: AgentDriver = {
       warnings.push(
         "dangerouslySkipPermissions is false, but headless `opencode run` needs it to apply edits without a permission prompt; the agent may stall waiting for confirmation.",
       );
+    }
+
+    const model = parsed.data.model;
+    if (!model) {
+      warnings.push(
+        "No model set. OpenCode will use its CLI default, which may not be the local server you think you're using. Set driver.options.model to a provider/model id (e.g. lmstudio/qwen/qwen3-coder-next).",
+      );
+    } else if (!model.includes("/")) {
+      warnings.push(
+        `model "${model}" has no provider prefix. OpenCode needs provider/model (e.g. lmstudio/…, ollama/…). Without the prefix it mis-resolves the model.`,
+      );
+    } else if (model.startsWith("lmstudio/")) {
+      const probeRes = await probeLmStudio(LMSTUDIO_MODELS_URL, AbortSignal.timeout(LMSTUDIO_PROBE_MS));
+      if (!probeRes.ok) {
+        warnings.push(
+          `LM Studio at ${LMSTUDIO_MODELS_URL} is unreachable (${probeRes.error ?? "unknown"}). Load a tool-calling model and confirm with \`curl ${LMSTUDIO_MODELS_URL}\` (or configure a custom port in OpenCode).`,
+        );
+      }
     }
 
     // Quick probe that the binary responds.

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { generateSpec, specToYaml, runRedCheck, verifySpec } from "../src/generate";
+import { generateSpec, specToYaml, runRedCheck, verifySpec, defaultDriverOptions } from "../src/generate";
 import { parseSpec, type LoopSpec } from "../src/core/spec";
 import { silentLogger } from "../src/core/logger";
 
@@ -51,6 +51,53 @@ describe("generateSpec safer defaults", () => {
     // Overrides don't disable the safe posture.
     expect(spec.limits.baseline).toBe(true);
     expect(spec.workspace.snapshot).toBe("git");
+  });
+
+  it("seeds opencode headless options so a generated spec shows the required flags", () => {
+    const spec = generateSpec({
+      name: "G",
+      taskType: "function",
+      language: "typescript",
+      requirements: "x",
+      driver: "opencode",
+    });
+    expect(spec.driver.uses).toBe("opencode");
+    expect(spec.driver.options).toEqual({ dangerouslySkipPermissions: true });
+    expect(specToYaml(spec)).toContain("dangerouslySkipPermissions: true");
+  });
+
+  it("merges caller-supplied opencode options on top of the headless seed", () => {
+    const spec = generateSpec({
+      name: "G",
+      taskType: "function",
+      language: "typescript",
+      requirements: "x",
+      driver: "opencode",
+      driverOptions: { model: "lmstudio/qwen/qwen3-coder-next" },
+    });
+    expect(spec.driver.options).toEqual({
+      dangerouslySkipPermissions: true,
+      model: "lmstudio/qwen/qwen3-coder-next",
+    });
+  });
+
+  it("lets an explicit dangerouslySkipPermissions: false win", () => {
+    const spec = generateSpec({
+      name: "G",
+      taskType: "function",
+      language: "typescript",
+      requirements: "x",
+      driver: "opencode",
+      driverOptions: { dangerouslySkipPermissions: false },
+    });
+    expect(spec.driver.options.dangerouslySkipPermissions).toBe(false);
+  });
+
+  it("does not seed options for other drivers", () => {
+    expect(defaultDriverOptions("claude-agent-sdk")).toEqual({});
+    expect(defaultDriverOptions("mock")).toEqual({});
+    const spec = generateSpec({ name: "G", taskType: "function", language: "typescript", requirements: "x" });
+    expect(spec.driver.options).toEqual({});
   });
 });
 

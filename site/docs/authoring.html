@@ -191,7 +191,12 @@ RED-able slices   falsifiable         .loop.yaml,      run goes sideways)
       <li><strong>Which driver</strong> — <code>claude-agent-sdk</code>
         (default), <code>grok</code>, <code>github-copilot</code>,
         <code>opencode</code>, or <code>mock</code> (the offline demo). Real
-        drivers need credentials (opencode runs against local models).</li>
+        hosted drivers need credentials.
+        <code>opencode</code> is the local-inference path: point
+        <code>driver.options.model</code> at a tool-calling LM Studio or
+        Ollama id in <code>provider/model</code> form (e.g.
+        <code>lmstudio/qwen/qwen3-coder-next</code>). See
+        <a href="getting-started.html#local-models">Local models</a>.</li>
     </ul>
     <p>
       If the goal is too vague to write a check for, resolve that
@@ -270,6 +275,10 @@ RED-able slices   falsifiable         .loop.yaml,      run goes sideways)
     <p>
       (From the repo without a build, prefix with <code>npm run loopgen --</code>,
       e.g. <code>npm run loopgen -- generate …</code>.)
+      <code>-d opencode</code> seeds
+      <code>dangerouslySkipPermissions: true</code>; interactive
+      (<code>-i</code>) also asks for a <code>provider/model</code> id
+      (e.g. <code>lmstudio/…</code>).
     </p>
     <p>
       Then edit the file to: swap in the <strong>real</strong> test/build

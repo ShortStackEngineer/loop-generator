@@ -12,6 +12,8 @@ import {
   formatErrorEvent,
   cleanSummary,
   lastMeaningfulLine,
+  __setLmStudioFetchForTests,
+  LMSTUDIO_MODELS_URL,
 } from "../src/drivers/opencode";
 import { silentLogger } from "../src/core/logger";
 import { runDriverConformance } from "../src/testing/conformance";
@@ -200,12 +202,35 @@ describe("opencode driver (fake CLI)", () => {
   it("preflight succeeds when the binary responds", async () => {
     const pf = await opencodeDriver.preflight!({ workdir, options: {} });
     expect(pf.ok).toBe(true);
+    expect((pf.warnings ?? []).join(" ")).toMatch(/No model set/);
   });
 
   it("preflight warns when dangerouslySkipPermissions is disabled", async () => {
     const pf = await opencodeDriver.preflight!({ workdir, options: { dangerouslySkipPermissions: false } });
     expect(pf.ok).toBe(true);
     expect((pf.warnings ?? []).join(" ")).toMatch(/dangerouslySkipPermissions|permission/i);
+  });
+
+  it("preflight warns when model lacks a provider prefix", async () => {
+    const pf = await opencodeDriver.preflight!({ workdir, options: { model: "gemma-4" } });
+    expect(pf.ok).toBe(true);
+    expect((pf.warnings ?? []).join(" ")).toMatch(/provider prefix/);
+  });
+
+  it("preflight warns when LM Studio is unreachable for an lmstudio/ model", async () => {
+    __setLmStudioFetchForTests(async () => {
+      throw new Error("fetch failed");
+    });
+    try {
+      const pf = await opencodeDriver.preflight!({
+        workdir,
+        options: { model: "lmstudio/google/gemma-4" },
+      });
+      expect(pf.ok).toBe(true);
+      expect((pf.warnings ?? []).join(" ")).toContain(LMSTUDIO_MODELS_URL);
+    } finally {
+      __setLmStudioFetchForTests(null);
+    }
   });
 
   it("preflight fails on invalid options", async () => {

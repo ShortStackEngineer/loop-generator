@@ -13,6 +13,8 @@ import {
   cleanSummary,
   lastMeaningfulLine,
   OPENCODE_OPTION_KEYS,
+  __setLmStudioFetchForTests,
+  LMSTUDIO_MODELS_URL,
   type OpencodeError,
 } from "../src/drivers/opencode";
 import { silentLogger } from "../src/core/logger";
@@ -171,10 +173,14 @@ describe("opencode driver identity", () => {
 // preflight (kills L91 name, warning branches, probe branch, modelNote ternary)
 // ─────────────────────────────────────────────────────────────────────────────
 describe("opencode preflight", () => {
+  afterEach(() => {
+    __setLmStudioFetchForTests(null);
+  });
+
   it("succeeds with model note and binary note, no warnings, when clean", async () => {
-    const pf = await opencodeDriver.preflight!({ workdir, options: { model: "lmstudio/qwen" } });
+    const pf = await opencodeDriver.preflight!({ workdir, options: { model: "ollama/qwen" } });
     expect(pf.ok).toBe(true);
-    expect(pf.notes).toContain("model: lmstudio/qwen");
+    expect(pf.notes).toContain("model: ollama/qwen");
     expect(pf.notes?.some((n) => n.startsWith("binary: "))).toBe(true);
     expect(pf.warnings ?? []).toEqual([]);
   });
@@ -184,9 +190,55 @@ describe("opencode preflight", () => {
     expect(pf.ok).toBe(true);
     expect(pf.notes).toContain("model: (CLI default)");
     expect(pf.notes).not.toContain("model: undefined");
+    expect((pf.warnings ?? []).join(" ")).toMatch(/No model set/);
   });
 
-  it("warns exactly once for an unknown option key", async () => {
+  it("warns when model has no provider prefix", async () => {
+    const pf = await opencodeDriver.preflight!({ workdir, options: { model: "qwen3-coder-next" } });
+    expect(pf.ok).toBe(true);
+    expect((pf.warnings ?? []).join(" ")).toMatch(/provider prefix/);
+    expect((pf.warnings ?? []).join(" ")).toMatch(/qwen3-coder-next/);
+  });
+
+  it("does not warn about a prefix when model already has provider/model", async () => {
+    const pf = await opencodeDriver.preflight!({ workdir, options: { model: "ollama/qwen" } });
+    expect((pf.warnings ?? []).join(" ")).not.toMatch(/provider prefix/);
+    expect((pf.warnings ?? []).join(" ")).not.toMatch(/No model set/);
+  });
+
+  it("warns when an lmstudio/ model is set but the local server is unreachable", async () => {
+    __setLmStudioFetchForTests(async () => {
+      throw new Error("ECONNREFUSED");
+    });
+    const pf = await opencodeDriver.preflight!({
+      workdir,
+      options: { model: "lmstudio/qwen/qwen3-coder-next" },
+    });
+    expect(pf.ok).toBe(true);
+    const joined = (pf.warnings ?? []).join(" ");
+    expect(joined).toContain(LMSTUDIO_MODELS_URL);
+    expect(joined).toMatch(/unreachable/);
+    expect(joined).toContain("ECONNREFUSED");
+  });
+
+  it("does not warn about LM Studio when the probe succeeds", async () => {
+    __setLmStudioFetchForTests(async () => ({ ok: true, status: 200 }));
+    const pf = await opencodeDriver.preflight!({
+      workdir,
+      options: { model: "lmstudio/qwen/qwen3-coder-next" },
+    });
+    expect(pf.ok).toBe(true);
+    expect((pf.warnings ?? []).join(" ")).not.toMatch(/LM Studio/);
+  });
+
+  it("warns when LM Studio returns a non-OK status", async () => {
+    __setLmStudioFetchForTests(async () => ({ ok: false, status: 503 }));
+    const pf = await opencodeDriver.preflight!({ workdir, options: { model: "lmstudio/foo" } });
+    expect(pf.ok).toBe(true);
+    expect((pf.warnings ?? []).join(" ")).toMatch(/returned 503/);
+  });
+
+  it("warns for an unknown option key", async () => {
     const pf = await opencodeDriver.preflight!({ workdir, options: { bogusKey: 1 } });
     expect(pf.ok).toBe(true);
     const joined = (pf.warnings ?? []).join(" ");
