@@ -90,6 +90,8 @@ echo "Next:"
 echo "  1. Edit requirements and confirm test paths"
 echo "  2. npm run loopgen -- lint $dest"
 if [[ "$kind" == bug || "$kind" == greenfield ]]; then
-  echo "  3. Write the test file (RED on main), then prove baseline fails"
+  echo "  3. Write the test file (RED on main)"
+  echo "  4. Add that path to vitest.config.ts exclude AND vitest.repro.config.ts include"
+  echo "  5. Prove baseline: new check RED, npm test still green"
 fi
-echo "  4. npm run loopgen -- run $dest"
+echo "  6. npm run loopgen -- run $dest"

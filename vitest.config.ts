@@ -3,8 +3,18 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["test/**/*.test.ts"],
-    // RED dog-food repros stay out of `npm test`; run explicitly via loop specs.
-    exclude: ["test/repro/mock-structured-feedback-e2e.test.ts"],
+    // Custom `exclude` replaces vitest defaults — keep the stock ignores, then
+    // list intentionally RED in-repo repro stubs so `npm test` / regression stays
+    // green under baseline:strict. Sync with vitest.repro.config.ts `include`
+    // (see loops/README.md). Remove a path once that stub goes green.
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/cypress/**",
+      "**/.{idea,git,cache,output,temp}/**",
+      "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
+      // RED in-repo repro stubs (also in vitest.repro.config.ts include):
+    ],
     // Driver/agent runs and command evaluators can be slow; give them room.
     testTimeout: 30_000,
     hookTimeout: 30_000,

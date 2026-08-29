@@ -1,7 +1,9 @@
-# Dog-food: prove LoopEngine + mock useStructuredFeedback via integration test.
+# COMPLETED — acceptance landed in test/repro/mock-structured-feedback-e2e.test.ts.
+# Kept as-run for the audit trail (do not rewrite into a green no-op). Re-running
+# with baseline:strict will fail baseline-vacuous now that the check is green.
 #
 #   npm run loopgen -- lint loops/instances/mock-structured-feedback-e2e.loop.yaml
-#   npx vitest run --config vitest.repro.config.ts   # RED until implemented
+#   npx vitest run test/repro/mock-structured-feedback-e2e.test.ts
 #   npm run loopgen -- run loops/instances/mock-structured-feedback-e2e.loop.yaml
 version: 1
 name: mock-structured-feedback-e2e
@@ -36,7 +38,7 @@ evaluators:
   - uses: command
     as: acceptance
     options:
-      command: npx vitest run --config vitest.repro.config.ts
+      command: npx vitest run test/repro/mock-structured-feedback-e2e.test.ts
     guard:
       - test/repro/mock-structured-feedback-e2e.test.ts
   - uses: command

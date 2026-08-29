@@ -3,7 +3,9 @@
 # Before running:
 #   1. frame-checks: write a repro test that fails on current main (RED).
 #   2. Replace __REPRO_TEST__ and the requirements block below.
-#   3. lint + baseline: new repro must fail; npm test/typecheck for unrelated regressions.
+#   3. While RED: add __REPRO_TEST__ to vitest.config.ts `test.exclude` and
+#      vitest.repro.config.ts `test.include` (keeps `npm test` green at baseline).
+#   4. lint + baseline: new repro must fail; npm test/typecheck for unrelated regressions.
 #
 #   npm run loopgen -- lint loops/instances/<slug>.loop.yaml
 #   npm run loopgen -- run  loops/instances/<slug>.loop.yaml
@@ -32,7 +34,7 @@ evaluators:
   - uses: command
     as: repro
     options:
-      command: npx vitest run __REPRO_TEST__
+      command: npx vitest run --config vitest.repro.config.ts
     guard:
       - __REPRO_TEST__
   - uses: command

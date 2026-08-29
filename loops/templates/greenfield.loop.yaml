@@ -3,7 +3,9 @@
 # Before running:
 #   1. frame-checks: acceptance tests that are RED on main (new behavior only).
 #   2. Replace __ACCEPTANCE_TEST__ and requirements.
-#   3. lint + baseline: acceptance fails; full suite + typecheck still pass (invariants).
+#   3. While RED: add __ACCEPTANCE_TEST__ to vitest.config.ts `test.exclude` and
+#      vitest.repro.config.ts `test.include` (keeps `npm test` green at baseline).
+#   4. lint + baseline: acceptance fails; full suite + typecheck still pass (invariants).
 #
 #   npm run loopgen -- lint loops/instances/<slug>.loop.yaml
 #   npm run loopgen -- run  loops/instances/<slug>.loop.yaml
@@ -32,7 +34,7 @@ evaluators:
   - uses: command
     as: acceptance
     options:
-      command: npx vitest run __ACCEPTANCE_TEST__
+      command: npx vitest run --config vitest.repro.config.ts
     guard:
       - __ACCEPTANCE_TEST__
   - uses: command
