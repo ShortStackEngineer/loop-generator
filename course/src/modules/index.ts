@@ -61,7 +61,7 @@ export const MODULES: CourseModule[] = [
     lede:
       "A green run is only meaningful if the checks exercise the requirement and the agent did real work. Play attacker against the engine's six defense layers and learn exactly where each one is (and isn't) watching.",
     Component: TrustModel,
-    docs: { label: "Trust model", href: "../docs/trust.html" },
+    docs: { label: "Why the green is earned", href: "../docs/trust.html" },
   },
   {
     id: "evaluator-design",
