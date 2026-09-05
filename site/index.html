@@ -43,6 +43,7 @@
     <pre><code><span class="c"># offline demo — no API key needed</span>
 $ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 
+[loopgen] running baseline evaluation (no agent) — disable with limits.baseline: false
 [loopgen:iter0] starting iteration 1/5
   iter 1: retry — agent ok — <span class="red">✗ answer-check</span> · 1 file(s)
 [loopgen:iter0] result: not yet — failing: answer-check
@@ -52,12 +53,15 @@ $ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 
 <span class="green">✓ SUCCESS</span> — mock-demo
 outcome: success — all checks passed
+baseline: checks <span class="red">fail as expected</span> — failing: answer-check
 iterations: 2, time: 0.0s
 changed: 1 file(s)</code></pre>
     <p style="color:var(--ink-faint); font-size:0.9rem; margin-top:0.8rem">
       Abridged. The real run also warns that its workspace isn't a git repo, so
       change detection fell back to content hashes and there's no unified diff.
-      That caveat is part of the receipt — a thinner receipt says so.
+      That caveat is part of the receipt — a thinner receipt says so. Run it a
+      second time and it fails <code>baseline-vacuous</code> after zero agent
+      iterations: the answer is already there, so there's nothing to earn.
     </p>
   </div>
 </section>
@@ -159,8 +163,8 @@ changed: 1 file(s)</code></pre>
       special-casing tests, hard-coding expected values, and editing the very
       test files that grade them</a>. Most loop runners take the agent's word
       for it. This one treats every green as a claim to be checked — and the
-      report tells you what it checked. Two of these checks are always on; the
-      other four you arm in the spec. Today's defaults only <em>warn</em>.
+      report tells you what it checked. All of it is on by default; the one thing
+      you add yourself is a spend ceiling, because only you know the number.
     </p>
     <div class="threat">
       <div class="card">
@@ -182,29 +186,30 @@ changed: 1 file(s)</code></pre>
         <p>The test files a check runs <em>are</em> the contract. They're
         hash-watched across iterations — detected from the command, plus any
         explicit <code>guard:</code> paths.</p>
-        <span class="verdict"><code>evaluatorGuard: error</code> → run fails <code class="bad">evaluator-tampered</code> · default warns</span>
+        <span class="verdict">Default (<code>evaluatorGuard: error</code>) → run fails <code class="bad">evaluator-tampered</code></span>
       </div>
       <div class="card">
         <h3>The success criteria weren't rewritten</h3>
         <p>The <code>.loop.yaml</code> is excluded from the work diff and
-        hash-watched when it lives in the workspace. With the guard armed, a
-        mid-run edit isn't a clever fix; it's a failed run.</p>
-        <span class="verdict"><code>specGuard: error</code> → run fails <code class="bad">spec-tampered</code> · default warns</span>
+        hash-watched when it lives in the workspace. A mid-run edit isn't a
+        clever fix; it's a failed run.</p>
+        <span class="verdict">Default (<code>specGuard: error</code>) → run fails <code class="bad">spec-tampered</code></span>
       </div>
       <div class="card">
         <h3>The checks were red before the work</h3>
         <p>Baseline evaluation runs every check <em>before</em> the agent's
         first turn. Already passing? Then the checks don't measure the
-        requirement. Off by default because side-effecting checks would run
-        twice.</p>
-        <span class="verdict"><code>baseline: strict</code> → run fails <code class="bad">baseline-vacuous</code> · default off</span>
+        requirement, and no agent turn is spent finding out. Set
+        <code>baseline: false</code> only for checks whose side effects must not
+        run twice.</p>
+        <span class="verdict">Default (<code>baseline: strict</code>) → run fails <code class="bad">baseline-vacuous</code></span>
       </div>
       <div class="card">
         <h3>Spend stayed under a ceiling you set</h3>
         <p><code>maxCostUsd</code> and <code>maxTokens</code> cap cumulative
         spend. A satisfied iteration always reports success first — only
         <em>further</em> spend is refused.</p>
-        <span class="verdict">ceiling set → run stops <code class="bad">budget-exceeded</code> · default no ceiling</span>
+        <span class="verdict">Opt-in: set a ceiling → run stops <code class="bad">budget-exceeded</code></span>
       </div>
     </div>
     <div class="grid cols-2" style="align-items:start; margin-top:1.8rem">

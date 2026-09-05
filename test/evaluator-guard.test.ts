@@ -122,20 +122,20 @@ describe("resolveGuardedFiles", () => {
 
 // ---------------------------------------------------------------------------
 describe("evaluator-integrity guard (engine)", () => {
-  it("schema defaults evaluatorGuard=warn and accepts off/error + evaluators[].guard", () => {
+  it("schema defaults evaluatorGuard=error and accepts off/warn + evaluators[].guard", () => {
     const d = parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" } });
-    expect(d.limits.evaluatorGuard).toBe("warn");
+    expect(d.limits.evaluatorGuard).toBe("error");
     const s = parseSpec({
       name: "d",
       requirements: "x",
       driver: { uses: "mock" },
       evaluators: [{ uses: "command", options: { command: "true" }, guard: ["a/b_test.rb"] }],
-      limits: { evaluatorGuard: "error" },
+      limits: { evaluatorGuard: "error", baseline: false },
     });
     expect(s.limits.evaluatorGuard).toBe("error");
     expect(s.evaluators[0]!.guard).toEqual(["a/b_test.rb"]);
     expect(() =>
-      parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" }, limits: { evaluatorGuard: "loud" } }),
+      parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" }, limits: { evaluatorGuard: "loud", baseline: false } }),
     ).toThrow();
   });
 
@@ -147,7 +147,7 @@ describe("evaluator-integrity guard (engine)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "test/c_test.rb": "tampered\n", "x.txt": "1" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: "true test/c_test.rb" } }],
-      limits: { maxIterations: 2, ...(guard ? { evaluatorGuard: guard } : {}) },
+      limits: { maxIterations: 2, baseline: false, ...(guard ? { evaluatorGuard: guard } : {}) },
     });
 
   it("error: editing a guarded evaluator file fails an otherwise-green run", async () => {
@@ -158,9 +158,17 @@ describe("evaluator-integrity guard (engine)", () => {
     expect(r.warnings.join("\n")).toMatch(/evaluator depends on/);
   });
 
-  it("warn (default): the edit is surfaced but the run still succeeds", async () => {
+  it("default (no evaluatorGuard set): the edit fails the run — the audit posture is on out of the box", async () => {
     write("test/c_test.rb");
     const r = await engine().run(tamperSpec(), { baseDir: workdir });
+    expect(r.outcome).toBe("evaluator-tampered");
+    expect(r.success).toBe(false);
+    expect(r.warnings.join("\n")).toMatch(/evaluator depends on/);
+  });
+
+  it("warn: the edit is surfaced but the run still succeeds", async () => {
+    write("test/c_test.rb");
+    const r = await engine().run(tamperSpec("warn"), { baseDir: workdir });
     expect(r.success).toBe(true);
     expect(r.outcome).toBe("success");
     expect(r.warnings.join("\n")).toMatch(/evaluator depends on/);
@@ -180,7 +188,7 @@ describe("evaluator-integrity guard (engine)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "src/app.rb": "code\n" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: "true test/c_test.rb" } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const r = await engine().run(spec, { baseDir: workdir });
     expect(r.success).toBe(true);
@@ -196,7 +204,7 @@ describe("evaluator-integrity guard (engine)", () => {
       // edits ONLY the guarded file → all "work" is excluded
       driver: { uses: "mock", options: { steps: [{ files: { "test/c_test.rb": "tampered\n" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: "true test/c_test.rb" } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false, evaluatorGuard: "warn" }, // warn: this test is about the diff exclusion, not the verdict
     });
     const r = await engine().run(spec, { baseDir: workdir });
     expect(r.success).toBe(true);
@@ -211,7 +219,7 @@ describe("evaluator-integrity guard (engine)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "contracts/special.txt": "tampered\n", "x.txt": "1" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: "true" }, guard: ["contracts/special.txt"] }],
-      limits: { maxIterations: 1, evaluatorGuard: "error" },
+      limits: { maxIterations: 1, evaluatorGuard: "error", baseline: false },
     });
     const r = await engine().run(spec, { baseDir: workdir });
     expect(r.outcome).toBe("evaluator-tampered");

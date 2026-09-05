@@ -124,17 +124,18 @@ engine, preserve them:
   driver that omits `changedFiles` can't produce a false vacuous-success
   warning; driver-reported files are secondary. The run still carries a
   persistent caveat (no unified diff; large trees are capped).
-- **Baseline eval** (`limits.baseline: true|"strict"`): runs checks before any
-  agent work; if already green, the checks probably don't test the requirement.
-  `"strict"` makes that a hard `baseline-vacuous` failure.
+- **Baseline eval** (`limits.baseline: "strict"|true|false`, default `"strict"`):
+  runs checks before any agent work; if already green, the checks don't test the
+  requirement, so `"strict"` fails the run (`baseline-vacuous`) before any agent
+  turn; `true` only warns; `false` skips it (side-effecting checks).
 - **Sequential evaluators** (`evaluation.concurrency`, default 1): evaluators
   run one at a time so checks sharing external state (one DB) can't race.
-- **Spec-integrity guard** (`limits.specGuard: off|warn|error`): the spec file
+- **Spec-integrity guard** (`limits.specGuard: off|warn|error`, default `error`): the spec file
   is always excluded from the work diff; when it lives in the workspace it's
   hash-watched, and `error` mode turns a mid-run spec edit into a
   `spec-tampered` failure.
-- **Evaluator-integrity guard** (`limits.evaluatorGuard: off|warn|error`,
-  `src/core/evaluator-guard.ts`): the same shape as `specGuard`, applied to the
+- **Evaluator-integrity guard** (`limits.evaluatorGuard: off|warn|error`, default
+  `error`, `src/core/evaluator-guard.ts`): the same shape as `specGuard`, applied to the
   test files an evaluator runs (the real success criteria). `resolveGuardedFiles`
   collects test-like files named in a `command` (a bare runner like `npm test`
   names none) plus explicit `evaluators[].guard` paths; they're hash-watched and

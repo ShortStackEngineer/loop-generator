@@ -79,10 +79,17 @@ export function generateSpec(input: GenerateInput): LoopSpec {
         { stack: { language: input.language, framework: input.framework } } as LoopSpec,
       ),
     success: input.success ?? ({ type: "all-pass" } as SuccessCriteria),
-    // baseline: true runs the checks once before any agent work, so a freshly
-    // generated spec surfaces the vacuous-baseline smell (checks that already
-    // pass) instead of silently reporting a green that proves nothing.
-    limits: { maxIterations: input.maxIterations ?? 5, baseline: true as const },
+    // Spell the audit posture out so a generated spec is explicit about what
+    // its report can claim: the checks must be RED before any agent work
+    // (baseline: strict), and editing the spec or a check's test files fails the
+    // run rather than warning. These match the schema defaults; they're written
+    // so the file reads as a contract without consulting the docs.
+    limits: {
+      maxIterations: input.maxIterations ?? 5,
+      baseline: "strict" as const,
+      specGuard: "error" as const,
+      evaluatorGuard: "error" as const,
+    },
   };
 
   // Round-trip through the schema so generated specs are always valid + defaulted.

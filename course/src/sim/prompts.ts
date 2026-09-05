@@ -31,7 +31,7 @@ export function toLoopSpec(mini: MiniSpec): LoopSpec {
       options: e.command ? { command: e.command } : {},
     })),
     success: { type: "all-pass" },
-    limits: { maxIterations: 5, baseline: false, specGuard: "warn", evaluatorGuard: "warn" },
+    limits: { maxIterations: 5, baseline: "strict", specGuard: "error", evaluatorGuard: "error" },
     evaluation: { concurrency: 1 },
     observability: { observers: [] },
   };

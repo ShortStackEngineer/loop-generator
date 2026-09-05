@@ -21,15 +21,16 @@ const vacuousSpec = (over: Record<string, unknown> = {}) =>
     requirements: "x",
     driver: { uses: "mock", options: { steps: [{ files: { "a.txt": "1" } }] } },
     evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
-    limits: { maxIterations: 2, ...(over as object) },
+    limits: { maxIterations: 2, baseline: false, ...(over as object) },
   });
 
 // ---------------------------------------------------------------------------
 describe("schema: baseline + specGuard", () => {
-  it("defaults baseline=false and specGuard=warn", () => {
+  it("defaults baseline=strict and specGuard=error", () => {
     const s = parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" } });
-    expect(s.limits.baseline).toBe(false);
-    expect(s.limits.specGuard).toBe("warn");
+    expect(s.limits.baseline).toBe("strict");
+    expect(s.limits.specGuard).toBe("error");
+    expect(s.limits.evaluatorGuard).toBe("error");
   });
   it("accepts baseline:'strict' and specGuard values", () => {
     const s = parseSpec({
@@ -43,7 +44,7 @@ describe("schema: baseline + specGuard", () => {
   });
   it("rejects an invalid specGuard", () => {
     expect(() =>
-      parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" }, limits: { specGuard: "loud" } }),
+      parseSpec({ name: "d", requirements: "x", driver: { uses: "mock" }, limits: { specGuard: "loud", baseline: false } }),
     ).toThrow();
   });
 });
@@ -100,7 +101,7 @@ describe("spec-tamper policy (#2)", () => {
         options: { steps: [{ files: { "my.loop.yaml": "tampered: true\n", "x.txt": "1" } }] },
       },
       evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
-      limits: { maxIterations: 2, ...(specGuard ? { specGuard } : {}) },
+      limits: { maxIterations: 2, baseline: false, ...(specGuard ? { specGuard } : {}) },
     });
 
   const runWithSpecFile = (specGuard?: string) => {
@@ -116,8 +117,15 @@ describe("spec-tamper policy (#2)", () => {
     expect(report.warnings.join("\n")).toMatch(/modified the loop spec file/);
   });
 
-  it("warn (default): tampering is surfaced but the run still succeeds", async () => {
+  it("default (no specGuard set): tampering fails the run — the audit posture is on out of the box", async () => {
     const report = await runWithSpecFile();
+    expect(report.outcome).toBe("spec-tampered");
+    expect(report.success).toBe(false);
+    expect(report.warnings.join("\n")).toMatch(/modified the loop spec file/);
+  });
+
+  it("warn: tampering is surfaced but the run still succeeds", async () => {
+    const report = await runWithSpecFile("warn");
     expect(report.success).toBe(true);
     expect(report.outcome).toBe("success");
     expect(report.warnings.join("\n")).toMatch(/modified the loop spec file/);
@@ -138,7 +146,7 @@ describe("spec-tamper policy (#2)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "my.loop.yaml": "tampered\n", "x.txt": "1" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: "exit 1" } }], // never passes
-      limits: { maxIterations: 1, specGuard: "error" },
+      limits: { maxIterations: 1, specGuard: "error", baseline: false },
     });
     const report = await engine().run(spec, { baseDir: workdir, specFile });
     expect(report.outcome).toBe("max-iterations");
@@ -157,7 +165,7 @@ describe("spec-tamper policy (#2)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "my.loop.yaml": "tampered\n" } }] } }, // edits ONLY the spec
       evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
-      limits: { maxIterations: 1, specGuard: "off" },
+      limits: { maxIterations: 1, specGuard: "off", baseline: false },
     });
     const report = await engine().run(spec, { baseDir: workdir, specFile });
     expect(report.success).toBe(true);

@@ -103,7 +103,7 @@ description: Add a fixed-window rate limiter to the API.`,
   evaluatorGuard: warn  # off | warn | error`,
     title: "limits — budgets and trust guards",
     explain:
-      "maxIterations defaults to 5. iterationTimeoutMs aborts a single iteration. maxCostUsd / maxTokens (input+output) cap cumulative driver-reported usage — checked only after a non-converging iteration, and unenforceable if the driver reports no usage. baseline defaults to false (off!) because side-effecting checks would run twice. Both guards default to \"warn\".",
+      "maxIterations defaults to 5. iterationTimeoutMs aborts a single iteration. maxCostUsd / maxTokens (input+output) cap cumulative driver-reported usage — checked only after a non-converging iteration, and unenforceable if the driver reports no usage. baseline defaults to \"strict\" (a green-before-work check set fails the run before any agent turn); set false when side-effecting checks must not run twice. Both guards default to \"error\".",
   },
   {
     id: "evaluation",
@@ -267,12 +267,12 @@ export function SpecAnatomy() {
             options: [
               "maxIterations: 10, baseline: true, guards: error",
               "maxIterations: 5, baseline: false, specGuard/evaluatorGuard: warn",
-              "maxIterations: 5, baseline: strict, guards: warn",
+              "maxIterations: 5, baseline: strict, specGuard/evaluatorGuard: error",
               "maxIterations: 3, baseline: false, guards: off",
             ],
-            answer: 1,
+            answer: 2,
             explain:
-              "Defaults: maxIterations 5, baseline false (off — because side-effecting checks would run twice), and both integrity guards \"warn\". Hardening a spec usually means baseline: strict and guards: error.",
+              "Defaults: maxIterations 5, baseline strict (a check set that's already green fails the run before any agent turn), and both integrity guards \"error\". The audit posture is on out of the box; loosen with baseline: false when checks have side effects that must not run twice, or guards: warn when you only want the caveat.",
           },
           {
             q: "Why does evaluation.concurrency default to 1?",

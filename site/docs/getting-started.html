@@ -116,6 +116,13 @@ npm run loopgen -- run examples/building-blocks/opencode-feature.loop.yaml</code
     <h2 id="quickstart">Quick start</h2>
     <p>Run the offline demo:</p>
 <pre><code>npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
+    <p>
+      Then run it again. The second run fails with <code>baseline-vacuous</code>
+      after zero agent iterations: the answer is already in the workspace, so
+      the check is green before any work and there is nothing for the agent to
+      earn. That's the default strict baseline doing its job. Reset with
+      <code>rm -rf examples/building-blocks/.workspace</code>.
+    </p>
     <p>Generate a new loop and run it:</p>
 <pre><code>npm run loopgen -- generate -i           <span class="c"># interactive</span>
 npm run loopgen -- generate -i --verify  <span class="c"># …and prove it's lint-clean + starts RED</span>
@@ -212,9 +219,9 @@ npm run loopgen -- verify-driver mock</code></pre>
   <span class="k">type:</span> all-pass         <span class="c"># all evaluators must pass</span>
 <span class="k">limits:</span>
   <span class="k">maxIterations:</span> 6
-  <span class="k">baseline:</span> false        <span class="c"># false | true | strict — run checks before the agent</span>
-  <span class="k">specGuard:</span> warn        <span class="c"># off | warn | error — agent edits this spec mid-run</span>
-  <span class="k">evaluatorGuard:</span> warn   <span class="c"># off | warn | error — agent edits the test files a check runs</span>
+  <span class="k">baseline:</span> strict       <span class="c"># strict (default) | true | false — checks must be RED before the agent</span>
+  <span class="k">specGuard:</span> error       <span class="c"># error (default) | warn | off — agent edits this spec mid-run</span>
+  <span class="k">evaluatorGuard:</span> error  <span class="c"># error (default) | warn | off — agent edits the test files a check runs</span>
   <span class="k">maxCostUsd:</span> 5.0        <span class="c"># optional — stop with "budget-exceeded" past this cumulative cost</span>
   <span class="k">maxTokens:</span> 2000000     <span class="c"># optional — same, on cumulative input+output tokens</span>
 <span class="k">evaluation:</span>

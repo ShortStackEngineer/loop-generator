@@ -55,6 +55,9 @@ loop turn over.
 npm run loopgen -- run   examples/building-blocks/mock-demo.loop.yaml
 npm run loopgen -- run   examples/building-blocks/observed-demo.loop.yaml
 npm run loopgen -- batch examples/building-blocks/punch-list.batch.yaml
+# run any of them a second time and it fails `baseline-vacuous`: the workspace
+# already holds the answer, so the check is green before any work. Reset with
+# rm -rf examples/building-blocks/.workspace examples/building-blocks/.batch-demo
 
 # agent-driven example with a scaffolded RED target:
 npm run loopgen -- init-target fizzbuzz -d ./examples/building-blocks/target

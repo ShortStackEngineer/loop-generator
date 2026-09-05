@@ -194,7 +194,7 @@ const vacuousBaseline: Scenario = {
         { cls: "warn", text: "success criteria already pass BEFORE any agent work — your checks likely do not verify the new requirement" },
       ],
       explain:
-        "Baseline runs the evaluators once before any agent work. Green-before-work is the signature of checks that don't test the new requirement (they'd pass no matter what the agent does). Default is baseline: false (off) because checks with side effects would run twice; \"true\" warns, \"strict\" fails hard.",
+        "Baseline runs the evaluators once before any agent work. Green-before-work is the signature of checks that don't test the new requirement (they'd pass no matter what the agent does). Default is baseline: \"strict\" — fail hard, before any agent turn; \"true\" only warns; \"false\" skips it, for checks with side effects that must not run twice.",
     },
     outcomeStep(
       "bad",
@@ -258,7 +258,7 @@ const specTamper: Scenario = {
         { cls: "err", text: "spec hash mismatch: task.loop.yaml was modified during the run" },
       ],
       explain:
-        "On every terminal path that could have seen agent activity, the engine re-hashes the watched spec. With specGuard: \"error\", a mid-run edit converts an apparent success into outcome spec-tampered; with \"warn\" (the default) it's a loud caveat on a green run.",
+        "On every terminal path that could have seen agent activity, the engine re-hashes the watched spec. With specGuard: \"error\", a mid-run edit converts an apparent success into outcome spec-tampered; with \"warn\" it's only a loud caveat on a green run. error is the default.",
     },
     outcomeStep(
       "bad",

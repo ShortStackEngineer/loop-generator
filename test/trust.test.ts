@@ -37,7 +37,7 @@ describe("trustworthy success (P1)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ summary: "did nothing" }] } },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, { baseDir: workdir });
 
@@ -53,7 +53,7 @@ describe("trustworthy success (P1)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "answer.txt": "42" } }] } },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, { baseDir: workdir });
 
@@ -86,7 +86,7 @@ describe("trustworthy success (P1)", () => {
       // Agent only writes a log file — the kind of churn running a test suite produces.
       driver: { uses: "mock", options: { steps: [{ files: { "log/test.log": "ran tests\n" } }] } },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, { baseDir: workdir });
 
@@ -106,7 +106,7 @@ describe("trustworthy success (P1)", () => {
         },
       },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, { baseDir: workdir });
 
@@ -130,7 +130,7 @@ describe("trustworthy success (P1)", () => {
         options: { steps: [{ files: { "answer.txt": "42", "task.loop.yaml": "name: tampered\n" } }] },
       },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false, specGuard: "warn" }, // warn: this test is about the diff exclusion, not the verdict
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, {
       baseDir: workdir,
@@ -151,7 +151,7 @@ describe("trustworthy success (P1)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "answer.txt": "42" } }] } },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await new LoopEngine(createDefaultRegistries(), silentLogger).run(spec, {
       baseDir: workdir,
@@ -178,7 +178,7 @@ describe("trustworthy success (P1)", () => {
       requirements: "x",
       driver: { uses: "incomplete" },
       evaluators: [checkAnswer],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false },
     });
     const report = await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
 

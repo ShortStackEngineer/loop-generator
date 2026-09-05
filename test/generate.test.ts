@@ -23,9 +23,11 @@ function specWith(evaluators: LoopSpec["evaluators"], success?: LoopSpec["succes
 }
 
 describe("generateSpec safer defaults", () => {
-  it("defaults to a safe baseline posture (baseline on, git change detection on)", () => {
+  it("defaults to the audit posture (strict baseline, guards on, git change detection on)", () => {
     const spec = generateSpec({ name: "G", taskType: "function", language: "typescript", requirements: "x" });
-    expect(spec.limits.baseline).toBe(true);
+    expect(spec.limits.baseline).toBe("strict");
+    expect(spec.limits.specGuard).toBe("error");
+    expect(spec.limits.evaluatorGuard).toBe("error");
     expect(spec.workspace.snapshot).toBe("git");
   });
 
@@ -33,7 +35,9 @@ describe("generateSpec safer defaults", () => {
     const yaml = specToYaml(
       generateSpec({ name: "G", taskType: "function", language: "typescript", requirements: "x" }),
     );
-    expect(yaml).toContain("baseline: true");
+    expect(yaml).toContain("baseline: strict");
+    expect(yaml).toContain("specGuard: error");
+    expect(yaml).toContain("evaluatorGuard: error");
     expect(yaml).toContain("snapshot: git");
   });
 
@@ -49,7 +53,7 @@ describe("generateSpec safer defaults", () => {
     expect(spec.workspace.dir).toBe("sub");
     expect(spec.limits.maxIterations).toBe(3);
     // Overrides don't disable the safe posture.
-    expect(spec.limits.baseline).toBe(true);
+    expect(spec.limits.baseline).toBe("strict");
     expect(spec.workspace.snapshot).toBe("git");
   });
 

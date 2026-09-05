@@ -11,6 +11,7 @@ to a reviewer, not the agent's word that it's done.
 ```
 $ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 
+[loopgen] running baseline evaluation (no agent) — disable with limits.baseline: false
 [loopgen:iter0] starting iteration 1/5
   iter 1: retry — agent ok — ✗ answer-check · 1 file(s)
 [loopgen:iter0] result: not yet — failing: answer-check
@@ -20,6 +21,7 @@ $ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 
 ✓ SUCCESS — mock-demo
 outcome: success — all checks passed
+baseline: checks fail as expected — failing: answer-check
 iterations: 2, time: 0.0s
 changed: 1 file(s)
 ```
@@ -68,19 +70,21 @@ files that grade them](https://www.anthropic.com/research/emergent-misalignment-
 Most loop runners take the agent's word for it. This one treats every green as
 a claim to be checked — and the report tells you what it checked.
 
-Two of those checks are always on. The other three you arm in the spec (three
-lines of YAML, shown in [the spec](#the-spec) below); today's defaults only
-*warn*, and hardening them is on the
-[roadmap](https://shortstackengineer.github.io/loop-generator/docs/roadmap.html).
+All of it is on by default. The one thing you have to add yourself is a spend
+ceiling, because only you know the number.
 
-| The report can tell you… | How | Armed (`error` / `strict`) | Default |
-|--------------------------|-----|----------------------------|---------|
-| Real files changed, not just build output | Workspace change detection (git-index diff) | — | always on; warning on a green run |
-| The agent actually finished its last turn | Honest `stopReason` from the driver | — | always on; warning on a green run |
-| The tests the checks run were not edited | Evaluator-integrity guard (hash-watched) | run fails: `evaluator-tampered` | `warn` |
-| The success criteria were not rewritten | Spec-integrity guard (hash-watched) | run fails: `spec-tampered` | `warn` |
-| The checks were RED before the work began | Baseline evaluation | run fails: `baseline-vacuous` | off (`baseline: false`) |
-| Spend stayed under a ceiling you set | `maxCostUsd` / `maxTokens` | run stops: `budget-exceeded` | no ceiling |
+| The report can tell you… | How | If it isn't true |
+|--------------------------|-----|------------------|
+| The checks were RED before the work began | Baseline evaluation (`baseline: strict`, default) | run fails before any agent turn: `baseline-vacuous` |
+| The tests the checks run were not edited | Evaluator-integrity guard (hash-watched; `error`, default) | run fails: `evaluator-tampered` |
+| The success criteria were not rewritten | Spec-integrity guard (hash-watched; `error`, default) | run fails: `spec-tampered` |
+| Real files changed, not just build output | Workspace change detection (git-index diff) | warning on the green run |
+| The agent actually finished its last turn | Honest `stopReason` from the driver | warning on the green run |
+| Spend stayed under a ceiling you set | `maxCostUsd` / `maxTokens` (opt-in) | run stops: `budget-exceeded` |
+
+Each guard can be loosened per spec — `baseline: false` when your checks have
+side effects that must not run twice, `warn` when you want the caveat without
+the failure — and the report says which posture the run used.
 
 "Done" is a rule over *your* check results, never the model's opinion. How each
 guard works — and where each has honest limits — is in
@@ -126,6 +130,12 @@ Run the offline demo (no API key needed; it uses the scripted `mock` driver):
 ```bash
 npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 ```
+
+Then run it again. The second run fails with `baseline-vacuous` after zero
+agent iterations: the answer is already in the workspace, so the check is green
+before any work and there is nothing for the agent to earn. That's the strict
+baseline doing its job — and it's why a green you didn't watch is still worth
+something. Reset with `rm -rf examples/building-blocks/.workspace`.
 
 Write a loop of your own and run it:
 
@@ -173,11 +183,10 @@ limits:
   maxCostUsd: 5.0        # stop (budget-exceeded) past this cumulative spend
 ```
 
-The three guards are shown in the recommended "audit" posture; today's schema
-defaults are looser (`baseline: false`, both guards `warn`), so set them
-explicitly — hardening the defaults is on the
-[roadmap](https://shortstackengineer.github.io/loop-generator/docs/roadmap.html).
-Every field, evaluator option, and success rule is documented in
+The three guard lines are the schema defaults, spelled out; `loopgen generate`
+writes them so the spec reads as a contract without consulting the docs. Drop
+`baseline` to `false` only when your checks have side effects that must not run
+twice. Every field, evaluator option, and success rule is documented in
 [the spec reference](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#spec).
 
 ## From one loop to a whole app
