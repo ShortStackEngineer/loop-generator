@@ -1,0 +1,66 @@
+# N1 — skeleton (moderately concrete; subtle tests still force care)
+version: 1
+name: n1-coach-auth
+description: Coach register/login/me; safe errors (case-insensitive email, JSON 400).
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Build the walking skeleton for a leadership-coaching client portal API.
+
+  Stack constraints (scaffold already present — do not rewrite or delete tests):
+  - TypeScript + Express; export `createApp()` from `src/app.ts`
+  - Persist data as JSON files under `process.env.LCP_DATA_DIR` (fallback `./data`)
+  - Cookie-based sessions
+  - Password hashing required (never store or return plaintext passwords)
+
+  Behavior to deliver (N1 only — do not invent client/portal features yet):
+  - A new coach can register with email, password, and name and receive an
+    identity payload (role coach) without secret fields.
+  - The same coach can log in and call a "current user" endpoint that returns
+    their identity when a session cookie is present.
+  - Unauthenticated current-user requests are rejected as unauthorized.
+  - Registering the same email twice is a conflict, even if casing differs.
+  - Login email matching is case-insensitive.
+  - Wrong passwords are unauthorized and must not echo secrets.
+  - Malformed JSON request bodies must be rejected as a client error (not a
+    server crash/500).
+
+  Make `npm run test:n1` and `npm run typecheck` pass. Leave later suites red.
+  Do not edit files under `test/`.
+driver:
+  uses: grok
+  options:
+    maxTurns: 50
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n1
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/helpers.ts
+      - package.json
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+      timeoutMs: 120000
+success:
+  type: all-pass
+limits:
+  maxIterations: 10
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

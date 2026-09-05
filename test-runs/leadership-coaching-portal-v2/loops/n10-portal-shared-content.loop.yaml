@@ -1,0 +1,54 @@
+version: 1
+name: n10-portal-shared-content
+description: Portal home assembles shared content; live opt-in notes/feedback.
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Build the client portal home experience: when a client is logged in they see
+  the coaching content the coach has made available to them.
+
+  Always client-visible once recorded: 360 results, focus areas, coaching plan,
+  recommendations.
+
+  Notes and feedback appear only when the coach has explicitly shared that
+  entry; private entries must never leak into the portal payload (including
+  stringified bodies). Another client must never see this client's content.
+  Coaches must not use the portal home endpoint.
+
+  Full suite must pass: `npm run test:n10` and typecheck. Do not edit tests.
+driver:
+  uses: grok
+  options:
+    maxTurns: 50
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n10
+      timeoutMs: 180000
+    guard:
+      - test/acceptance
+      - test/helpers.ts
+      - package.json
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 10
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

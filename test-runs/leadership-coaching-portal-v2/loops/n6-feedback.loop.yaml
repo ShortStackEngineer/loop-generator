@@ -1,0 +1,49 @@
+version: 1
+name: n6-feedback
+description: Feedback entries with opt-in share (outcome-only).
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Coaches capture feedback about a client (body + optional source). Feedback is
+  private by default; the coach can later mark a specific entry as shared with
+  the client. Portal users must not post feedback via coach tools.
+
+  Discover endpoints from failing tests. Pass `npm run test:n6` + typecheck.
+  Do not edit tests.
+driver:
+  uses: grok
+  options:
+    maxTurns: 45
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n6
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/acceptance/n6-feedback.test.ts
+      - test/helpers.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 10
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

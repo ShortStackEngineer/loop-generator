@@ -1,0 +1,52 @@
+version: 1
+name: n3-survey-360
+description: Proprietary 360 results on a client (outcome-only requirements).
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Coaches already manage clients. A coach needs to store and re-read proprietary
+  360 survey results for a client they own (summary, scored dimensions,
+  completion date).
+
+  Other coaches must not access that data. Portal-only users must not write
+  360 data through coach tooling.
+
+  Read the failing acceptance tests for the precise contract. Do not edit tests.
+  Pass `npm run test:n3` and `npm run typecheck`.
+driver:
+  uses: grok
+  options:
+    maxTurns: 40
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n3
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/acceptance/n3-survey-360.test.ts
+      - test/helpers.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

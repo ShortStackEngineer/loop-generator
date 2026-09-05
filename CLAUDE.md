@@ -4,11 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`loop-generator` generates and runs **agent coding feedback loops**: a spec (`.loop.yaml`)
-describes a task, a stack, an agent backend, and the tools that measure success;
-the engine invokes the agent, runs the measurement tools, folds the results into
-feedback, and re-invokes — until the success criteria pass or the iteration
-budget runs out. The CLI is `loopgen`; the package also ships as a library.
+`loop-generator` is a **definition-of-done engine for coding agents**: a spec
+(`.loop.yaml`) describes a task, a stack, an agent backend, and the checks that
+must go from RED to GREEN; the engine invokes the agent, runs the checks, folds
+the results into feedback, and re-invokes — until the checks pass or the budget
+runs out — then ends in a `LoopReport` whose outcome the guards, not the agent,
+decide. The CLI is `loopgen`; the package also ships as a library.
+
+The public story (README, site) is: *write the definition of done, any agent
+does the work, you get the receipt.* Keep new prose outcome-first — mechanisms
+(hash-watching, baselines, budgets) belong in the trust docs, not in headlines.
 
 ## Commands
 

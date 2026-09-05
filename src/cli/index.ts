@@ -12,7 +12,7 @@ const program = new Command();
 
 program
   .name("loopgen")
-  .description("The loop runner that doesn't believe the agent — verify agent coding loops against your own checks.")
+  .description("Write the definition of done; any agent does the work; you get a report you can review.")
   .version("0.1.0");
 
 registerGenerate(program);

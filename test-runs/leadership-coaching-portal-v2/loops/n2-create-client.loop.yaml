@@ -1,0 +1,60 @@
+# N2 — OUTCOME-ONLY requirements (contract is in tests; expect multi-iter possible)
+version: 1
+name: n2-create-client
+description: Coach manages clients; tenants isolated; clients are not coaches.
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Coach auth already works. Extend the product so a coach can manage a roster
+  of coaching clients belonging only to them.
+
+  Product outcomes (discover the exact HTTP contract from the failing tests —
+  do not invent a parallel API):
+  - An authenticated coach can add a client (name + email) and later list their
+    clients and open one by id.
+  - Anonymous callers cannot mutate the roster.
+  - One coach must never observe another coach's clients.
+  - A person who is only a *client* (portal user) must never act as a coach on
+    roster endpoints — reject those attempts as forbidden. If you cannot yet
+    create a client session, still structure coach routes so role checks are
+    ready; the full matrix is enforced once portal access exists.
+
+  Keep prior tests green. Pass `npm run test:n2` and `npm run typecheck`.
+  Do not edit `test/**` or weaken assertions.
+driver:
+  uses: grok
+  options:
+    maxTurns: 45
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n2
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/helpers.ts
+      - package.json
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

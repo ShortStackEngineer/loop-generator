@@ -1,0 +1,48 @@
+# v2 feedback-loop experiment — hardened obligations + underspecified mid nodes
+#
+# npm run loopgen -- lint  test-runs/leadership-coaching-portal-v2/coaching-portal.batch.yaml
+# npm run loopgen -- batch test-runs/leadership-coaching-portal-v2/coaching-portal.batch.yaml \
+#   --report test-runs/leadership-coaching-portal-v2/batch-report.json
+version: 1
+name: leadership-coaching-portal-v2
+concurrency: 1
+continueOnError: false
+defaults:
+  baseline: strict
+items:
+  - name: n1-coach-auth
+    spec: ./loops/n1-coach-auth.loop.yaml
+  - name: n2-create-client
+    spec: ./loops/n2-create-client.loop.yaml
+    needs: [n1-coach-auth]
+  - name: n3-survey-360
+    spec: ./loops/n3-survey-360.loop.yaml
+    needs: [n2-create-client]
+  - name: n4-focus-areas
+    spec: ./loops/n4-focus-areas.loop.yaml
+    needs: [n2-create-client]
+  - name: n5-call-notes
+    spec: ./loops/n5-call-notes.loop.yaml
+    needs: [n2-create-client]
+  - name: n6-feedback
+    spec: ./loops/n6-feedback.loop.yaml
+    needs: [n2-create-client]
+  - name: n7-coaching-plan
+    spec: ./loops/n7-coaching-plan.loop.yaml
+    needs: [n2-create-client]
+  - name: n8-recommendations
+    spec: ./loops/n8-recommendations.loop.yaml
+    needs: [n2-create-client]
+  - name: n9-portal-access
+    spec: ./loops/n9-portal-access.loop.yaml
+    needs: [n2-create-client]
+  - name: n10-portal-shared-content
+    spec: ./loops/n10-portal-shared-content.loop.yaml
+    needs:
+      - n3-survey-360
+      - n4-focus-areas
+      - n5-call-notes
+      - n6-feedback
+      - n7-coaching-plan
+      - n8-recommendations
+      - n9-portal-access

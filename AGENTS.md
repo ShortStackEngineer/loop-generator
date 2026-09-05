@@ -2,7 +2,8 @@
 
 ## Cursor Cloud specific instructions
 
-`loop-generator` is a pure TypeScript/Node CLI + library (the `loopgen` binary).
+`loop-generator` — a definition-of-done engine for coding agents — is a pure
+TypeScript/Node CLI + library (the `loopgen` binary).
 There is no server, database, or other long-running service to start — the
 "application" is the CLI, and it runs fully offline. Node ≥ 20 is required
 (CI uses Node 22); this VM already has Node 22.

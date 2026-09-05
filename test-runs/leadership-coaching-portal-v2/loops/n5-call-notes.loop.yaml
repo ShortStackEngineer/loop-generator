@@ -1,0 +1,52 @@
+# Stress node: private-by-default + explicit share toggle (easy to miss first pass)
+version: 1
+name: n5-call-notes
+description: Call notes with opt-in sharing toggle (outcome-only; multi-iter likely).
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Coaches need call notes on a client. Notes are coach-private by default, but
+  the coach must be able to explicitly share (or unshare) an individual note
+  with that client later — the portal will eventually show only shared notes.
+
+  Portal users must not create notes through coach tooling.
+
+  The acceptance suite is the contract; product language above is intentional.
+  Pass `npm run test:n5` and typecheck. Do not edit tests.
+driver:
+  uses: grok
+  options:
+    maxTurns: 45
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n5
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/acceptance/n5-call-notes.test.ts
+      - test/helpers.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 10
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

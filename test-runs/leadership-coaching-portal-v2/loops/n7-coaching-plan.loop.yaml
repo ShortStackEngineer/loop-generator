@@ -1,0 +1,48 @@
+version: 1
+name: n7-coaching-plan
+description: Coaching plan goals and actions (outcome-only).
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  A coach authors a coaching plan for a client: goals (title, status) and
+  actions (title, optional due date). Portal users must not author plans via
+  coach tools. Contract is in the acceptance tests.
+
+  Pass `npm run test:n7` and typecheck. Do not edit tests.
+driver:
+  uses: grok
+  options:
+    maxTurns: 40
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n7
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/acceptance/n7-coaching-plan.test.ts
+      - test/helpers.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1
