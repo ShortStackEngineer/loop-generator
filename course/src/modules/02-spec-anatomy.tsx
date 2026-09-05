@@ -98,9 +98,9 @@ description: Add a fixed-window rate limiter to the API.`,
   iterationTimeoutMs: 600000
   maxCostUsd: 2.50
   maxTokens: 400000
-  baseline: strict      # false | true | "strict"
-  specGuard: warn       # off | warn | error
-  evaluatorGuard: warn  # off | warn | error`,
+  baseline: strict      # "strict" (default) | true | false
+  specGuard: error      # error (default) | warn | off
+  evaluatorGuard: error # error (default) | warn | off`,
     title: "limits — budgets and trust guards",
     explain:
       "maxIterations defaults to 5. iterationTimeoutMs aborts a single iteration. maxCostUsd / maxTokens (input+output) cap cumulative driver-reported usage — checked only after a non-converging iteration, and unenforceable if the driver reports no usage. baseline defaults to \"strict\" (a green-before-work check set fails the run before any agent turn); set false when side-effecting checks must not run twice. Both guards default to \"error\".",

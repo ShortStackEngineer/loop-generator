@@ -88,8 +88,9 @@ Map the findings to fields (full schema in `reference.md`):
 - **`limits.baseline`** — default to **`"strict"`** so a vacuous (already-green)
   check set fails fast. Drop to `false` only when checks side-effect and can't
   run twice.
-- **`limits.specGuard`** — keep the spec **outside** `workspace.dir` and leave
-  `warn`. If it must live inside, set `error`.
+- **`limits.specGuard`** — defaults to `error` (a mid-run spec edit fails the
+  run). Keep the spec **outside** `workspace.dir` so the agent never has a reason
+  to touch it; leave the default alone.
 - **`limits.evaluatorGuard`** — for any loop where success is a *metric the agent
   could game* (evals, coverage bars, benchmarks), set `error` and list the scorer
   and labeled data in each check's `guard:`. It makes the grader tamper-evident, so

@@ -30,9 +30,9 @@ it.
 | `success` | — | `{ type: all-pass }` | See success criteria below. |
 | `limits.maxIterations` | — | `5` | Positive integer; the agent-turn budget. |
 | `limits.iterationTimeoutMs` | no | — | Per-iteration timeout. |
-| `limits.baseline` | — | `false` | `false` \| `true` \| `"strict"` — pre-run vacuity check. |
-| `limits.specGuard` | — | `warn` | `off` \| `warn` \| `error` — if the agent edits the spec mid-run. |
-| `limits.evaluatorGuard` | — | `warn` | `off` \| `warn` \| `error` — if the agent edits a guarded check/data file mid-run. |
+| `limits.baseline` | — | `"strict"` | `"strict"` \| `true` \| `false` — pre-run vacuity check. `strict` fails an already-green check set (`baseline-vacuous`); `true` only warns; `false` skips it. |
+| `limits.specGuard` | — | `error` | `error` \| `warn` \| `off` — a mid-run edit of the spec fails the run (`spec-tampered`). |
+| `limits.evaluatorGuard` | — | `error` | `error` \| `warn` \| `off` — a mid-run edit of a guarded check/data file fails the run (`evaluator-tampered`). |
 | `limits.maxCostUsd` | no | — | Cap cumulative driver-reported cost; a non-converging iteration past it stops with `budget-exceeded`. |
 | `limits.maxTokens` | no | — | Same ceiling on input+output tokens combined. |
 | `evaluation.concurrency` | — | `1` | Evaluators run sequentially by default. |
@@ -146,21 +146,23 @@ evaluator: latency, gte/lte: … }` for a numeric gate.
 
 ## Trust knobs — when to set what
 
-- **`limits.baseline: "strict"`** — use when the checks *should* be RED before any
-  work (the normal case for a new requirement). The run fails fast with
-  `baseline-vacuous` if they already pass, which means the checks don't test the
-  requirement. Leave `false` only when checks side-effect (db migrate/seed) and
-  can't be run twice cheaply.
-- **`limits.specGuard: "error"`** — set when the spec file lives **inside**
-  `workspace.dir` (the agent could edit its own success criteria). Best practice
-  is to keep the spec *outside* the target repo and leave `warn`.
+- **`limits.baseline`** — the default `"strict"` is right when the checks *should*
+  be RED before any work (the normal case for a new requirement). The run fails
+  fast with `baseline-vacuous` if they already pass, which means the checks don't
+  test the requirement. Set `true` to downgrade that to a warning (a live LLM
+  scorer that wobbles); set `false` only when checks side-effect (db
+  migrate/seed) and can't be run twice cheaply.
+- **`limits.specGuard`** — the default `"error"` fails a run whose spec was edited
+  mid-run. Best practice is still to keep the spec *outside* the target repo so
+  the agent never has a reason to touch it; there is no reason to loosen this.
 - **`limits.evaluatorGuard: "error"` + `evaluators[].guard`** — the *checker's* own
   integrity, the counterpart to `specGuard`. List the files a check grades against
   in its `guard:` (the scorer, the test dir, the labeled/held-out data); `error`
   makes a mid-run edit to any of them abort as `evaluator-tampered`. This is what
   keeps "optimize until the metric passes" honest — the agent's only lever becomes
-  the code under test, not the grader. Use it on every metric/eval loop; leave the
-  `warn` default when nothing about the checks is gameable.
+  the code under test, not the grader. `error` is the default; what you add on a
+  metric/eval loop is the `guard:` list, since a scorer or dataset isn't a
+  test-like path the guard can discover from the command alone.
 - **`limits.maxCostUsd` / `limits.maxTokens`** — a spend ceiling. The engine sums
   driver-reported usage across iterations and stops a non-converging run with
   `budget-exceeded` rather than funding another turn (a satisfied iteration always
@@ -188,7 +190,7 @@ Run `loopgen lint <spec> --strict`. Resolve every `✗` (error) and `⚠` (warni
 | `SPEC-EVAL-CWD-MIXED` | warn | Some checks use absolute `cd`, others bare project commands. Make cwd handling consistent. |
 | `SPEC-SMOKE-SELF-FULFILLING` | warn | A smoke creates records directly but never hits a real endpoint — it can pass without exercising the feature. Drive the real endpoint. |
 | `SPEC-REQ-UNVERIFIED-ARTIFACT` | info | Requirements mention updating docs/data but no evaluator verifies it. Add a check or accept the gap. |
-| `SPEC-BASELINE-RECOMMENDED` | info | There's a smoke but no baseline evaluation. Set `limits.baseline: true`/`"strict"`. |
+| `SPEC-BASELINE-RECOMMENDED` | info | There's a smoke and `limits.baseline: false` turned the pre-run check off. Remove the key (the default is `"strict"`) unless the checks side-effect. |
 
 Batch manifests add `BATCH-MAXITER-OVERRIDE`, `BATCH-NEEDS-AS-ORDERING`,
 `BATCH-FAILFAST-CHAIN`, `BATCH-SPEC-LOAD`, `BATCH-INVALID`.

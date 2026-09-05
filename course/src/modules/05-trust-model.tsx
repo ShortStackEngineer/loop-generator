@@ -58,7 +58,7 @@ const ATTACKS: Attack[] = [
             chip: "success + loud warning",
             kind: "warn",
             body:
-              "With evaluatorGuard: warn (loosened from the default error), the run stays green but warns: \"the agent modified file(s) an evaluator depends on … re-verify before trusting this result\". Set evaluatorGuard: error to make this a hard failure.",
+              "With evaluatorGuard: warn (loosened from the default error), the run stays green but warns: \"the agent modified file(s) an evaluator depends on … re-verify before trusting this result\". Remove the override and the default error makes this a hard failure.",
           },
   },
   {

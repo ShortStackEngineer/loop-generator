@@ -54,6 +54,8 @@ success:
 limits:
   maxIterations: 8
   iterationTimeoutMs: 1200000
-  # Run the checks once before the agent: if GET /orders already "passes", the
-  # tests aren't actually exercising the new endpoint.
-  baseline: true
+  # limits.baseline is left at its default, "strict": the checks run once before
+  # the agent, and if GET /orders already "passes" the run fails `baseline-vacuous`
+  # — the tests aren't exercising the new endpoint. After a successful run the
+  # answer is in ./target, so re-scaffold (`loopgen init-target api-feature-grok
+  # --force`) before running again.
