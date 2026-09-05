@@ -1,0 +1,48 @@
+version: 1
+name: n4-focus-areas
+description: Focus areas on a client (outcome-only).
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Let a coach set and re-read an ordered list of focus areas for a client they
+  own (title + priority). Portal users must not mutate focus areas via coach
+  tools. Discover the HTTP contract from failing tests only.
+
+  Pass `npm run test:n4` and typecheck. Do not edit tests.
+driver:
+  uses: grok
+  options:
+    maxTurns: 40
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n4
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/acceptance/n4-focus-areas.test.ts
+      - test/helpers.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 8
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

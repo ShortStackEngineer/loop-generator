@@ -12,7 +12,7 @@ const program = new Command();
 
 program
   .name("loopgen")
-  .description("Write the definition of done. Any agent does the work. You get the receipt — a report you can hand to a reviewer, not the agent's word that it's finished.")
+  .description("Write the definition of done; any agent does the work; you get a report you can review.")
   .version("0.1.0");
 
 registerGenerate(program);

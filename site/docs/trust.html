@@ -28,7 +28,7 @@
 <div class="wrap docs-body">
   <aside class="docs-toc">
     <div class="toc-title">On this page</div>
-    <a href="#trust">What the report certifies</a>
+    <a href="#trust">What the report can tell you</a>
     <a href="#lint">Linting before you run</a>
     <a href="#budget">Budget ceilings</a>
   </aside>
@@ -36,10 +36,11 @@
   <main class="docs-content">
     <h1>Why the green is earned</h1>
     <p class="lead">
-      A run ends in a report, not a claim. This page is what that report
-      certifies — that the checks were real, that the agent did the work, that
-      nothing it wasn't allowed to touch was touched — and how each guarantee
-      is made, including where it has honest limits. <code>loopgen lint</code>
+      A run ends in a report, not a claim. This page is what that report can
+      tell you — that the checks were real, that the agent did the work, that
+      nothing it wasn't allowed to touch was touched — how each check is made,
+      which are always on and which you arm in the spec, and where each has
+      honest limits. <code>loopgen lint</code>
       catches a bad spec before any agent runs at all.
     </p>
 
@@ -50,7 +51,7 @@
       <a href="../course/#/trust-model">Module 5 · The Trust Model</a>.
     </div>
 
-    <h2 id="trust">What the report certifies</h2>
+    <h2 id="trust">What the report can tell you</h2>
     <p>
       "All checks passed" is only meaningful if the checks actually exercise the
       new requirement and the agent actually did something. The loop runner that
@@ -87,7 +88,7 @@
       pre-agent workspace.
     </p>
 
-    <h3>Sequential evaluators (default)</h3>
+    <h3>The checks didn't race each other — sequential evaluators (default)</h3>
     <p>
       Evaluators run one at a time (<code>evaluation.concurrency: 1</code>) so
       checks that share external state (several <code>bin/rails</code> checks

@@ -25,9 +25,11 @@ changed: 1 file(s)
 ```
 
 That's the offline demo — no API key, a scripted `mock` agent — and it is the
-whole product in miniature: a check fails, the agent gets the failure back,
-the check passes, and the run ends in an outcome you didn't have to take on
-faith.
+shape of the whole product: a check fails, the agent gets the failure back, the
+check passes, and the run ends in an outcome you didn't have to take on faith.
+(Abridged: the real run also prints a warning that its workspace isn't a git
+repo, so change detection fell back to content hashes and there's no unified
+diff. That caveat is part of the receipt — a thinner receipt says so.)
 
 **Docs:** the full detail lives at
 **<https://shortstackengineer.github.io/loop-generator/>** — this README is the
@@ -64,20 +66,25 @@ Reward hacking isn't hypothetical: [frontier coding models have been caught
 special-casing tests, hard-coding expected values, and editing the very test
 files that grade them](https://www.anthropic.com/research/emergent-misalignment-reward-hacking).
 Most loop runners take the agent's word for it. This one treats every green as
-a claim to be checked, and the report tells you what it checked.
+a claim to be checked — and the report tells you what it checked.
 
-| What the report certifies | How | If it fails |
-|---------------------------|-----|-------------|
-| The tests the checks run were not edited | Evaluator-integrity guard (hash-watched) | `evaluator-tampered` |
-| The success criteria were not rewritten | Spec-integrity guard (hash-watched) | `spec-tampered` |
-| The checks were RED before the work began | Baseline evaluation (`baseline: strict`) | `baseline-vacuous` |
-| Real files changed, not just build output | Workspace change detection (git-index diff) | vacuous-success warning |
-| Spend stayed under the ceiling | Cost / token ceilings | `budget-exceeded` |
-| The agent actually finished its last turn | Honest `stopReason` reporting | warning on a green run |
+Two of those checks are always on. The other three you arm in the spec (three
+lines of YAML, shown in [the spec](#the-spec) below); today's defaults only
+*warn*, and hardening them is on the
+[roadmap](https://shortstackengineer.github.io/loop-generator/docs/roadmap.html).
+
+| The report can tell you… | How | Armed (`error` / `strict`) | Default |
+|--------------------------|-----|----------------------------|---------|
+| Real files changed, not just build output | Workspace change detection (git-index diff) | — | always on; warning on a green run |
+| The agent actually finished its last turn | Honest `stopReason` from the driver | — | always on; warning on a green run |
+| The tests the checks run were not edited | Evaluator-integrity guard (hash-watched) | run fails: `evaluator-tampered` | `warn` |
+| The success criteria were not rewritten | Spec-integrity guard (hash-watched) | run fails: `spec-tampered` | `warn` |
+| The checks were RED before the work began | Baseline evaluation | run fails: `baseline-vacuous` | off (`baseline: false`) |
+| Spend stayed under a ceiling you set | `maxCostUsd` / `maxTokens` | run stops: `budget-exceeded` | no ceiling |
 
 "Done" is a rule over *your* check results, never the model's opinion. How each
-guard works — and where each has honest limits — is in the
-[trust model](https://shortstackengineer.github.io/loop-generator/docs/trust.html).
+guard works — and where each has honest limits — is in
+[why the green is earned](https://shortstackengineer.github.io/loop-generator/docs/trust.html).
 
 ## Install
 
@@ -219,7 +226,7 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
 
 ## Going deeper
 
-- **[Trust model](https://shortstackengineer.github.io/loop-generator/docs/trust.html)** —
+- **[Why the green is earned](https://shortstackengineer.github.io/loop-generator/docs/trust.html)** —
   how each guard works (change detection, baseline, tamper guards, budget
   ceilings) and where each has honest limits.
 - **[Lint before you run](https://shortstackengineer.github.io/loop-generator/docs/trust.html#lint)** —

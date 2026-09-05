@@ -197,6 +197,7 @@ td code { white-space: nowrap; }
   .docs-body { grid-template-columns: 1fr; }
   .docs-toc { position: static; order: -1; border: 1px solid var(--line); border-radius: 10px; padding: 0.9rem 1.1rem; }
   .hero h1 { font-size: 2.2rem; }
+  .hero h1 br { display: none; }
 }
 
 /* ---------- footer ---------- */
@@ -218,6 +219,7 @@ td code { white-space: nowrap; }
   border-top: 1px dashed var(--line); font-size: 0.88rem; color: var(--ink);
 }
 .threat .card .verdict code { background: var(--green-bg); border-color: transparent; color: var(--green-dark); }
+.threat .card .verdict code.bad { background: var(--red-bg); color: var(--red); }
 .outcome-list { font-family: var(--mono); font-size: 0.85rem; line-height: 2; color: var(--ink-soft); }
 .outcome-list .oc { white-space: nowrap; }
 .outcome-list .oc.bad code { background: var(--red-bg); color: var(--red); border-color: transparent; }

@@ -1,0 +1,55 @@
+# Hard O3 matrix — designed to fail if role gates were deferred
+version: 1
+name: n9-portal-access
+description: Portal access + full client-must-not-use-coach-APIs matrix.
+task:
+  type: api
+stack:
+  language: typescript
+  framework: express
+  packageManager: npm
+workspace:
+  dir: ../app
+  snapshot: git
+  ignore: ["data/**", "node_modules/**", "dist/**"]
+requirements: |
+  Give each coaching client a portal login bound to their client record so they
+  can authenticate as role "client" and see their portal identity.
+
+  Critical security outcome: a client session must be forbidden from every
+  coach-facing client-management capability (creating clients, writing 360s,
+  notes, plans, recommendations, granting portal access, etc.). Coach sessions
+  must not use client-portal identity endpoints.
+
+  Exact routes and status codes live only in the acceptance suite — use
+  failing tests as your guide. Pass `npm run test:n9` and typecheck.
+  Do not edit tests.
+driver:
+  uses: grok
+  options:
+    maxTurns: 50
+    alwaysApprove: true
+evaluators:
+  - uses: command
+    as: tests
+    options:
+      command: npm run test:n9
+      timeoutMs: 180000
+    guard:
+      - test/acceptance/n1-coach-auth.test.ts
+      - test/acceptance/n2-create-client.test.ts
+      - test/acceptance/n9-portal-access.test.ts
+      - test/helpers.ts
+  - uses: command
+    as: typecheck
+    options:
+      command: npm run typecheck
+success:
+  type: all-pass
+limits:
+  maxIterations: 10
+  iterationTimeoutMs: 1200000
+  baseline: strict
+  evaluatorGuard: error
+evaluation:
+  concurrency: 1

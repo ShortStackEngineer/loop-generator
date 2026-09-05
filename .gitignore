@@ -35,3 +35,9 @@ reports/
 
 # Course build notes — kept local, not committed
 course/PROJECT-NOTES.md
+# Local experiment runs stay out of the repo, except the published case study
+test-runs/*
+!test-runs/leadership-coaching-portal-v2/
+test-runs/leadership-coaching-portal-v2/app/node_modules/
+test-runs/leadership-coaching-portal-v2/app/.git.local/
+test-runs/leadership-coaching-portal-v2/app/data/

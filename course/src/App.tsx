@@ -37,7 +37,7 @@ export function App() {
           </div>
         </div>
         <a className="docs-link" href="../">
-          ← Docs &amp; trust model
+          ← Docs · why the green is earned
         </a>
         <div className="progress-summary">
           {doneCount} of {MODULES.length} modules complete
