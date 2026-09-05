@@ -13,8 +13,8 @@
   <div class="inner">
     <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
     <nav class="site-nav">
-      <a href="trust.html">Trust model</a>
       <a class="active" href="getting-started.html">Getting started</a>
+      <a href="trust.html">Why the green is earned</a>
       <a href="authoring.html">Authoring</a>
       <a href="debugging.html">Debugging</a>
       <a href="observing.html">Observing</a>
@@ -42,11 +42,11 @@
   <main class="docs-content">
     <h1>Getting started</h1>
     <p class="lead">
-      loop-generator generates and runs agent coding feedback loops. You
-      describe a task, the stack, and the tools that measure success; the
-      runner invokes a coding agent and re-invokes it, feeding back the
-      measurement results after each turn, until the goal is met or the
-      iteration budget runs out.
+      loop-generator is a definition-of-done engine for coding agents. You
+      write the checks that are red today and go green only when the work is
+      really finished; the runner invokes a coding agent and re-invokes it,
+      feeding back what still fails after each turn, until the checks pass or
+      the budget runs out — and hands you a report you can review.
     </p>
 
     <div class="callout">
@@ -352,7 +352,7 @@ npm run mutation   <span class="c"># Stryker mutation testing (gate: 60% mutatio
 
 <footer class="site-footer">
   <div class="inner">
-    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>loop-generator — write the definition of done, any agent does the work, you get the receipt.</span>
     <span>
       <a href="../index.html">Home</a> ·
       <a href="roadmap.html">Roadmap</a> ·

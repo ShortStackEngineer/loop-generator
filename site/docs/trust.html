@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trust model — loop-generator</title>
+<title>Why the green is earned — loop-generator</title>
 <meta name="description" content="The engine's trust guards keep a finished run from reporting a false 'all checks passed' — tamper-watched specs and tests, baseline checks, workspace-diff attestation, budget ceilings — plus a lint that catches a bad spec before any agent runs.">
 <link rel="stylesheet" href="../assets/style.css">
 </head>
@@ -13,8 +13,8 @@
   <div class="inner">
     <a class="brand" href="../index.html"><span class="loopmark"></span>loop-generator</a>
     <nav class="site-nav">
-      <a class="active" href="trust.html">Trust model</a>
       <a href="getting-started.html">Getting started</a>
+      <a class="active" href="trust.html">Why the green is earned</a>
       <a href="authoring.html">Authoring</a>
       <a href="debugging.html">Debugging</a>
       <a href="observing.html">Observing</a>
@@ -28,18 +28,19 @@
 <div class="wrap docs-body">
   <aside class="docs-toc">
     <div class="toc-title">On this page</div>
-    <a href="#trust">Trustworthy results</a>
+    <a href="#trust">What the report certifies</a>
     <a href="#lint">Linting before you run</a>
     <a href="#budget">Budget ceilings</a>
   </aside>
 
   <main class="docs-content">
-    <h1>Trust model</h1>
+    <h1>Why the green is earned</h1>
     <p class="lead">
-      A green run is only a claim until something audits it. The engine layers
-      false-positive guards so "all checks passed" means the checks were real
-      and the agent did the work — and <code>loopgen lint</code> catches a bad
-      spec before any agent runs at all.
+      A run ends in a report, not a claim. This page is what that report
+      certifies — that the checks were real, that the agent did the work, that
+      nothing it wasn't allowed to touch was touched — and how each guarantee
+      is made, including where it has honest limits. <code>loopgen lint</code>
+      catches a bad spec before any agent runs at all.
     </p>
 
     <div class="callout">
@@ -49,14 +50,14 @@
       <a href="../course/#/trust-model">Module 5 · The Trust Model</a>.
     </div>
 
-    <h2 id="trust">Trustworthy results</h2>
+    <h2 id="trust">What the report certifies</h2>
     <p>
       "All checks passed" is only meaningful if the checks actually exercise the
-      new requirement and the agent actually did something. The runner guards
-      against false positives in layers:
+      new requirement and the agent actually did something. The loop runner that
+      doesn't believe the agent earns that title in layers:
     </p>
 
-    <h3>Change detection (git)</h3>
+    <h3>Real files changed — change detection (git)</h3>
     <p>
       Every iteration is diffed non-destructively, via a throwaway index. The
       report shows a <code>git diff --stat</code>, and a green run that changed
@@ -72,7 +73,7 @@
       persistent caveat: no unified diff, and very large trees are capped.
     </p>
 
-    <h3>Baseline evaluation</h3>
+    <h3>The checks were red before the work — baseline evaluation</h3>
     <p>
       <code>limits.baseline: true</code> (or <code>--baseline</code>) runs the
       checks once <em>before</em> any agent work. If they already pass, your
@@ -95,7 +96,7 @@
       independent checks that are safe to run in parallel.
     </p>
 
-    <h3>Spec-integrity guard</h3>
+    <h3>The success criteria weren't rewritten — spec-integrity guard</h3>
     <p>
       If the loop spec lives inside the workspace, the agent can edit its own
       success criteria. The runner watches the spec file, excludes it from the
@@ -107,7 +108,7 @@
       the target repo.
     </p>
 
-    <h3>Evaluator-integrity guard</h3>
+    <h3>The tests weren't edited — evaluator-integrity guard</h3>
     <p>
       The real success criteria for a <code>command</code> check are the test
       files it runs, and the agent could fake a green by editing them. The
@@ -122,7 +123,7 @@
       precedence.
     </p>
 
-    <h3>Honest agent outcomes</h3>
+    <h3>The agent actually finished — honest outcomes</h3>
     <p>
       Drivers report a <code>stopReason</code>
       (<code>completed | max_turns | aborted | error</code>). When the agent
@@ -228,7 +229,7 @@ loopgen lint my.loop.yaml --json        <span class="c"># machine-readable findi
 
 <footer class="site-footer">
   <div class="inner">
-    <span>loop-generator — generate and run agent coding feedback loops.</span>
+    <span>loop-generator — write the definition of done, any agent does the work, you get the receipt.</span>
     <span>
       <a href="../index.html">Home</a> ·
       <a href="roadmap.html">Roadmap</a> ·

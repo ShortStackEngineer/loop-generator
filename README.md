@@ -1,54 +1,82 @@
 # loop-generator
 
-**The loop runner that doesn't believe the agent.**
+**Write the definition of done. Any agent does the work. You get the receipt.**
 
-Anything can drive a coding agent in a loop until the checks go green — your
-platform probably does it natively now. The hard problem is the other one:
-*was the green earned?* loop-generator runs a coding agent against the checks
-*you* define and then **audits the result** — it hash-watches the tests and the
-spec, diffs the workspace for real work, can refuse runs whose checks were
-already passing, and caps the spend. What comes back isn't the agent's word that
-it finished; it's a `LoopReport` you can treat as evidence.
+loop-generator is a definition-of-done engine for coding agents. You write the
+checks — tests, type checks, a metric with a threshold — that are RED today and
+go GREEN only when the work is really finished. Claude, Grok, Copilot, or a
+local model works until they pass. And the run ends in a report you can hand
+to a reviewer, not the agent's word that it's done.
+
+```
+$ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
+
+[loopgen:iter0] starting iteration 1/5
+  iter 1: retry — agent ok — ✗ answer-check · 1 file(s)
+[loopgen:iter0] result: not yet — failing: answer-check
+[loopgen:iter1] starting iteration 2/5
+  iter 2: PASS — agent ok — ✓ answer-check · 1 file(s)
+[loopgen:iter1] result: PASS — all checks passed
+
+✓ SUCCESS — mock-demo
+outcome: success — all checks passed
+iterations: 2, time: 0.0s
+changed: 1 file(s)
+```
+
+That's the offline demo — no API key, a scripted `mock` agent — and it is the
+whole product in miniature: a check fails, the agent gets the failure back,
+the check passes, and the run ends in an outcome you didn't have to take on
+faith.
+
+**Docs:** the full detail lives at
+**<https://shortstackengineer.github.io/loop-generator/>** — this README is the
+short version.
+
+## How it works
 
 ```
 .loop.yaml ─► drive agent ─► audit work ─► run checks ─► fold feedback ─► LoopReport
  task+checks    any backend   diff+guards   the gate      + last diff      the verdict
 ```
 
-One `.loop.yaml` spec describes the task, the stack, and the tools that measure
-success. The engine drives the agent, audits and evaluates each iteration, folds
-the results — including a bounded diff of what the agent changed last turn —
-into the next prompt, and repeats until the checks pass with the guards quiet,
-or the budget runs out. It's an agent-agnostic verifier: one honest scorecard
-across `claude-agent-sdk`, `grok`, `github-copilot`, and `opencode` — the
-harness auditing the agent isn't sold by the agent's vendor.
+**You write what done means.** A `.loop.yaml` is the contract: the task, the
+workspace the agent may edit, and the checks that must go from RED to GREEN. If
+you can't write a check that's red today and green only when the requirement is
+met, the work isn't ready for an agent yet — and `loopgen lint` plus
+`--verify` tell you that before a token is spent.
 
-**Docs:** the full detail lives at
-**<https://shortstackengineer.github.io/loop-generator/>** — this README is the
-short version.
+**Any agent grinds toward it.** The agent is a plug-in, held to the same
+contract whichever one you pick: `claude-agent-sdk`, `grok`, `github-copilot`,
+`opencode` (including local models), or the scripted `mock`. Each round it sees
+which checks still fail and what it changed last time, and tries again until
+the checks pass or the budget runs out.
 
-## Why it audits the agent
+**You get the report.** A run ends in a `LoopReport`, not a claim. It shows
+what the agent changed, which checks it passed, what it cost, and whether
+anything it wasn't allowed to touch was touched. If the green wasn't earned, the
+report says so in one word — `baseline-vacuous`, `spec-tampered`,
+`evaluator-tampered`, `budget-exceeded` — and says why.
+
+## Why the green is earned
 
 Reward hacking isn't hypothetical: [frontier coding models have been caught
 special-casing tests, hard-coding expected values, and editing the very test
 files that grade them](https://www.anthropic.com/research/emergent-misalignment-reward-hacking).
-Most loop runners take the agent's word for it; loop-generator treats every
-green as a claim to audit.
+Most loop runners take the agent's word for it. This one treats every green as
+a claim to be checked, and the report tells you what it checked.
 
-| An unattended agent can… | The guard that catches it | Result |
-|--------------------------|---------------------------|--------|
-| Edit the test files a check runs | Evaluator-integrity guard (hash-watched) | `evaluator-tampered` |
-| Rewrite its own success criteria | Spec-integrity guard (hash-watched) | `spec-tampered` |
-| Pass checks that were already green | Baseline evaluation (`baseline: strict`) | `baseline-vacuous` |
-| Report "done" without changing anything | Workspace change detection (git-index diff) | vacuous-success warning |
-| Grind the budget instead of converging | Cost / token ceilings | `budget-exceeded` |
-| Crash while the checks happen to pass | Honest `stopReason` reporting | warning on the report |
+| What the report certifies | How | If it fails |
+|---------------------------|-----|-------------|
+| The tests the checks run were not edited | Evaluator-integrity guard (hash-watched) | `evaluator-tampered` |
+| The success criteria were not rewritten | Spec-integrity guard (hash-watched) | `spec-tampered` |
+| The checks were RED before the work began | Baseline evaluation (`baseline: strict`) | `baseline-vacuous` |
+| Real files changed, not just build output | Workspace change detection (git-index diff) | vacuous-success warning |
+| Spend stayed under the ceiling | Cost / token ceilings | `budget-exceeded` |
+| The agent actually finished its last turn | Honest `stopReason` reporting | warning on a green run |
 
-"Done" is a rule over *your* evaluator results, never the model's opinion, and
-a run ends with a `LoopReport`: one verdict, each iteration's evaluator results,
-the diff of the real work, and every caveat the guards raised — green with
-receipts, or an honest name for why not. How each guard works, and where each
-has honest limits, is in the
+"Done" is a rule over *your* check results, never the model's opinion. How each
+guard works — and where each has honest limits — is in the
 [trust model](https://shortstackengineer.github.io/loop-generator/docs/trust.html).
 
 ## Install
@@ -92,7 +120,7 @@ Run the offline demo (no API key needed; it uses the scripted `mock` driver):
 npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
 ```
 
-Generate a new loop and run it:
+Write a loop of your own and run it:
 
 ```bash
 npm run loopgen -- generate -i --verify   # interactive; proves it's lint-clean + starts RED
@@ -145,6 +173,38 @@ explicitly — hardening the defaults is on the
 Every field, evaluator option, and success rule is documented in
 [the spec reference](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#spec).
 
+## From one loop to a whole app
+
+One loop delivers one checkable outcome. An application is a graph of them, and
+the same discipline scales: cut the app into the smallest slices a check can
+observe ("a coach can sign in", "a client cannot see coach-only pages"), order
+them by what each needs built first, give every slice its own RED checks, and
+run the graph as a `.batch.yaml` — the scheduler respects `needs`, caps
+concurrency, and never lets two loops edit the same workspace at once.
+
+The repo ships the tooling for that as Claude Code skills in
+[`.claude/skills/`](./.claude/skills) — they load automatically when you open
+the repo in Claude Code:
+
+- **`frame-app`** — decompose an app spec into a dependency-ordered graph of
+  RED-able slices and emit the buildable frontier.
+- **`frame-checks`** — turn one request into falsifiable acceptance checks:
+  RED now, for the right reason, hard to fake.
+- **`author-loop`** — interview the goal, inspect the repo for the real
+  commands, and hand back a spec that lints clean and starts RED.
+- **`debug-loop`** — diagnose a failed, stalled, or suspiciously-green run by
+  its `outcome` without spending agent budget.
+- **`add-driver`** — scaffold a new agent backend and drive it through the
+  conformance harness.
+
+It has been run end to end: [`test-runs/leadership-coaching-portal-v2`](./test-runs/leadership-coaching-portal-v2)
+builds a ten-slice coaching portal from a plan, per-slice checks, and a batch
+manifest — 10/10 trustworthy greens under `baseline: strict` with the
+evaluator guard armed, for about $1.77 and nine minutes of agent time. The
+run's README also records what the experiment *didn't* show, which is how a
+case study should read. The in-repo [`loops/`](./loops) library applies the
+same workflow to changes to loop-generator itself.
+
 ## When to use it
 
 Use it where success is mechanically checkable and the run is unattended:
@@ -166,21 +226,13 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
   `loopgen lint` catches a misconfigured spec in milliseconds, before any agent
   turn: wrong workspace, missing binaries, destructive checks, racy parallelism.
 - **[Observing a run](https://shortstackengineer.github.io/loop-generator/docs/observing.html)** —
-  evaluators tell you *what* failed; the trace tells you *why the agent didn't
+  the checks tell you *what* failed; the trace tells you *why the agent didn't
   fix it*. `--trace file.jsonl` for JSONL, or declare `jsonl` / `otlp` observers
   in the spec (standard OTLP spans, zero OTel dependency).
 - **[Authoring](https://shortstackengineer.github.io/loop-generator/docs/authoring.html)
   and [debugging](https://shortstackengineer.github.io/loop-generator/docs/debugging.html) workflows** —
   interview the goal into something checkable and prove the spec RED before
   spending budget; diagnose a failed or suspiciously-green run by its `outcome`.
-- **[Agent-assisted workflows](https://shortstackengineer.github.io/loop-generator/docs/authoring.html#skills)
-  (`.claude/skills/`)** — the engine audits the run; these Claude Code skills
-  produce checks worth auditing. The authoring pipeline: `frame-checks` (turn
-  one request into falsifiable acceptance checks) → `author-loop` (a verified,
-  lint-clean spec that starts RED). Plus `debug-loop` (diagnose a run by its
-  `outcome` without spending agent budget) and `add-driver` (scaffold a new
-  backend and drive it through `verify-driver`). They load automatically when
-  you open this repo in Claude Code.
 - **[Batch runs](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#batch)** —
   a `.batch.yaml` punch list runs many specs with `needs` ordering, a
   concurrency cap, and same-workspace auto-serialization.
@@ -189,6 +241,9 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
   types, observers) plus declarative success criteria. Register your own and
   pass them in; the engine — and its guards — never change. New drivers are
   gated by a conformance harness (`loopgen verify-driver`).
+- **[The interactive workshop](https://shortstackengineer.github.io/loop-generator/course/)** —
+  seven modules that run the real engine code in the browser: step through
+  scripted runs, build the prompts, red-team the guards.
 
 ## Examples
 
@@ -210,10 +265,9 @@ npm run mutation   # Stryker mutation testing (gate: 60% mutation score)
 
 ## Status
 
-The verification layer is the point; the loop is the chassis it rides on. v1 is
-the full framework: a working engine, the four extension points, the conformance
-harness, five drivers (`mock`, `claude-agent-sdk`, `grok`, `github-copilot`,
-`opencode`), the `command` + `experiment` evaluators, the `jsonl` + `otlp`
-observers, and five task types (`function`, `api`, `webapp`, `experiment`,
-`generic`). Task types beyond `function` ship with prompt
+v1 is the full framework: a working engine, the four extension points, the
+conformance harness, five drivers (`mock`, `claude-agent-sdk`, `grok`,
+`github-copilot`, `opencode`), the `command` + `experiment` evaluators, the
+`jsonl` + `otlp` observers, and five task types (`function`, `api`, `webapp`,
+`experiment`, `generic`). Task types beyond `function` ship with prompt
 scaffolding and recommended evaluators; deepen them as you go.

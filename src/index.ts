@@ -1,5 +1,6 @@
 /**
- * loop-generator — generate and run agent coding feedback loops.
+ * loop-generator — a definition-of-done engine for coding agents: write the
+ * checks, any agent does the work, you get the report.
  *
  * Public API. The three extension points are drivers (agents), evaluators
  * (feedback tools), and task types (prompt scaffolding). Register your own on

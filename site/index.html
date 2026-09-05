@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>loop-generator — the loop runner that doesn't believe the agent</title>
-<meta name="description" content="Any loop can drive a coding agent until the checks go green. loop-generator verifies the green: tamper-watched tests and specs, baseline checks, workspace-diff attestation, budget ceilings — and a report you can treat as evidence.">
+<title>loop-generator — write the definition of done, any agent does the work, you get the receipt</title>
+<meta name="description" content="A definition-of-done engine for coding agents. You write the checks; Claude, Grok, Copilot, or a local model works until they pass; the run ends in a report you can hand to a reviewer — not the agent's word that it's finished.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -13,8 +13,8 @@
   <div class="inner">
     <a class="brand" href="index.html"><span class="loopmark"></span>loop-generator</a>
     <nav class="site-nav">
-      <a href="docs/trust.html">Trust model</a>
       <a href="docs/getting-started.html">Getting started</a>
+      <a href="docs/trust.html">Why the green is earned</a>
       <a href="docs/authoring.html">Authoring</a>
       <a href="docs/debugging.html">Debugging</a>
       <a href="docs/observing.html">Observing</a>
@@ -28,141 +28,81 @@
 <!-- ============ HERO ============ -->
 <section class="hero">
   <div class="wrap">
-    <div class="kicker">Verified agent loops</div>
-    <h1>The loop runner that<br><span class="red">doesn't believe</span> the agent.</h1>
+    <div class="kicker">A definition-of-done engine for coding agents</div>
+    <h1>Write the definition of done.<br>Any agent does the work.<br><span class="green">You get the receipt.</span></h1>
     <p class="lead">
-      Anything can run a coding agent until the checks go green — your platform
-      probably does it natively. The hard problem is the other one:
-      <em>was the green earned?</em> loop-generator hash-watches the tests and
-      the spec, diffs the workspace for real work, fails runs whose checks were
-      already passing, caps the spend — and hands you a report you can treat
-      as evidence, not as the agent's opinion of itself.
+      You write the checks; Claude, Grok, Copilot, or a local model works until
+      they pass; and the run ends in a report you can hand to a reviewer — not
+      the agent's word that it's finished.
     </p>
     <div class="cta-row">
       <a class="btn primary" href="docs/getting-started.html">Get started</a>
-      <a class="btn ghost" href="docs/trust.html">Read the trust model</a>
+      <a class="btn ghost" href="docs/trust.html">Why the green is earned</a>
       <a class="btn ghost" href="course/">Take the interactive workshop</a>
     </div>
     <pre><code><span class="c"># offline demo — no API key needed</span>
-npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
+$ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml
+
+[loopgen:iter0] starting iteration 1/5
+  iter 1: retry — agent ok — <span class="red">✗ answer-check</span> · 1 file(s)
+[loopgen:iter0] result: not yet — failing: answer-check
+[loopgen:iter1] starting iteration 2/5
+  iter 2: PASS — agent ok — <span class="green">✓ answer-check</span> · 1 file(s)
+[loopgen:iter1] result: PASS — all checks passed
+
+<span class="green">✓ SUCCESS</span> — mock-demo
+outcome: success — all checks passed
+iterations: 2, time: 0.0s
+changed: 1 file(s)</code></pre>
   </div>
 </section>
 
-<!-- ============ THREAT MODEL ============ -->
+<!-- ============ THREE DOORS ============ -->
 <section class="alt">
   <div class="wrap">
-    <div class="kicker">The threat model</div>
-    <h2>Six ways an unattended agent fakes a “done”</h2>
-    <p class="lead narrow" style="margin:0 0 0.6rem">
-      Reward hacking isn't hypothetical — frontier coding models have been
-      <a href="https://www.anthropic.com/research/emergent-misalignment-reward-hacking">caught
-      special-casing tests, hard-coding expected values, and editing the very
-      test files that grade them</a>. Most loop runners take the agent's word
-      for it. This one treats every green as a claim to be audited.
-    </p>
-    <div class="threat">
+    <div class="kicker">Start where you are</div>
+    <h2>Three ways in</h2>
+    <div class="grid cols-3">
       <div class="card">
-        <h3>It edits the tests</h3>
-        <p>The test files a check runs <em>are</em> the contract. The
-        evaluator-integrity guard hash-watches them across iterations —
-        heuristically detected from the command, plus any explicit
-        <code>guard:</code> paths.</p>
-        <span class="verdict">Caught → <code>evaluator-tampered</code></span>
+        <span class="mono-tag">Platform &amp; senior engineers</span>
+        <h3>Run it where nobody is watching</h3>
+        <p>Overnight, in CI, across a fleet. Every run ends in a report with one
+        of nine outcomes, each iteration's results, and the diff of the real
+        work — and streams the agent's trajectory as JSONL or standard OTLP
+        spans to whatever you already use.</p>
+        <p style="margin-top:0.6rem"><a href="docs/trust.html">What the report certifies →</a><br><a href="docs/observing.html">Observing runs →</a></p>
       </div>
       <div class="card">
-        <h3>It rewrites its own success criteria</h3>
-        <p>The <code>.loop.yaml</code> spec is excluded from the work diff and
-        hash-watched when it lives in the workspace. A mid-run edit isn't a
-        clever fix; it's a failed run.</p>
-        <span class="verdict">Caught → <code>spec-tampered</code></span>
+        <span class="mono-tag">Solo builders</span>
+        <h3>Describe the app. Wake up to one that works.</h3>
+        <p>Cut a product into slices a check can observe, give each its own
+        red-then-green checks, and run the whole graph as one batch. A
+        ten-slice coaching portal built this way came back 10/10 for about
+        $1.77 — and the report showed the work, not just the "done".</p>
+        <p style="margin-top:0.6rem"><a href="docs/authoring.html#skills">From one loop to an app →</a><br><a href="docs/getting-started.html#local-models">Run it on a local model →</a></p>
       </div>
       <div class="card">
-        <h3>The checks were already green</h3>
-        <p>Baseline evaluation runs every check <em>before</em> the agent's
-        first turn. Already passing? Then the checks don't measure the
-        requirement — the loop refuses to launder that into a success.</p>
-        <span class="verdict">Caught → <code>baseline-vacuous</code></span>
-      </div>
-      <div class="card">
-        <h3>“Done” — without changing anything</h3>
-        <p>Every iteration is git-diffed via a throwaway index, with build and
-        runtime artifacts excluded. A green run that changed no source files is
-        flagged as likely vacuous, not celebrated.</p>
-        <span class="verdict">Caught → vacuous-success warning</span>
-      </div>
-      <div class="card">
-        <h3>It grinds your budget instead of converging</h3>
-        <p><code>maxCostUsd</code> and <code>maxTokens</code> cap cumulative
-        driver-reported spend. A satisfied iteration always reports success
-        first — only <em>further</em> spend is refused.</p>
-        <span class="verdict">Stopped → <code>budget-exceeded</code></span>
-      </div>
-      <div class="card">
-        <h3>It crashed, but the checks happened to pass</h3>
-        <p>Drivers report an honest <code>stopReason</code>. An agent that
-        errored or ran out of turns on an otherwise-green run puts a caveat in
-        <code>report.warnings</code> — a warning on a green run is a finding.</p>
-        <span class="verdict">Surfaced → warning on the report</span>
-      </div>
-    </div>
-    <div class="callout" style="margin-top:2rem">
-      <strong>And a linter that runs before a single token is spent.</strong>
-      <code>loopgen lint</code> catches the misconfigurations that fake results
-      upstream — self-fulfilling smoke tests, wrong workspace, missing binaries,
-      destructive checks — in milliseconds.
-      <a href="docs/trust.html">Every guard and rule, documented →</a>
-    </div>
-  </div>
-</section>
-
-<!-- ============ THE REPORT ============ -->
-<section>
-  <div class="wrap">
-    <div class="kicker">The deliverable</div>
-    <h2>The report is the product</h2>
-    <p class="lead narrow" style="margin:0">
-      A run doesn't end with the agent saying “done.” It ends with a
-      <code>LoopReport</code>: a verdict from the outcome list below, every
-      iteration's evaluator results, the diff of real work, and every caveat
-      the guards raised. Green with receipts — or an honest name for why not.
-    </p>
-    <div class="grid cols-2" style="align-items:start; margin-top:1.8rem">
-      <div class="card">
-        <h3>Every way a run can end</h3>
-        <p class="outcome-list">
-          <span class="oc good"><code>success</code></span> — checks pass, guards quiet<br>
-          <span class="oc bad"><code>spec-tampered</code></span> · <span class="oc bad"><code>evaluator-tampered</code></span><br>
-          <span class="oc bad"><code>baseline-vacuous</code></span> — checks never went red<br>
-          <span class="oc warn"><code>budget-exceeded</code></span> · <span class="oc warn"><code>max-iterations</code></span><br>
-          <span class="oc warn"><code>preflight-failed</code></span> · <span class="oc warn"><code>aborted</code></span> · <span class="oc warn"><code>error</code></span>
-        </p>
-        <p>No outcome is inferred from the agent's self-report. “Done” is a
-        rule over evaluator results — never the model's opinion.</p>
-      </div>
-      <div class="card">
-        <h3>Evidence at three depths</h3>
-        <p>The outcome tells you <em>what</em> happened. Each iteration's
-        evaluator feedback tells you <em>what failed</em>. And observers stream
-        the agent's inner trajectory — turns, tool calls, model output,
-        warnings — as a JSONL trace or standard OTLP spans (zero OpenTelemetry
-        dependency) for Jaeger, Grafana Tempo, or any collector. When you don't
-        trust the verdict, read the trace.</p>
-        <p style="margin-top:0.6rem"><a href="docs/observing.html">Observing runs →</a></p>
+        <span class="mono-tag">Engineering leaders</span>
+        <h3>Agent work you can review, audit, and budget</h3>
+        <p>The loop is a versioned file your team code-reviews, not a script on
+        someone's laptop. Spend is capped per run. The report is an artifact you
+        can keep — the difference between a party trick and a process.</p>
+        <p style="margin-top:0.6rem"><a href="https://github.com/ShortStackEngineer/loop-generator/blob/master/docs/blog-agentic-loops-so-what-leaders.md">What should a leader actually do about agent loops? →</a></p>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ============ HOW IT WORKS ============ -->
-<section class="alt">
+<section>
   <div class="wrap">
-    <div class="kicker">The chassis</div>
-    <h2>Yes, it's also a very good loop</h2>
+    <div class="kicker">How it works</div>
+    <h2>The checks are the contract</h2>
     <p class="lead narrow" style="margin:0">
-      One <code>.loop.yaml</code> spec describes the task, the workspace, the
-      agent backend, and the checks that measure success. The engine drives the
-      agent, audits the work, feeds every failure back, and repeats — until the
-      checks pass or the budget runs out.
+      One <code>.loop.yaml</code> describes the task, the workspace the agent
+      may edit, and the checks that are red today and go green only when the
+      work is really finished. The engine drives the agent, feeds every
+      failure back, and repeats — until the checks pass or the budget runs out.
     </p>
     <div class="flow">
       <div class="node"><strong>.loop.yaml</strong><span>task + checks</span></div>
@@ -179,36 +119,152 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
     </div>
     <div class="grid cols-3" style="margin-top:2.2rem">
       <div class="card">
-        <span class="mono-tag">AgentDriver</span>
-        <h3>Agent-agnostic by design</h3>
-        <p>One interface wraps the backend: <code>claude-agent-sdk</code>,
-        <code>grok</code>, <code>github-copilot</code>, <code>opencode</code>,
-        or a scripted <code>mock</code>. One honest scorecard across vendors —
-        the harness auditing the agent isn't sold by the agent's vendor.</p>
+        <h3>You write what done means</h3>
+        <p>If you can't write a check that's red before the work and green only
+        when the requirement is met, the work isn't ready for an agent yet.
+        <code>loopgen lint</code> and <code>generate --verify</code> tell you
+        that before a token is spent.</p>
       </div>
       <div class="card">
-        <span class="mono-tag">Evaluator</span>
-        <h3>Checks that can say no</h3>
-        <p><code>command</code> covers anything with a CLI and an exit code —
-        tests, linters, type checkers, builds. <code>experiment</code> compares
-        a numeric metric against thresholds or baselines. Or register your own
-        in ~15 lines.</p>
+        <h3>Any agent grinds toward it</h3>
+        <p>The agent is a plug-in — <code>claude-agent-sdk</code>,
+        <code>grok</code>, <code>github-copilot</code>, <code>opencode</code>
+        with a local model, or a scripted <code>mock</code> — held to the same
+        contract whichever you pick. Each round it sees what still fails and
+        what it changed last time.</p>
       </div>
       <div class="card">
-        <span class="mono-tag">Conformance</span>
-        <h3>Even the drivers are audited</h3>
-        <p>New backend? <code>loopgen verify-driver</code> runs it against a
-        behavioral contract — reports a name, does requested work, applies
-        feedback, handles aborts — before it's trusted inside a loop. Plus
-        <code>.batch.yaml</code> punch lists with dependency ordering and
-        same-workspace serialization.</p>
+        <h3>You get the report</h3>
+        <p>What the agent changed, which checks it passed, what it cost, and
+        whether anything it wasn't allowed to touch was touched. If the green
+        wasn't earned, the report says so in one word — and says why.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ WHY THE GREEN IS EARNED ============ -->
+<section class="alt">
+  <div class="wrap">
+    <div class="kicker">Why the green is earned</div>
+    <h2>What the report certifies</h2>
+    <p class="lead narrow" style="margin:0 0 0.6rem">
+      Reward hacking isn't hypothetical — frontier coding models have been
+      <a href="https://www.anthropic.com/research/emergent-misalignment-reward-hacking">caught
+      special-casing tests, hard-coding expected values, and editing the very
+      test files that grade them</a>. Most loop runners take the agent's word
+      for it. This one treats every green as a claim to be checked — and the
+      report tells you what it checked.
+    </p>
+    <div class="threat">
+      <div class="card">
+        <h3>The tests weren't edited</h3>
+        <p>The test files a check runs <em>are</em> the contract. They're
+        hash-watched across iterations — detected from the command, plus any
+        explicit <code>guard:</code> paths.</p>
+        <span class="verdict">Otherwise → <code>evaluator-tampered</code></span>
+      </div>
+      <div class="card">
+        <h3>The success criteria weren't rewritten</h3>
+        <p>The <code>.loop.yaml</code> is excluded from the work diff and
+        hash-watched when it lives in the workspace. A mid-run edit isn't a
+        clever fix; it's a failed run.</p>
+        <span class="verdict">Otherwise → <code>spec-tampered</code></span>
+      </div>
+      <div class="card">
+        <h3>The checks were red before the work</h3>
+        <p>Baseline evaluation runs every check <em>before</em> the agent's
+        first turn. Already passing? Then the checks don't measure the
+        requirement, and the loop won't launder that into a success.</p>
+        <span class="verdict">Otherwise → <code>baseline-vacuous</code></span>
+      </div>
+      <div class="card">
+        <h3>Real files changed</h3>
+        <p>Every iteration is diffed with build and runtime artifacts excluded.
+        A green run that changed no source files is flagged as likely vacuous,
+        not celebrated.</p>
+        <span class="verdict">Otherwise → vacuous-success warning</span>
+      </div>
+      <div class="card">
+        <h3>Spend stayed under the ceiling</h3>
+        <p><code>maxCostUsd</code> and <code>maxTokens</code> cap cumulative
+        spend. A satisfied iteration always reports success first — only
+        <em>further</em> spend is refused.</p>
+        <span class="verdict">Otherwise → <code>budget-exceeded</code></span>
+      </div>
+      <div class="card">
+        <h3>The agent actually finished</h3>
+        <p>Drivers report an honest <code>stopReason</code>. An agent that
+        errored or ran out of turns on an otherwise-green run puts a caveat in
+        <code>report.warnings</code> — a warning on a green run is a finding.</p>
+        <span class="verdict">Otherwise → warning on the report</span>
+      </div>
+    </div>
+    <div class="grid cols-2" style="align-items:start; margin-top:1.8rem">
+      <div class="card">
+        <h3>Every way a run can end</h3>
+        <p class="outcome-list">
+          <span class="oc good"><code>success</code></span> — checks pass, guards quiet<br>
+          <span class="oc bad"><code>spec-tampered</code></span> · <span class="oc bad"><code>evaluator-tampered</code></span><br>
+          <span class="oc bad"><code>baseline-vacuous</code></span> — checks never went red<br>
+          <span class="oc warn"><code>budget-exceeded</code></span> · <span class="oc warn"><code>max-iterations</code></span><br>
+          <span class="oc warn"><code>preflight-failed</code></span> · <span class="oc warn"><code>aborted</code></span> · <span class="oc warn"><code>error</code></span>
+        </p>
+        <p>No outcome is inferred from the agent's self-report. "Done" is a
+        rule over your check results — never the model's opinion.</p>
+      </div>
+      <div class="card">
+        <h3>And a linter that runs before a single token is spent</h3>
+        <p><code>loopgen lint</code> catches the misconfigurations that fake
+        results upstream — self-fulfilling smoke tests, wrong workspace,
+        missing binaries, destructive checks — in milliseconds. When you don't
+        trust the verdict, the trace shows the agent's every turn.</p>
+        <p style="margin-top:0.6rem"><a href="docs/trust.html">Every guard and rule, documented →</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FROM ONE LOOP TO AN APP ============ -->
+<section>
+  <div class="wrap">
+    <div class="kicker">From one loop to a whole app</div>
+    <h2>The same discipline, at the size of a product</h2>
+    <p class="lead narrow" style="margin:0">
+      One loop delivers one checkable outcome. An application is a graph of
+      them. Cut it into the smallest slices a check can observe, order them by
+      what each needs built first, give every slice its own red checks, and run
+      the graph as a <code>.batch.yaml</code> — dependency-ordered, concurrency
+      capped, never two loops in one workspace at once.
+    </p>
+    <div class="grid cols-2" style="align-items:start">
+      <div class="card">
+        <h3>The authoring pipeline, as Claude Code skills</h3>
+        <p><code>frame-app</code> turns a product spec into a dependency graph
+        of slices. <code>frame-checks</code> turns one slice into acceptance
+        checks that are red now, for the right reason, and hard to fake.
+        <code>author-loop</code> writes the spec and proves it lints clean and
+        starts red. <code>debug-loop</code> reads a failed or suspicious run
+        and finds the fix without spending agent budget. They load when you
+        open the repo in Claude Code.</p>
+        <p style="margin-top:0.6rem"><a href="docs/authoring.html#skills">Agent-assisted authoring →</a></p>
+      </div>
+      <div class="card">
+        <h3>Run end to end</h3>
+        <p>A ten-slice leadership-coaching portal — sign-in, clients, surveys,
+        notes, a client portal with role separation — built from a plan, ten
+        check files, and one batch manifest. Result: 10/10 trustworthy greens
+        under a strict baseline with the evaluator guard armed, about $1.77 and
+        nine minutes of agent time. The write-up also records what the
+        experiment <em>didn't</em> show.</p>
+        <p style="margin-top:0.6rem"><a href="https://github.com/ShortStackEngineer/loop-generator/tree/master/test-runs/leadership-coaching-portal-v2">Read the run →</a></p>
       </div>
     </div>
   </div>
 </section>
 
 <!-- ============ THE SPEC ============ -->
-<section>
+<section class="alt">
   <div class="wrap">
     <div class="kicker">The spec</div>
     <h2>The whole contract in one file</h2>
@@ -248,6 +304,39 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
       The guards are three lines of YAML. Everything after that is the engine's
       problem — including proving it to whoever reads the report.
     </p>
+  </div>
+</section>
+
+<!-- ============ ANY AGENT ============ -->
+<section>
+  <div class="wrap">
+    <div class="kicker">Any agent</div>
+    <h2>The harness isn't sold by the agent's vendor</h2>
+    <div class="grid cols-3">
+      <div class="card">
+        <span class="mono-tag">AgentDriver</span>
+        <h3>One interface, five backends</h3>
+        <p><code>claude-agent-sdk</code>, <code>grok</code>,
+        <code>github-copilot</code>, <code>opencode</code> — including LM Studio
+        and Ollama models through it — or a scripted <code>mock</code> for
+        offline runs. Swap with <code>--driver</code>; the spec doesn't change.</p>
+      </div>
+      <div class="card">
+        <span class="mono-tag">Evaluator</span>
+        <h3>Checks that can say no</h3>
+        <p><code>command</code> covers anything with a CLI and an exit code —
+        tests, linters, type checkers, builds. <code>experiment</code> compares
+        a numeric metric against thresholds or baselines. Or register your own
+        in ~15 lines.</p>
+      </div>
+      <div class="card">
+        <span class="mono-tag">Conformance</span>
+        <h3>Even the drivers are audited</h3>
+        <p>New backend? <code>loopgen verify-driver</code> runs it against a
+        behavioral contract — reports a name, does requested work, applies
+        feedback, handles aborts — before it's trusted inside a loop.</p>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -329,13 +418,31 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
   </div>
 </section>
 
-<!-- ============ FINAL CTA ============ -->
-<section class="alt" style="text-align:center">
+<!-- ============ LEARN IT ============ -->
+<section class="alt">
   <div class="wrap">
-    <h2>Green is a claim. Demand the receipt.</h2>
+    <div class="kicker">Learn it</div>
+    <h2>The workshop runs the real engine in your browser</h2>
+    <p class="lead narrow" style="margin:0">
+      Seven modules, no API key. Step through scripted runs — the happy path,
+      a vacuous baseline, a spec tamper, a blown budget. Build the exact prompt
+      the agent sees. Pick an attack and watch which guard catches it, and
+      which two don't yet. The demos import the engine's own functions, so
+      what you see is what ships.
+    </p>
+    <div class="cta-row" style="margin-top:1.4rem">
+      <a class="btn primary" href="course/">Take the workshop</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section style="text-align:center">
+  <div class="wrap">
+    <h2>Green is a claim. Get the receipt.</h2>
     <p class="lead" style="max-width:48ch; margin-left:auto; margin-right:auto">
-      Write the checks once. Let the loop grind toward them.
-      Trust the report because it was audited — not because the agent said so.
+      Write the checks once. Let any agent grind toward them.
+      Trust the report because it shows the work — not because the agent said so.
     </p>
     <div class="cta-row" style="justify-content:center">
       <a class="btn primary" href="docs/getting-started.html">Read the docs</a>
@@ -346,9 +453,9 @@ npm run loopgen -- run examples/building-blocks/mock-demo.loop.yaml</code></pre>
 
 <footer class="site-footer">
   <div class="inner">
-    <span>loop-generator — the loop runner that doesn't believe the agent.</span>
+    <span>loop-generator — write the definition of done, any agent does the work, you get the receipt.</span>
     <span>
-      <a href="docs/trust.html">Trust model</a> ·
+      <a href="docs/trust.html">Why the green is earned</a> ·
       <a href="docs/getting-started.html">Docs</a> ·
       <a href="docs/roadmap.html">Roadmap</a> ·
       <a href="https://github.com/ShortStackEngineer/loop-generator">GitHub</a>

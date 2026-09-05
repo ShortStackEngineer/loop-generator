@@ -1,7 +1,7 @@
 {
   "name": "loop-generator",
   "version": "0.1.3",
-  "description": "The loop runner that doesn't believe the agent: drive a coding agent against your checks and get a verifiable report — with spec/test tamper guards, baseline checks, and budget ceilings.",
+  "description": "A definition-of-done engine for coding agents. Write the checks; any agent (Claude, Grok, Copilot, opencode/local) works until they pass; the run ends in a report you can hand to a reviewer — not the agent's word that it's finished.",
   "type": "module",
   "bin": {
     "loopgen": "dist/cli/index.js"
