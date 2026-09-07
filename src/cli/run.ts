@@ -131,9 +131,9 @@ export function registerRun(program: Command): void {
     .option("--trace <file>", "write a JSONL execution trace (loop + agent events) to a file")
     .option("--log-level <level>", "debug|info|warn|error|silent", "info")
     .option("--skip-preflight", "skip driver/evaluator preflight checks")
-    .option("--baseline", "run a pre-run baseline evaluation (detects vacuous checks)")
+    .option("--baseline", "run the baseline as a warning only (the spec default is strict: an already-green baseline fails the run)")
     .option("--strict-baseline", "fail the run if the baseline already passes (vacuous checks); takes precedence over --baseline/--skip-baseline")
-    .option("--skip-baseline", "skip the baseline evaluation even if the spec enables it")
+    .option("--skip-baseline", "skip the baseline evaluation (for checks with side effects that must not run twice)")
     .option(
       "-d, --driver <name>",
       "override driver.uses from the spec (keeps driver.options; preflight warns on unknown keys)",

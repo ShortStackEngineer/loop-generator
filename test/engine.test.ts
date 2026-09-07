@@ -216,7 +216,7 @@ describe("off-git trust hole (roadmap #2)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ files: { "answer.txt": "42" } }] } },
       evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false }, // exercising change detection, not the baseline
     });
     const report = await engine().run(spec, { baseDir: workdir });
     expect(report.success).toBe(true);
@@ -230,7 +230,7 @@ describe("off-git trust hole (roadmap #2)", () => {
       requirements: "x",
       driver: { uses: "mock", options: { steps: [{ summary: "did nothing" }] } }, // no files → no changes
       evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false }, // exercising change detection, not the baseline
     });
     const report = await engine().run(spec, { baseDir: workdir });
     expect(report.success).toBe(true);
@@ -254,7 +254,7 @@ describe("off-git trust hole (roadmap #2)", () => {
       requirements: "x",
       driver: { uses: "silent-writer" },
       evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false }, // exercising change detection, not the baseline
     });
     const report = await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
     expect(report.success).toBe(true);
@@ -281,7 +281,7 @@ describe("off-git trust hole (roadmap #2)", () => {
       requirements: "x",
       driver: { uses: "liar" },
       evaluators: [{ uses: "command", as: "check", options: { command: `test "$(cat answer.txt)" = "42"` } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false }, // exercising change detection, not the baseline
     });
     const report = await new LoopEngine(regs, silentLogger).run(spec, { baseDir: workdir });
     expect(report.success).toBe(true);

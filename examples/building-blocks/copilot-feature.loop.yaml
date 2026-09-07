@@ -50,6 +50,8 @@ success:
 limits:
   maxIterations: 6
   iterationTimeoutMs: 1200000
-  # Run the checks once before the agent: if the retry tests already "pass",
-  # they aren't actually exercising the new backoff behavior.
-  baseline: true
+  # limits.baseline is left at its default, "strict": the checks run once before
+  # the agent, and if the retry tests already "pass" the run fails
+  # `baseline-vacuous` — they aren't exercising the new backoff behavior. After a
+  # successful run the answer is in ./target, so re-scaffold
+  # (`loopgen init-target copilot-feature --force`) before running again.

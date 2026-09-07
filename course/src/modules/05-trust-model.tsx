@@ -28,7 +28,7 @@ const ATTACKS: Attack[] = [
             chip: "success + loud warning",
             kind: "warn",
             body:
-              "With specGuard: warn (the default) the run still reports success, but carries: \"the agent modified the loop spec file … re-verify the on-disk spec before re-running\". Either way, the spec edit is excluded from the work diff — it never counts as work.",
+              "With specGuard: warn (loosened from the default error) the run still reports success, but carries: \"the agent modified the loop spec file … re-verify the on-disk spec before re-running\". Either way, the spec edit is excluded from the work diff — it never counts as work.",
           },
   },
   {
@@ -58,7 +58,7 @@ const ATTACKS: Attack[] = [
             chip: "success + loud warning",
             kind: "warn",
             body:
-              "With evaluatorGuard: warn (default), the run stays green but warns: \"the agent modified file(s) an evaluator depends on … re-verify before trusting this result\". Set evaluatorGuard: error to make this a hard failure.",
+              "With evaluatorGuard: warn (loosened from the default error), the run stays green but warns: \"the agent modified file(s) an evaluator depends on … re-verify before trusting this result\". Remove the override and the default error makes this a hard failure.",
           },
   },
   {
@@ -103,7 +103,7 @@ const DEFENSES: { name: string; what: string }[] = [
   },
   {
     name: "Baseline evaluation",
-    what: "Run the checks before any agent work. Already green ⇒ the checks likely don't test the requirement. Off by default (side-effecting checks would run twice); \"strict\" makes it a hard baseline-vacuous failure.",
+    what: "Run the checks before any agent work. Already green ⇒ the checks likely don't test the requirement. \"strict\" (the default) makes it a hard baseline-vacuous failure before any agent turn; true only warns; false skips it (for side-effecting checks that must not run twice).",
   },
   {
     name: "Change detection",
@@ -111,7 +111,7 @@ const DEFENSES: { name: string; what: string }[] = [
   },
   {
     name: "Spec-integrity guard (specGuard)",
-    what: "Hash-watch the in-workspace spec file; re-check on every terminal path that could have seen agent activity. warn (default) → caveat; error → outcome spec-tampered overrides an apparent green.",
+    what: "Hash-watch the in-workspace spec file; re-check on every terminal path that could have seen agent activity. error (default) → outcome spec-tampered overrides an apparent green; warn → caveat only.",
   },
   {
     name: "Evaluator-integrity guard (evaluatorGuard)",
@@ -125,7 +125,7 @@ const DEFENSES: { name: string; what: string }[] = [
 
 export function TrustModel() {
   const [attackId, setAttackId] = useState(ATTACKS[0]!.id);
-  const [guardMode, setGuardMode] = useState<GuardMode>("warn");
+  const [guardMode, setGuardMode] = useState<GuardMode>("error");
   const attack = ATTACKS.find((a) => a.id === attackId)!;
   const v = attack.verdict(guardMode);
 
@@ -163,10 +163,10 @@ export function TrustModel() {
           {(attack.id === "edit-spec" || attack.id === "edit-named-test") && (
             <div className="pill-row">
               <button className={`pill ${guardMode === "warn" ? "on" : ""}`} onClick={() => setGuardMode("warn")}>
-                guard: warn (default)
+                guard: warn
               </button>
               <button className={`pill ${guardMode === "error" ? "on" : ""}`} onClick={() => setGuardMode("error")}>
-                guard: error
+                guard: error (default)
               </button>
             </div>
           )}
@@ -219,13 +219,13 @@ export function TrustModel() {
             q: "With default settings, the agent edits the in-workspace spec mid-run and the criteria pass. Result?",
             options: [
               "Outcome spec-tampered, success: false",
-              "success with a loud tamper warning (specGuard defaults to warn)",
+              "success with a loud tamper warning",
               "The run aborts immediately when the edit happens",
               "The engine re-parses the new spec and uses it",
             ],
-            answer: 1,
+            answer: 0,
             explain:
-              "Default specGuard is warn: green stands but carries the tamper caveat. Only specGuard: error converts it to spec-tampered. And the engine always evaluates the original in-memory spec — mid-run edits never take effect within the run.",
+              "Default specGuard is error: the apparent green becomes outcome spec-tampered. Only specGuard: warn lets the green stand with a caveat. And the engine always evaluates the original in-memory spec — mid-run edits never take effect within the run.",
           },
           {
             q: "Why does evaluator-file auto-detection deliberately skip bare runners like `npm test`?",

@@ -70,8 +70,10 @@ success:
 limits:
   maxIterations: 6
   # A vague prompt should score poorly up front; if the checker is already green,
-  # it isn't measuring the improvement. `true` warns (LLM scores wobble slightly);
-  # switch to "strict" to make a green baseline a hard failure.
+  # it isn't measuring the improvement. This deliberately downgrades the default
+  # "strict" to `true` (warn only): the scorer is a live LLM whose scores wobble,
+  # so a green baseline is a signal to inspect, not proof the eval is vacuous.
+  # Remove the key to get the default hard failure.
   baseline: true
   evaluatorGuard: error
   specGuard: error

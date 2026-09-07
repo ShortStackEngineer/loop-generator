@@ -248,14 +248,18 @@ RED-able slices   falsifiable         .loop.yaml,      run goes sideways)
         check set fails fast with <code>baseline-vacuous</code>. Drop to
         <code>false</code> only when the checks side-effect and can't be run
         twice.</li>
-      <li><strong><code>limits.specGuard</code></strong> — keep the spec
-        <strong>outside</strong> <code>workspace.dir</code> and leave it at
-        <code>warn</code>. If it must live inside the repo the agent edits, set
-        <code>error</code>.</li>
-      <li><strong><code>limits.evaluatorGuard</code></strong> — the test files a
-        <code>command</code> check runs are the real success criteria; leave at
-        <code>warn</code> (or <code>error</code>) so the agent can't fake a
-        green by editing them.</li>
+      <li><strong><code>limits.specGuard</code></strong> — defaults to
+        <strong><code>error</code></strong>: a mid-run edit of the spec fails the
+        run as <code>spec-tampered</code>. Keep the spec
+        <strong>outside</strong> <code>workspace.dir</code> so the agent never
+        has a reason to touch it; leave the default alone either way.</li>
+      <li><strong><code>limits.evaluatorGuard</code></strong> — defaults to
+        <strong><code>error</code></strong>: the test files a
+        <code>command</code> check runs are the real success criteria, and a
+        mid-run edit of them fails the run as <code>evaluator-tampered</code>.
+        Add <code>guard:</code> paths on any check whose grader isn't named in
+        its command (a scorer, labeled data). Drop to <code>warn</code> only for
+        a check that legitimately rewrites its own fixtures.</li>
       <li><strong><code>limits.maxIterations</code></strong> — a budget, not a
         target. 5–8 is typical; small, well-checked tasks need fewer.</li>
     </ul>

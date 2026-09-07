@@ -43,6 +43,8 @@ success:
 limits:
   maxIterations: 6
   iterationTimeoutMs: 1200000
-  # Run the checks once before the agent. If they already pass, the tests aren't
-  # exercising fizzbuzz yet (safe to enable here — `npm test` has no side effects).
-  baseline: true
+  # limits.baseline is left at its default, "strict": the checks run once before
+  # the agent, and if they already pass the run fails `baseline-vacuous` — the
+  # tests aren't exercising fizzbuzz. After a successful run the answer is in
+  # ./target, so re-scaffold before running again:
+  #   loopgen init-target fizzbuzz -d ./examples/building-blocks/target --force

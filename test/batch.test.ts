@@ -27,7 +27,7 @@ function item(name: string, opts: { pass?: boolean; needs?: string[]; ws?: strin
       workspace: { dir: opts.ws ?? "." },
       driver: { uses: "mock", options: { steps: [{ files: { [`${name}.txt`]: "ok" } }] } },
       evaluators: [{ uses: "command", as: "c", options: { command: pass ? "true" : "exit 1" } }],
-      limits: { maxIterations: 1 },
+      limits: { maxIterations: 1, baseline: false }, // scheduler test: checks are scaffolding, not RED-first
     },
   };
 }
@@ -143,7 +143,7 @@ describe("batch scheduling", () => {
   it("loads an item from a spec file on disk", async () => {
     writeFileSync(
       path.join(dir, "task.loop.yaml"),
-      "name: from-file\nrequirements: x\ndriver: { uses: mock, options: { steps: [{ files: { f.txt: ok } }] } }\nevaluators: [{ uses: command, as: c, options: { command: 'true' } }]\nlimits: { maxIterations: 1 }\n",
+      "name: from-file\nrequirements: x\ndriver: { uses: mock, options: { steps: [{ files: { f.txt: ok } }] } }\nevaluators: [{ uses: command, as: c, options: { command: 'true' } }]\nlimits: { maxIterations: 1, baseline: false }\n",
     );
     const report = await runBatch(manifest({ items: [{ name: "f", spec: "task.loop.yaml" }] }), engine(), {
       baseDir: dir, log: silentLogger,
@@ -175,7 +175,7 @@ describe("batch concurrency + workspace exclusivity", () => {
         workspace: { dir: ws },
         driver: { uses: "probe" },
         evaluators: [{ uses: "command", as: "c", options: { command: "true" } }],
-        limits: { maxIterations: 1 },
+        limits: { maxIterations: 1, baseline: false }, // scheduler test: checks are scaffolding, not RED-first
       },
     };
   }

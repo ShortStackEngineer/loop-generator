@@ -313,9 +313,9 @@ const baselineRecommended: SpecRule = {
       {
         ruleId: "SPEC-BASELINE-RECOMMENDED",
         severity: "info",
-        message: "no baseline evaluation; a smoke that already passes before any agent work is likely vacuous",
+        message: "baseline evaluation is off; a smoke that already passes before any agent work is likely vacuous",
         path: "limits.baseline",
-        hint: "Set limits.baseline: true to catch checks that pass before the feature is built.",
+        hint: "Remove limits.baseline: false (the default is strict) or set it to true/strict, unless the checks have side effects that must not run twice.",
       },
     ];
   },

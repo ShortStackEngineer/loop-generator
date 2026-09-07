@@ -8,6 +8,12 @@
 # the runner falls back to driver-reported file changes (you'll see "N file(s)"
 # but no diff-stat). Point a loop at a normal, tracked directory to get the full
 # git diff + no-op detection.
+#
+# Run it twice: the second run fails `baseline-vacuous` after zero agent
+# iterations, because answer.txt already holds "42" and the check is green
+# before any work. That is the strict baseline (the default) refusing to
+# launder an already-passing check into a success. Reset with
+# `rm -rf examples/building-blocks/.workspace`.
 version: 1
 name: mock-demo
 description: Demonstrates the feedback loop end-to-end without any external agent.
