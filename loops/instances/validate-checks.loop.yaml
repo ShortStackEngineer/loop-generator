@@ -1,0 +1,105 @@
+# As-authored contract. Keep unchanged during and after the run.
+version: 1
+name: validate-checks
+description: Validate acceptance checks against good controls and explicit faulty fixtures.
+task: {type: function}
+stack: {language: typescript, packageManager: npm}
+workspace:
+  dir: ../..
+  ignore: [.octo-continue.md]
+requirements: |
+  Implement the first check-validation slice described in docs/check-validation-plan.md.
+  Add `loopgen validate-checks <manifest> --report <file>` and a public library API.
+  This task is already running inside loopgen: implement directly, do not scaffold
+  another loop, delegate agents, commit, switch branches, or modify guarded files.
+
+  Manifest (.checks.yaml or JSON): version:1, name, goal, assumptions:string[] and
+  gaps:string[] (default []), claims:[{id,description,checks:string[]}],
+  checks:[{id,command,timeoutMs?:positive integer,rejectExitCodes?:integer[]}],
+  control:{dir}, counterexamples:[{id,claim,dir}]. Use Zod. Require nonempty IDs,
+  descriptions, commands, dirs, and nonempty claims/checks/counterexamples/check refs;
+  reject duplicate IDs within each collection, unknown claim/check references,
+  duplicate check refs, invalid timeouts, and rejectExitCodes outside 1..125.
+  Default rejectExitCodes:[1], timeoutMs:10000. Explicit [] rejectExitCodes is invalid.
+  The directories resolve relative to the manifest, independent of shell cwd.
+
+  For every control/check and counterexample/check pair, recursively COPY that
+  fixture directory into a fresh OS temporary directory, run the SAME check
+  command there, capture bounded feedback and exit code, and remove the copy in
+  finally. Do not modify source fixtures. Reject symlinks (including fixture root),
+  missing/non-directory fixtures and special files before execution. These copies
+  isolate ordinary relative file mutations, NOT arbitrary shell commands; document
+  that manifests are trusted executable input and this is not a security sandbox.
+  Run all control checks first. If any does not pass, do not run counterexamples.
+  Exit 0 means passed; declared reject codes mean rejected; every other exit,
+  timeout, abort or execution failure means error. Never count errors as caught.
+  Use existing runCommand if appropriate; bound output and timeout each command.
+
+  A counterexample is caught only if at least one check mapped to its claim rejects
+  it and no check execution errors occur. Otherwise escaped, or error (precedence).
+  Run all checks even when one rejects. A claim is validated only with >=1 mapped
+  counterexample and all its counterexamples caught; uncovered/escaped = gap,
+  execution error = error. These statuses validate supplied examples, not universal
+  correctness. Preserve explicit free-form gaps even on a validated report.
+
+  Report JSON: name, goal, assumptions, gaps, outcome (validated|gaps|error),
+  control:[{check,status:passed|rejected|error,exitCode:number|null,feedback}],
+  counterexamples:[{id,claim,status:caught|escaped|error,checks:[same check results]}],
+  claims:[{id,description,status:validated|gap|error,...optional evidence IDs}].
+  Control failure => outcome:error and counterexamples:[], claims not validated.
+  Overall execution errors take precedence over gaps. CLI exit codes 0 validated,
+  1 gaps, 2 errors including invalid manifests; useful summary stdout and actionable
+  errors stderr. --report writes JSON when execution produced a report. Expose typed
+  parsing/running functions from src/index.ts; use existing conventions and no new
+  dependencies. Runtime accepts optional AbortSignal, cleans temp dirs on all paths.
+  Write meaningful unit tests for schema/aggregation/abort/error paths beyond the
+  immutable CLI acceptance suite. Add an offline good/weak-check example and usage
+  docs at docs/check-validation.md and manifests at examples/check-validation/strong.checks.yaml
+  and examples/check-validation/weak.checks.yaml. Do not alter existing run success semantics or require this for old specs.
+
+  Allowed edits: new src/check-validation/**, src/cli/validate-checks.ts,
+  src/cli/index.ts, src/index.ts, new test/check-validation*.test.ts,
+  new examples/check-validation/**, docs/check-validation.md, and README.md.
+  Do not edit the existing engine, drivers, test files, configs, package files,
+  acceptance tests, this spec, plan, or .octo-continue.md. Do not enable acceptance
+  in the main test suite; the orchestrator will promote it after the audited run.
+driver:
+  uses: grok
+  options:
+    maxTurns: 45
+    alwaysApprove: true
+    extraArgs: [--disable-web-search]
+evaluators:
+  - uses: command
+    as: acceptance
+    options:
+      command: npm run build && npx vitest run --config vitest.repro.config.ts
+      timeoutMs: 120000
+    guard:
+      - test/acceptance/validate-checks.test.ts
+      - vitest.repro.config.ts
+      - vitest.config.ts
+      - package.json
+      - package-lock.json
+      - tsconfig.json
+      - tsup.config.ts
+      - docs/check-validation-plan.md
+  - uses: command
+    as: regression
+    options: {command: npm test, timeoutMs: 120000}
+    guard: [test, src/core, src/drivers, src/evaluators]
+  - uses: command
+    as: documentation
+    options:
+      command: test -s docs/check-validation.md && test -s examples/check-validation/strong.checks.yaml && test -s examples/check-validation/weak.checks.yaml
+  - uses: command
+    as: typecheck
+    options: {command: npm run typecheck, timeoutMs: 120000}
+success: {type: all-pass}
+limits:
+  maxIterations: 4
+  iterationTimeoutMs: 900000
+  baseline: strict
+  specGuard: error
+  evaluatorGuard: error
+  maxCostUsd: 8

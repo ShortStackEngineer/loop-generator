@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     include: [
       // Currently-RED stubs also listed in vitest.config.ts `test.exclude`.
-      // (none — mock-structured-feedback-e2e is green; re-add paths as needed)
+      // (none — completed checks run in the unit or built-CLI acceptance suite)
     ],
     testTimeout: 30_000,
     hookTimeout: 30_000,

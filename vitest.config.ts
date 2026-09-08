@@ -13,6 +13,8 @@ export default defineConfig({
       "**/cypress/**",
       "**/.{idea,git,cache,output,temp}/**",
       "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*",
+      // Built-CLI tests run separately after build (npm run test:acceptance).
+      "test/acceptance/**/*.test.ts",
       // RED in-repo repro stubs (also in vitest.repro.config.ts include):
     ],
     // Driver/agent runs and command evaluators can be slow; give them room.

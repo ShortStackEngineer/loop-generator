@@ -1,0 +1,99 @@
+{
+  "master": "3b944d60556fe46194e21c56e0519a96ae5de0c7",
+  "branch": "codex/validate-checks",
+  "contractSha256": {
+    "loops/instances/validate-checks.loop.yaml": "b25e8a4d5a294abd04627de2ccf9f9fed41fb7ef65b96f60f9b8875f24cbc446",
+    "test/acceptance/validate-checks.test.ts": "13c31b6cdf18a7e30c6a526deab313cbdba5ca604b20f1d8667a43dc8faf04b7"
+  },
+  "runs": [
+    {
+      "phase": "phase1",
+      "outcome": "success",
+      "iterations": 2,
+      "baselineSatisfied": false,
+      "reportedUsage": {
+        "inputTokens": 223725,
+        "outputTokens": 17793,
+        "costUsd": 0.2387344,
+        "turns": 28
+      },
+      "warnings": [],
+      "reportSha256": "b7e7d2cbfca7d1de595a45e2020086a81ad45656f0f130181b9edc2c02bb6bb5"
+    },
+    {
+      "phase": "phase2",
+      "outcome": "success",
+      "iterations": 1,
+      "baselineSatisfied": false,
+      "reportedUsage": {
+        "inputTokens": 77699,
+        "outputTokens": 31385,
+        "costUsd": 0.14699356,
+        "turns": 17
+      },
+      "warnings": [],
+      "reportSha256": "14aad7294d71a419dbabd54fcc51fdec933abd880061dcdbe5d42b60fe3e9809"
+    }
+  ],
+  "usageCaveat": "Phase 1 includes an interrupted iteration without usage; reported cost is not total billing cost.",
+  "rawEvidence": ".loopgen/validate-checks/completed-runs/ (local, gitignored)",
+  "verification": {
+    "sourceTests": 1114,
+    "cliAcceptanceTests": 17,
+    "typecheck": "passed",
+    "build": "passed",
+    "coverage": {
+      "lines": 98.05,
+      "statements": 98.05,
+      "functions": 99.34,
+      "branches": 94.01
+    },
+    "offlineMockSmoke": "success in 2 iterations",
+    "mockDriverConformance": "passed; pre-aborted signal reported as acceptable warning",
+    "targetedMutation": {
+      "score": 89.33,
+      "processRunnerScore": 93.17,
+      "threshold": 70,
+      "mutants": 656,
+      "killed": 576,
+      "timeout": 10,
+      "survived": 61,
+      "noCoverage": 9,
+      "scope": "src/check-validation/**/*.ts"
+    },
+    "implementationMatchesReviewedCandidate": true
+  },
+  "implementationSha256": {
+    "src/check-validation/aggregate.ts": "c462f06906bbe7e912522101b4141f61c11ad07e54a158238ada23a6f8f2ea1a",
+    "src/check-validation/exec.ts": "5455444db00bea286363e1ab3057278017ed9fda8ae4e7c29f1ec9589f9a44e3",
+    "src/check-validation/fixtures.ts": "0bd01b55a7f436ff3245ec458b903b5bd39d045c7c2ab10fbd572923b92304bc",
+    "src/check-validation/manifest.ts": "3692eb25e27daef0e09d0054b74daced9f09623b0257c59e6dd82c91f6711ccb",
+    "src/check-validation/report.ts": "ae6d5dffa5777c662ca0544ab50c5bf963600b2a61a107c03b20c1463561e729",
+    "src/check-validation/runner.ts": "b59459ef994420d7c66f0abb03f6c365aff049afd6858bc26979a944a59a26f7"
+  },
+  "verificationSeptember7": {
+    "sourceTests": 1095,
+    "cliAcceptanceTests": 17,
+    "typecheck": "passed",
+    "build": "passed",
+    "coverage": {
+      "lines": 97.46,
+      "statements": 97.46,
+      "functions": 99.34,
+      "branches": 93.61
+    },
+    "offlineMockSmoke": "success in 2 iterations",
+    "mockDriverConformance": "passed; pre-aborted signal reported as acceptable warning",
+    "targetedMutation": {
+      "score": 77.74,
+      "threshold": 70,
+      "mutants": 656,
+      "killed": 509,
+      "timeout": 1,
+      "survived": 111,
+      "noCoverage": 35,
+      "scope": "src/check-validation/**/*.ts"
+    },
+    "implementationMatchesReviewedCandidate": true
+  }
+}

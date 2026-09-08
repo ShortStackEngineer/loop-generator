@@ -1,0 +1,25 @@
+# Offline example: a check that accepts every candidate.
+# `loopgen validate-checks examples/check-validation/weak.checks.yaml --report /tmp/weak.json`
+# should exit 1 (gaps): the control still passes, but the faulty fixture escapes.
+version: 1
+name: answer-weak
+goal: Return the correct answer without losing the user's intent.
+assumptions:
+  - The input domain is the supplied fixtures.
+gaps:
+  - Production behavior is unobserved.
+  - A validated result only covers these fixtures, not every possible fault.
+claims:
+  - id: correct
+    description: The answer is 42
+    checks: [answer]
+checks:
+  - id: answer
+    command: node -e "process.exit(0)"
+    timeoutMs: 2000
+control:
+  dir: fixtures/good
+counterexamples:
+  - id: wrong-answer
+    claim: correct
+    dir: fixtures/bad
