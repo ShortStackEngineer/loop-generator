@@ -30,6 +30,7 @@
     "loopgen": "tsx src/cli/index.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:acceptance": "npm run build && vitest run --config vitest.acceptance.config.ts",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "mutation": "stryker run"

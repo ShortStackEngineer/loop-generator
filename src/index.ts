@@ -169,3 +169,44 @@ export type { OtlpTracePayload } from "./observers/otlp";
 export { lintSpec, lintBatch, lintPath, workspacePreflight, defaultKnownPlugins } from "./lint";
 export type { LintResult } from "./lint";
 export type { LintFinding, LintSeverity, SpecRule, KnownPlugins } from "./lint/types";
+
+// Check validation (known-good control + explicit faulty fixtures)
+export {
+  checksManifestSchema,
+  checkSpecSchema,
+  claimSpecSchema,
+  counterexampleSpecSchema,
+  parseChecksManifest,
+  loadChecksFile,
+  validateChecksManifest,
+  ChecksManifestError,
+  DEFAULT_CHECK_TIMEOUT_MS,
+  DEFAULT_REJECT_EXIT_CODES,
+} from "./check-validation/manifest";
+export type {
+  ChecksManifest,
+  CheckSpec,
+  ClaimSpec,
+  CounterexampleSpec,
+  LoadedChecks,
+} from "./check-validation/manifest";
+export {
+  runCheckValidation,
+  checkValidationExitCode,
+  classifyCheckExecution,
+  classifyCounterexample,
+  classifyClaim,
+  classifyOutcome,
+  controlPassed,
+} from "./check-validation/runner";
+export type {
+  RunCheckValidationOptions,
+  CheckValidationReport,
+  CheckRunResult,
+  CounterexampleReport,
+  ClaimReport,
+  CheckRunStatus,
+  CounterexampleStatus,
+  ClaimStatus,
+  CheckValidationOutcome,
+} from "./check-validation/runner";

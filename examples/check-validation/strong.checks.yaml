@@ -1,0 +1,25 @@
+# Offline example: a check that actually looks at the candidate.
+# `loopgen validate-checks examples/check-validation/strong.checks.yaml --report /tmp/strong.json`
+# should exit 0 (validated): the control answers 42, the faulty fixture does not.
+version: 1
+name: answer-strong
+goal: Return the correct answer without losing the user's intent.
+assumptions:
+  - The input domain is the supplied fixtures.
+gaps:
+  - Production behavior is unobserved.
+  - A validated result only covers these fixtures, not every possible fault.
+claims:
+  - id: correct
+    description: The answer is 42
+    checks: [answer]
+checks:
+  - id: answer
+    command: "node -e \"process.exit(require('fs').readFileSync('answer.txt','utf8').trim() === '42' ? 0 : 1)\""
+    timeoutMs: 2000
+control:
+  dir: fixtures/good
+counterexamples:
+  - id: wrong-answer
+    claim: correct
+    dir: fixtures/bad

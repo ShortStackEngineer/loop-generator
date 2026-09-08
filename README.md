@@ -137,6 +137,20 @@ before any work and there is nothing for the agent to earn. That's the strict
 baseline doing its job — and it's why a green you didn't watch is still worth
 something. Reset with `rm -rf examples/building-blocks/.workspace`.
 
+Ask the same question of the checks themselves, offline, with a known-good
+fixture and a deliberately wrong one:
+
+```bash
+npm run loopgen -- validate-checks examples/check-validation/strong.checks.yaml --report /tmp/strong.json
+npm run loopgen -- validate-checks examples/check-validation/weak.checks.yaml --report /tmp/weak.json
+```
+
+The strong check rejects the faulty fixture (`validated`). The weak check
+accepts everything, so the counterexample escapes (`gaps`). A crash that
+exits `1` looks like a rejection under the default `rejectExitCodes: [1]`;
+use a distinct code (for example `10`) if you need unexpected exits to
+classify as errors. Details: [Validating the checks](./docs/check-validation.md).
+
 Write a loop of your own and run it:
 
 ```bash
@@ -249,6 +263,13 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
   and [debugging](https://shortstackengineer.github.io/loop-generator/docs/debugging.html) workflows** —
   interview the goal into something checkable and prove the spec RED before
   spending budget; diagnose a failed or suspiciously-green run by its `outcome`.
+- **[Validating the checks](./docs/check-validation.md)** —
+  `loopgen validate-checks` runs your checks against a known-good fixture and
+  explicit faulty ones (a fresh copy per check, not one shared copy). A weak
+  check shows up as an escaped counterexample; a broken harness is an error,
+  never a catch — but exit codes alone cannot distinguish an assertion
+  failure from a crash when both exit `1`. This does not change how existing
+  `.loop.yaml` runs succeed.
 - **[Batch runs](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#batch)** —
   a `.batch.yaml` punch list runs many specs with `needs` ordering, a
   concurrency cap, and same-workspace auto-serialization.
@@ -274,9 +295,10 @@ harness — plus self-contained projects. The
 ```bash
 npm run typecheck
 npm test
+npm run test:acceptance       # build + black-box CLI acceptance checks
 npm run build
 npm run coverage   # vitest + v8 coverage (gate: 85% lines/functions/statements, 80% branches)
-npm run mutation   # Stryker mutation testing (gate: 60% mutation score)
+npm run mutation   # Stryker mutation testing (gate: 70% mutation score)
 ```
 
 ## Status

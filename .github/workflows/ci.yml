@@ -62,6 +62,8 @@ jobs:
       # The driver behavioral contract, against the built binary.
       - name: Driver conformance (mock)
         run: node dist/cli/index.js verify-driver mock
+      - name: Built CLI acceptance
+        run: npx vitest run --config vitest.acceptance.config.ts
       # Every example spec and batch manifest must be lint-clean of ERRORS.
       # (Not --strict: the illustrative examples point at ./target scaffolds
       # that are created on demand by `init-target`, which lints as a
