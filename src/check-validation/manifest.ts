@@ -141,6 +141,21 @@ export interface LoadedChecks {
   baseDir: string;
 }
 
+/**
+ * Parse already-read manifest bytes. Used by the loop gate so a bounded
+ * pre-parse read can be hashed and later compared to the inventory capture.
+ */
+export function loadChecksFromContents(raw: string, file: string): LoadedChecks {
+  const abs = path.resolve(file);
+  let data: unknown;
+  try {
+    data = parseYaml(raw);
+  } catch (err) {
+    throw new Error(`Could not parse "${abs}" as YAML/JSON: ${(err as Error).message}`);
+  }
+  return { manifest: parseChecksManifest(data), file: abs, baseDir: path.dirname(abs) };
+}
+
 export function loadChecksFile(file: string): LoadedChecks {
   const abs = path.resolve(file);
   let raw: string;
@@ -149,11 +164,5 @@ export function loadChecksFile(file: string): LoadedChecks {
   } catch (err) {
     throw new Error(`Could not read checks manifest "${abs}": ${(err as Error).message}`);
   }
-  let data: unknown;
-  try {
-    data = parseYaml(raw);
-  } catch (err) {
-    throw new Error(`Could not parse "${abs}" as YAML/JSON: ${(err as Error).message}`);
-  }
-  return { manifest: parseChecksManifest(data), file: abs, baseDir: path.dirname(abs) };
+  return loadChecksFromContents(raw, abs);
 }

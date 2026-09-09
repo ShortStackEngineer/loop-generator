@@ -149,7 +149,9 @@ The strong check rejects the faulty fixture (`validated`). The weak check
 accepts everything, so the counterexample escapes (`gaps`). A crash that
 exits `1` looks like a rejection under the default `rejectExitCodes: [1]`;
 use a distinct code (for example `10`) if you need unexpected exits to
-classify as errors. Details: [Validating the checks](./docs/check-validation.md).
+classify as errors. Details: [Validating the checks](./docs/check-validation.md). To require that
+evidence before an ordinary `loopgen run`, set `checkValidation.manifest` on
+the spec ([inside a loop](./docs/check-validation-integration.md)).
 
 Write a loop of your own and run it:
 
@@ -269,7 +271,9 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
   check shows up as an escaped counterexample; a broken harness is an error,
   never a catch — but exit codes alone cannot distinguish an assertion
   failure from a crash when both exit `1`. This does not change how existing
-  `.loop.yaml` runs succeed.
+  `.loop.yaml` runs succeed. Opt in on a spec with `checkValidation.manifest`
+  to run the same gate before baseline or any agent turn
+  ([inside a loop](./docs/check-validation-integration.md)).
 - **[Batch runs](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#batch)** —
   a `.batch.yaml` punch list runs many specs with `needs` ordering, a
   concurrency cap, and same-workspace auto-serialization.

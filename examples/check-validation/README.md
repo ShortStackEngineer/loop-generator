@@ -17,3 +17,20 @@ See [docs/check-validation.md](../../docs/check-validation.md).
 npm run loopgen -- validate-checks examples/check-validation/strong.checks.yaml --report /tmp/strong.json
 npm run loopgen -- validate-checks examples/check-validation/weak.checks.yaml --report /tmp/weak.json
 ```
+
+## Ordinary loop with validation
+
+`integrated.loop.yaml` validates the strong fixtures, confirms the workspace
+starts RED, then uses the offline mock driver to write `42`. The JSON report
+includes the fixture evidence and input hashes alongside the loop result.
+
+```bash
+npm run build
+node dist/cli/index.js run examples/check-validation/integrated.loop.yaml --report /tmp/integrated.json
+```
+
+The first run succeeds in one iteration. A second run stops as
+`baseline-vacuous` because `.workspace/answer.txt` already contains `42`;
+remove that generated file to repeat the example. See
+[the integration guide](../../docs/check-validation-integration.md) for binding
+rules and the limits of the evidence.

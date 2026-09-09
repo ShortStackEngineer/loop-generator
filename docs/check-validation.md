@@ -25,7 +25,9 @@ remains a gap. Free-form `gaps:` you wrote on the manifest stay on the report
 even when the examples validate.
 
 This does not change existing `.loop.yaml` run success semantics, and old specs
-do not need a checks manifest.
+do not need a checks manifest. To require the same evidence **before** an
+ordinary loop spends an agent turn, set `checkValidation.manifest` on the
+`.loop.yaml` — see [Check validation inside a loop](./check-validation-integration.md).
 
 ## Manifest (`.checks.yaml` or JSON)
 
@@ -215,3 +217,13 @@ npm run loopgen -- validate-checks examples/check-validation/weak.checks.yaml --
 ```
 
 Both share `examples/check-validation/fixtures/{good,bad}`.
+
+## Inside an ordinary loop
+
+Opt in with `checkValidation.manifest` on a `.loop.yaml` to run this gate
+before baseline or any agent invocation. Binding matches the declared
+command text and timeout (the same invocation), not identical fixture or
+candidate implementations, and not transitive command dependencies. Input
+integrity is re-checked after validation, after baseline, after each
+iteration, and on every later terminal path. Details:
+[Check validation inside a loop](./check-validation-integration.md).
