@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.0](https://github.com/ShortStackEngineer/loop-generator/compare/v0.1.3...v0.2.0) (2026-09-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **spec:** specs that relied on the implicit defaults change behaviour. A run whose checks pass before any agent work now fails with `baseline-vacuous` instead of succeeding with a warning; set `limits.baseline: false` (or pass --skip-baseline) for side-effecting checks. A mid-run edit of the spec or of a check's test files now fails the run instead of warning; set `specGuard: warn` / `evaluatorGuard: warn` to restore the old behaviour.
+
+### Features
+
+* add loops/ dog-food library for bug, greenfield, and refactor work ([#45](https://github.com/ShortStackEngineer/loop-generator/issues/45)) ([8ff5eef](https://github.com/ShortStackEngineer/loop-generator/commit/8ff5eeffb5f266f817603c79dc5e0f78b1fdec29))
+* gate loopgen run on an opt-in check-validation manifest ([#52](https://github.com/ShortStackEngineer/loop-generator/issues/52)) ([63c503f](https://github.com/ShortStackEngineer/loop-generator/commit/63c503f524c8e15221d7c417e9c8e04219e787c4))
+* make local inference a first-class OpenCode path ([#48](https://github.com/ShortStackEngineer/loop-generator/issues/48)) ([45e6d0e](https://github.com/ShortStackEngineer/loop-generator/commit/45e6d0e9a35da06b6354dbafe08d8cd4df2ef678))
+* **spec:** turn the trust guards on by default ([#50](https://github.com/ShortStackEngineer/loop-generator/issues/50)) ([3b944d6](https://github.com/ShortStackEngineer/loop-generator/commit/3b944d60556fe46194e21c56e0519a96ae5de0c7))
+* wire built-in drivers to consume structured feedback evaluations ([#46](https://github.com/ShortStackEngineer/loop-generator/issues/46)) ([feee6f4](https://github.com/ShortStackEngineer/loop-generator/commit/feee6f4729c4ee24be856674b7778a431ccfe0a4))
+
 ## [0.1.3](https://github.com/ShortStackEngineer/loop-generator/compare/v0.1.2...v0.1.3) (2026-07-16)
 
 
