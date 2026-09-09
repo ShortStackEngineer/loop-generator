@@ -1,0 +1,27 @@
+# Offline integration demo. Validation runs before the mock agent.
+# A second run is baseline-vacuous because the first already wrote 42.
+version: 1
+name: validated-answer-demo
+task: {type: function}
+stack: {language: text}
+workspace:
+  dir: ./.workspace
+requirements: Write the string "42" into answer.txt at the workspace root.
+checkValidation:
+  manifest: ./strong.checks.yaml
+driver:
+  uses: mock
+  options:
+    steps:
+      - files: {answer.txt: "42"}
+        summary: Wrote the requested answer.
+evaluators:
+  - uses: command
+    as: answer
+    options:
+      command: "node -e \"process.exit(require('fs').readFileSync('answer.txt','utf8').trim() === '42' ? 0 : 1)\""
+      timeoutMs: 2000
+success: {type: all-pass}
+limits:
+  baseline: strict
+  maxIterations: 1

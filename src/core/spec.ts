@@ -157,6 +157,18 @@ export const loopSpecSchema = z
       .object({ observers: z.array(specObserverSchema).default([]) })
       .default({ observers: [] }),
 
+    /**
+     * Opt-in: validate the spec's command evaluators against a known-good
+     * control and explicit faulty fixtures before any baseline or agent turn.
+     * Relative `manifest` paths resolve against `RunOptions.baseDir`.
+     * Absent on old specs — they keep their current behavior.
+     */
+    checkValidation: z
+      .object({
+        manifest: z.string().min(1, "manifest must be nonempty"),
+      })
+      .optional(),
+
     /** Optional overrides for the task type's generated prompts. */
     prompts: z
       .object({

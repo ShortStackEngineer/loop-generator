@@ -74,11 +74,14 @@ function formatIteration(it: IterationReport): string {
   return lines.join("\n");
 }
 
-function formatReport(report: LoopReport): string {
+export function formatReport(report: LoopReport): string {
   const lines: string[] = [];
   const mark = report.success ? "✓ SUCCESS" : "✗ FAILED";
   lines.push(`\n${mark} — ${report.spec}`);
   lines.push(`outcome: ${report.outcome} — ${report.reason}`);
+  if (report.checkValidation) {
+    lines.push(`check validation: ${report.checkValidation.outcome}`);
+  }
 
   if (report.baseline) {
     lines.push(

@@ -30,6 +30,16 @@ import {
 import { resolveGuardedFiles } from "./evaluator-guard";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
+import type { CheckValidationReport } from "../check-validation/aggregate";
+import {
+  verifyCheckValidationInputs,
+  type CheckValidationInputs,
+  type CheckValidationInventory,
+  type InventoryVerifyResult,
+} from "../check-validation/inventory";
+import { runCheckValidationGate } from "../check-validation/gate";
+
+export type { CheckValidationInputs };
 
 export interface EngineRegistries {
   drivers: Registry<AgentDriver>;
@@ -113,6 +123,16 @@ export interface LoopReport {
   /** Git checkpoints for inspect/reset, when `workspace.snapshot: "git"`. */
   snapshot?: RunSnapshot;
   error?: string;
+  /**
+   * Full check-validation report when the spec opted in via
+   * `checkValidation.manifest`. Attached on every subsequent outcome, including
+   * failures. Absent on old specs.
+   */
+  checkValidation?: CheckValidationReport;
+  /** Manifest path + sha256 of the manifest and every recursive fixture file. */
+  checkValidationInputs?: CheckValidationInputs;
+  /** Evaluator aliases the manifest did not cover. */
+  checkValidationUnmappedEvaluators?: string[];
 }
 
 export interface RunOptions {
@@ -224,6 +244,48 @@ function iterationSignal(external: AbortSignal | undefined, timeoutMs?: number):
   return AbortSignal.any(signals);
 }
 
+function attachCheckValidation(
+  report: LoopReport,
+  gate: {
+    report?: CheckValidationReport;
+    inputs?: CheckValidationInputs;
+    unmappedEvaluators?: string[];
+    unmappedWarning?: string;
+  },
+): void {
+  if (gate.report) report.checkValidation = gate.report;
+  if (gate.inputs) report.checkValidationInputs = gate.inputs;
+  if (gate.unmappedEvaluators?.length) {
+    report.checkValidationUnmappedEvaluators = [...gate.unmappedEvaluators];
+  }
+  if (gate.unmappedWarning && !report.warnings.includes(gate.unmappedWarning)) {
+    report.warnings.push(gate.unmappedWarning);
+  }
+}
+
+/**
+ * Re-verify check-validation inputs on a terminal path. A changed contract
+ * cannot become success or baseline-vacuous — or any other post-gate outcome
+ * except `spec-tampered`, which keeps precedence. Old specs (no inventory)
+ * are unchanged.
+ */
+function applyCheckValidationIntegrity(
+  report: LoopReport,
+  inventory: CheckValidationInventory | undefined,
+): LoopReport {
+  if (!inventory) return report;
+  const diff = verifyCheckValidationInputs(inventory);
+  if (diff.ok) return report;
+  if (!report.warnings.includes(diff.reason)) report.warnings.push(diff.reason);
+  if (report.outcome === "spec-tampered") return report;
+  return {
+    ...report,
+    outcome: "evaluator-tampered",
+    success: false,
+    reason: diff.reason,
+  };
+}
+
 /**
  * The loop engine: resolve plug-ins, preflight, then iterate
  * (drive agent → evaluate → check criteria → feed back) until the success
@@ -290,6 +352,55 @@ export class LoopEngine {
       log.info(`created workspace ${workdir}`);
     }
 
+    // Check-validation gate (opt-in): prove the spec's command evaluators
+    // distinguish good vs faulty fixtures BEFORE baseline or any agent turn.
+    // skipPreflight / baseline:false cannot bypass an explicit request.
+    let validationInventory: CheckValidationInventory | undefined;
+    if (spec.checkValidation) {
+      if (opts.signal?.aborted) {
+        return {
+          ...base,
+          outcome: "aborted",
+          reason: "run aborted",
+          durationMs: Date.now() - start,
+        };
+      }
+      log.info(`check validation: ${path.resolve(baseDir, spec.checkValidation.manifest)}`);
+      const gate = await runCheckValidationGate({
+        manifest: spec.checkValidation.manifest,
+        baseDir,
+        evaluators: spec.evaluators,
+        signal: opts.signal,
+      });
+      attachCheckValidation(base, gate);
+      validationInventory = gate.inventory;
+      if (gate.status === "aborted") {
+        return {
+          ...base,
+          outcome: "aborted",
+          reason: "run aborted",
+          durationMs: Date.now() - start,
+        };
+      }
+      if (gate.status === "tampered") {
+        return {
+          ...base,
+          outcome: "evaluator-tampered",
+          reason: gate.reason ?? "check validation inputs were modified — original validation evidence is retained",
+          durationMs: Date.now() - start,
+        };
+      }
+      if (gate.status !== "ok") {
+        return {
+          ...base,
+          outcome: "preflight-failed",
+          reason: gate.reason ?? "check validation did not succeed",
+          durationMs: Date.now() - start,
+        };
+      }
+      log.info(`check validation: ${gate.report?.outcome ?? "validated"}`);
+    }
+
     // Preflight: driver + every evaluator.
     if (!opts.skipPreflight) {
       const checks: PreflightResult[] = [];
@@ -306,25 +417,31 @@ export class LoopEngine {
       const merged = mergePreflight(checks);
       for (const w of merged.warnings ?? []) log.warn(w);
       if (!merged.ok) {
-        return {
-          ...base,
-          outcome: "preflight-failed",
-          reason: `preflight failed:\n${(merged.errors ?? []).map((e) => `  • ${e}`).join("\n")}`,
-          preflight: merged,
-          durationMs: Date.now() - start,
-        };
+        return applyCheckValidationIntegrity(
+          {
+            ...base,
+            outcome: "preflight-failed",
+            reason: `preflight failed:\n${(merged.errors ?? []).map((e) => `  • ${e}`).join("\n")}`,
+            preflight: merged,
+            durationMs: Date.now() - start,
+          },
+          validationInventory,
+        );
       }
       base.preflight = merged;
     }
 
     const validationErrors = taskType.validate?.(spec) ?? [];
     if (validationErrors.length) {
-      return {
-        ...base,
-        reason: `task validation failed: ${validationErrors.join("; ")}`,
-        error: validationErrors.join("; "),
-        durationMs: Date.now() - start,
-      };
+      return applyCheckValidationIntegrity(
+        {
+          ...base,
+          reason: `task validation failed: ${validationErrors.join("; ")}`,
+          error: validationErrors.join("; "),
+          durationMs: Date.now() - start,
+        },
+        validationInventory,
+      );
     }
 
     // Workspace change tracking: lets us detect "green but the agent changed
@@ -413,7 +530,13 @@ export class LoopEngine {
       ...guardedRels,
     ];
 
-    const runWarnings: string[] = [];
+    const runWarnings: string[] = [...base.warnings];
+    type InventoryTamper = Extract<InventoryVerifyResult, { ok: false }>;
+    const validationInputsTamper = (): InventoryTamper | null => {
+      if (!validationInventory) return null;
+      const diff = verifyCheckValidationInputs(validationInventory);
+      return diff.ok ? null : diff;
+    };
     // Off-git: content-hash detection is independent of the driver, but lacks
     // unified diffs and respects a file-count cap — still flag it so a green
     // run never *looks* identical to a git-backed one.
@@ -431,8 +554,9 @@ export class LoopEngine {
     let specTampered = false;
     // Re-hash the watched spec and flag tampering. Called on every terminal path
     // that could have seen agent activity (per-iteration success, max-iterations,
-    // abort); pre-loop returns (preflight/validation/baseline-vacuous) can't have
-    // tampering. A no-op when the watch is inactive (specGuard "off" or no specFile).
+    // abort, budget, error). Check-validation input integrity is re-verified
+    // independently after the gate on those same paths. A no-op when the watch
+    // is inactive (specGuard "off" or no specFile).
     const checkSpecTamper = (): void => {
       if (!specWatch) return;
       const now = hashFileSafe(path.resolve(workdir, specWatch.rel));
@@ -471,6 +595,8 @@ export class LoopEngine {
     // committed (past preflight). They see iteration + agent events live and the
     // terminal report; a failing observer is isolated, never breaking the run.
     const observerSessions = this.beginObservers(observers, { runId, workdir, baseDir, spec }, log);
+    const finish = (report: LoopReport): Promise<LoopReport> =>
+      this.finishObservers(observerSessions, applyCheckValidationIntegrity(report, validationInventory));
 
     // Baseline evaluation: run the checks once before any agent work. If they
     // already pass, the checks probably don't test the requirement.
@@ -478,6 +604,7 @@ export class LoopEngine {
     const wantBaseline = baselineSetting !== false;
     const strictBaseline = baselineSetting === "strict";
     let baseline: BaselineReport | undefined;
+    try {
     if (wantBaseline && evaluators.length) {
       log.info("running baseline evaluation (no agent) — disable with limits.baseline: false");
       const baseEvals = await this.runEvaluators(evaluators, {
@@ -490,13 +617,26 @@ export class LoopEngine {
       });
       const baseVerdict = evaluateCriteria(spec.success, baseEvals);
       baseline = { satisfied: baseVerdict.satisfied, reason: baseVerdict.reason, evaluations: baseEvals };
+      const baselineTamper = validationInputsTamper();
+      if (baselineTamper) {
+        const msg = baselineTamper.reason;
+        if (!runWarnings.includes(msg)) runWarnings.push(msg);
+        return finish({
+          ...base,
+          outcome: "evaluator-tampered",
+          reason: msg,
+          baseline,
+          warnings: runWarnings,
+          durationMs: Date.now() - start,
+        });
+      }
       if (baseVerdict.satisfied) {
         const w = "success criteria already pass BEFORE any agent work — your checks likely do not verify the new requirement";
         runWarnings.push(w);
         log.warn(w);
         // Strict baseline: a vacuous check set is a hard failure, not a caveat.
         if (strictBaseline) {
-          return this.finishObservers(observerSessions, {
+          return finish({
             ...base,
             outcome: "baseline-vacuous",
             reason: `strict baseline: ${w}`,
@@ -513,7 +653,7 @@ export class LoopEngine {
       if (opts.signal?.aborted) {
         checkSpecTamper();
         checkEvaluatorTamper();
-        return this.finishObservers(observerSessions, {
+        return finish({
           ...base,
           outcome: "aborted",
           reason: "run aborted",
@@ -724,6 +864,10 @@ export class LoopEngine {
       if (verdict.satisfied) {
         checkSpecTamper();
         checkEvaluatorTamper();
+        const validationTamper = validationInputsTamper();
+        if (validationTamper && !runWarnings.includes(validationTamper.reason)) {
+          runWarnings.push(validationTamper.reason);
+        }
         const overall = this.overallChanges(
           workdir,
           gitEnabled,
@@ -738,26 +882,80 @@ export class LoopEngine {
         // Tamper in "error" mode: the agent altered its own success criteria
         // (the spec, or the files an evaluator runs), so a green can't be
         // trusted — fail instead of reporting success. Spec-tamper takes
-        // precedence when both fire.
+        // precedence when both fire. Validation-input tamper is always an
+        // error (cannot be bypassed by evaluatorGuard: off).
         const specTamperFails = specTampered && specGuard === "error";
         const evalTamperFails = evaluatorTampered && evaluatorGuard === "error";
-        const tamperFails = specTamperFails || evalTamperFails;
+        const validationTamperFails = validationTamper !== null;
+        const tamperFails = specTamperFails || evalTamperFails || validationTamperFails;
         const tamperOutcome: LoopOutcome = specTamperFails ? "spec-tampered" : "evaluator-tampered";
-        return this.finishObservers(observerSessions, {
+        return finish({
           ...base,
           outcome: tamperFails ? tamperOutcome : "success",
           success: !tamperFails,
           reason: specTamperFails
             ? `the agent modified the loop spec file during the run (specGuard: error) — success criteria may have been altered`
-            : evalTamperFails
-              ? `the agent modified evaluator file(s) during the run (evaluatorGuard: error): ${tamperedEvalFiles.join(", ")} — success checks may have been altered`
-              : verdict.reason,
+            : validationTamperFails
+              ? (validationTamper?.reason ??
+                "check validation inputs were modified — original validation evidence is retained")
+              : evalTamperFails
+                ? `the agent modified evaluator file(s) during the run (evaluatorGuard: error): ${tamperedEvalFiles.join(", ")} — success checks may have been altered`
+                : verdict.reason,
           iterations,
           totalUsage,
           baseline,
           changedFiles: overall.files,
           diffStat: overall.stat || undefined,
           warnings,
+          durationMs: Date.now() - start,
+        });
+      }
+
+      // Unsatisfied iteration: still re-verify validation inputs and honor
+      // cancellation, including on the last permitted turn. Tamper wins over
+      // abort/budget/max-iterations; spec-tamper retains precedence.
+      if (validationInventory) {
+        checkSpecTamper();
+        checkEvaluatorTamper();
+      }
+      const iterTamper = validationInputsTamper();
+      if (iterTamper) {
+        if (!runWarnings.includes(iterTamper.reason)) runWarnings.push(iterTamper.reason);
+        const overall = this.overallChanges(
+          workdir,
+          gitEnabled,
+          baselineTree,
+          lastTree,
+          baselineContent,
+          lastContent,
+          ignoreGlobs,
+          overallChangedFiles,
+        );
+        return finish({
+          ...base,
+          outcome: specTampered && specGuard === "error" ? "spec-tampered" : "evaluator-tampered",
+          success: false,
+          reason: specTampered && specGuard === "error"
+            ? "the agent modified the loop spec file during the run (specGuard: error) — success criteria may have been altered"
+            : iterTamper.reason,
+          iterations,
+          totalUsage,
+          baseline,
+          changedFiles: overall.files,
+          diffStat: overall.stat || undefined,
+          warnings: runWarnings,
+          durationMs: Date.now() - start,
+        });
+      }
+      if (validationInventory && opts.signal?.aborted) {
+        return finish({
+          ...base,
+          outcome: "aborted",
+          reason: "run aborted",
+          iterations,
+          totalUsage,
+          warnings: runWarnings,
+          baseline,
           durationMs: Date.now() - start,
         });
       }
@@ -781,7 +979,7 @@ export class LoopEngine {
           ignoreGlobs,
           overallChangedFiles,
         );
-        return this.finishObservers(observerSessions, {
+        return finish({
           ...base,
           outcome: "budget-exceeded",
           success: false,
@@ -809,7 +1007,21 @@ export class LoopEngine {
       ignoreGlobs,
       overallChangedFiles,
     );
-    return this.finishObservers(observerSessions, {
+    if (validationInventory && opts.signal?.aborted) {
+      return finish({
+        ...base,
+        outcome: "aborted",
+        reason: "run aborted",
+        iterations,
+        totalUsage,
+        warnings: runWarnings,
+        baseline,
+        changedFiles: overall.files,
+        diffStat: overall.stat || undefined,
+        durationMs: Date.now() - start,
+      });
+    }
+    return finish({
       ...base,
       outcome: "max-iterations",
       success: false,
@@ -822,6 +1034,23 @@ export class LoopEngine {
       warnings: runWarnings,
       durationMs: Date.now() - start,
     });
+    } catch (err) {
+      // Preserve exception propagation for runs that have not opted in.
+      if (!spec.checkValidation) throw err;
+      checkSpecTamper();
+      checkEvaluatorTamper();
+      return finish({
+        ...base,
+        outcome: "error",
+        reason: (err as Error).message,
+        error: (err as Error).message,
+        iterations,
+        totalUsage,
+        warnings: runWarnings,
+        baseline,
+        durationMs: Date.now() - start,
+      });
+    }
   }
 
   /**

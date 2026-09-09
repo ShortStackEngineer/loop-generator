@@ -17,6 +17,7 @@ export type {
   IterationReport,
   BaselineReport,
   RunSnapshot,
+  CheckValidationInputs,
 } from "./core/engine";
 
 // Spec
@@ -178,6 +179,7 @@ export {
   counterexampleSpecSchema,
   parseChecksManifest,
   loadChecksFile,
+  loadChecksFromContents,
   validateChecksManifest,
   ChecksManifestError,
   DEFAULT_CHECK_TIMEOUT_MS,
@@ -210,3 +212,19 @@ export type {
   ClaimStatus,
   CheckValidationOutcome,
 } from "./check-validation/runner";
+export { bindManifestChecks, unmappedEvaluatorsWarning } from "./check-validation/bind";
+export type { CheckBindingResult } from "./check-validation/bind";
+export {
+  captureCheckValidationInputs,
+  verifyCheckValidationInputs,
+  publicCheckValidationInputs,
+  readBoundedFile,
+  DEFAULT_INVENTORY_LIMITS,
+} from "./check-validation/inventory";
+export type {
+  CheckValidationInventory,
+  InventoryLimits,
+  InventoryCaptureResult,
+  InventoryVerifyResult,
+  BoundedReadResult,
+} from "./check-validation/inventory";
