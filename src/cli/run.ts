@@ -79,6 +79,9 @@ export function formatReport(report: LoopReport): string {
   const mark = report.success ? "✓ SUCCESS" : "✗ FAILED";
   lines.push(`\n${mark} — ${report.spec}`);
   lines.push(`outcome: ${report.outcome} — ${report.reason}`);
+  if (report.challengePacket) {
+    lines.push(`challenge packet: ${report.challengePacket}`);
+  }
   if (report.checkValidation) {
     lines.push(`check validation: ${report.checkValidation.outcome}`);
   }
@@ -127,7 +130,9 @@ export function formatReport(report: LoopReport): string {
 export function registerRun(program: Command): void {
   program
     .command("run <spec>")
-    .description("Execute a loop spec until success criteria are met or iterations are exhausted.")
+    .description(
+      "Execute a loop spec until success criteria are met or iterations are exhausted. Always writes <workspace>/.loopgen/challenge.json.",
+    )
     .option("-b, --base <dir>", "base dir for the spec's relative paths (default: spec's directory)")
     .option("-m, --max-iterations <n>", "override maxIterations from the spec")
     .option("--report <file>", "write the full JSON report to a file")

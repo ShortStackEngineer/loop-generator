@@ -19,6 +19,14 @@ export type {
   RunSnapshot,
   CheckValidationInputs,
 } from "./core/engine";
+export {
+  CHALLENGE_PACKET_RELATIVE,
+  challengePacketPath,
+  buildChallengePacket,
+  writeChallengePacket,
+  ChallengePacketWriteError,
+} from "./core/challenge";
+export type { ChallengePacket, ChallengeIteration, ChallengeCheck } from "./core/challenge";
 
 // Spec
 export {
