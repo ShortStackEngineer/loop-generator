@@ -437,6 +437,30 @@ export class LoopEngine {
       log.info(`check validation: ${gate.report?.outcome ?? "validated"}`);
     }
 
+    // Preflight, task validation, and the iteration loop share one error
+    // boundary. A throw after check validation has succeeded still returns the
+    // validation evidence and writes the challenge packet. Until the tamper
+    // checks exist, this only seals that evidence — the agent has not run.
+    // Runs that did not opt in still propagate the exception.
+    let settleException: (err: unknown) => Promise<LoopReport> = (err) => {
+      const message = (err as Error).message;
+      return Promise.resolve(
+        seal(
+          applyCheckValidationIntegrity(
+            {
+              ...base,
+              outcome: "error",
+              success: false,
+              reason: message,
+              error: message,
+              durationMs: Date.now() - start,
+            },
+            validationInventory,
+          ),
+        ),
+      );
+    };
+    try {
     // Preflight: driver + every evaluator.
     if (!opts.skipPreflight) {
       const checks: PreflightResult[] = [];
@@ -646,7 +670,29 @@ export class LoopEngine {
     const wantBaseline = baselineSetting !== false;
     const strictBaseline = baselineSetting === "strict";
     let baseline: BaselineReport | undefined;
-    try {
+    // The agent can run after this point. Apply specGuard: error before
+    // finish() re-checks validation inputs, so spec-tampered keeps precedence
+    // over evaluator-tampered when the caught call also changed those fixtures.
+    settleException = (err) => {
+      checkSpecTamper();
+      checkEvaluatorTamper();
+      const specTamperFails = specTampered && specGuard === "error";
+      const message = (err as Error).message;
+      return finish({
+        ...base,
+        outcome: specTamperFails ? "spec-tampered" : "error",
+        success: false,
+        reason: specTamperFails
+          ? `the agent modified the loop spec file during the run (specGuard: error) — success criteria may have been altered`
+          : message,
+        ...(specTamperFails ? {} : { error: message }),
+        iterations,
+        totalUsage,
+        warnings: runWarnings,
+        baseline,
+        durationMs: Date.now() - start,
+      });
+    };
     if (wantBaseline && evaluators.length) {
       log.info("running baseline evaluation (no agent) — disable with limits.baseline: false");
       const baseEvals = await this.runEvaluators(evaluators, {
@@ -1079,19 +1125,7 @@ export class LoopEngine {
     } catch (err) {
       // Preserve exception propagation for runs that have not opted in.
       if (!spec.checkValidation) throw err;
-      checkSpecTamper();
-      checkEvaluatorTamper();
-      return finish({
-        ...base,
-        outcome: "error",
-        reason: (err as Error).message,
-        error: (err as Error).message,
-        iterations,
-        totalUsage,
-        warnings: runWarnings,
-        baseline,
-        durationMs: Date.now() - start,
-      });
+      return settleException(err);
     }
   }
 
