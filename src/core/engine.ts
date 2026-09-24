@@ -28,6 +28,7 @@ import {
   type TreeDiff,
 } from "./workspace";
 import { resolveGuardedFiles } from "./evaluator-guard";
+import { writeChallengePacket } from "./challenge";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
 import type { CheckValidationReport } from "../check-validation/aggregate";
@@ -105,6 +106,19 @@ export interface RunSnapshot {
 
 export interface LoopReport {
   spec: string;
+  /** Engine run id (`randomUUID`), stable for this process's run. */
+  runId: string;
+  /** The ask, copied from the spec (`requirements`). */
+  requirements: string;
+  /** Wall-clock start, ISO-8601. */
+  startedAt: string;
+  /** Wall-clock end, ISO-8601. Set when the run is sealed. */
+  endedAt: string;
+  /**
+   * Absolute path of the challenge packet written for this run
+   * (`<workspace>/.loopgen/challenge.json`). Present once the file is on disk.
+   */
+  challengePacket?: string;
   outcome: LoopOutcome;
   success: boolean;
   reason: string;
@@ -303,7 +317,9 @@ export class LoopEngine {
 
   async run(spec: LoopSpec, opts: RunOptions = {}): Promise<LoopReport> {
     const log = opts.log ?? this.log;
-    const start = Date.now();
+    const startedAtDate = new Date();
+    const startedAt = startedAtDate.toISOString();
+    const start = startedAtDate.getTime();
     const runId = randomUUID();
     const baseDir = opts.baseDir ?? process.cwd();
     const workdir = resolveWorkspaceDir(spec, baseDir);
@@ -311,8 +327,28 @@ export class LoopEngine {
     // compounded relative path landing in $HOME) is otherwise silent.
     log.info(`workspace: ${workdir}`);
 
+    // Every terminal path goes through `seal`: stamp identity + wall-clock end,
+    // then write the challenge packet. A failed write throws, so a returned
+    // report always has the file on disk.
+    const seal = (report: LoopReport): LoopReport => {
+      const sealed: LoopReport = {
+        ...report,
+        runId,
+        requirements: spec.requirements,
+        startedAt,
+        endedAt: new Date().toISOString(),
+      };
+      sealed.challengePacket = writeChallengePacket(workdir, sealed);
+      log.info(`challenge packet: ${sealed.challengePacket}`);
+      return sealed;
+    };
+
     const base: LoopReport = {
       spec: spec.name,
+      runId,
+      requirements: spec.requirements,
+      startedAt,
+      endedAt: startedAt,
       outcome: "error",
       success: false,
       reason: "",
@@ -344,7 +380,7 @@ export class LoopEngine {
         return { observer: observerRegistry.get(o.uses), options: o.options };
       });
     } catch (err) {
-      return { ...base, reason: (err as Error).message, error: (err as Error).message };
+      return seal({ ...base, reason: (err as Error).message, error: (err as Error).message });
     }
 
     if (!existsSync(workdir)) {
@@ -358,12 +394,12 @@ export class LoopEngine {
     let validationInventory: CheckValidationInventory | undefined;
     if (spec.checkValidation) {
       if (opts.signal?.aborted) {
-        return {
+        return seal({
           ...base,
           outcome: "aborted",
           reason: "run aborted",
           durationMs: Date.now() - start,
-        };
+        });
       }
       log.info(`check validation: ${path.resolve(baseDir, spec.checkValidation.manifest)}`);
       const gate = await runCheckValidationGate({
@@ -375,28 +411,28 @@ export class LoopEngine {
       attachCheckValidation(base, gate);
       validationInventory = gate.inventory;
       if (gate.status === "aborted") {
-        return {
+        return seal({
           ...base,
           outcome: "aborted",
           reason: "run aborted",
           durationMs: Date.now() - start,
-        };
+        });
       }
       if (gate.status === "tampered") {
-        return {
+        return seal({
           ...base,
           outcome: "evaluator-tampered",
           reason: gate.reason ?? "check validation inputs were modified — original validation evidence is retained",
           durationMs: Date.now() - start,
-        };
+        });
       }
       if (gate.status !== "ok") {
-        return {
+        return seal({
           ...base,
           outcome: "preflight-failed",
           reason: gate.reason ?? "check validation did not succeed",
           durationMs: Date.now() - start,
-        };
+        });
       }
       log.info(`check validation: ${gate.report?.outcome ?? "validated"}`);
     }
@@ -417,15 +453,17 @@ export class LoopEngine {
       const merged = mergePreflight(checks);
       for (const w of merged.warnings ?? []) log.warn(w);
       if (!merged.ok) {
-        return applyCheckValidationIntegrity(
-          {
-            ...base,
-            outcome: "preflight-failed",
-            reason: `preflight failed:\n${(merged.errors ?? []).map((e) => `  • ${e}`).join("\n")}`,
-            preflight: merged,
-            durationMs: Date.now() - start,
-          },
-          validationInventory,
+        return seal(
+          applyCheckValidationIntegrity(
+            {
+              ...base,
+              outcome: "preflight-failed",
+              reason: `preflight failed:\n${(merged.errors ?? []).map((e) => `  • ${e}`).join("\n")}`,
+              preflight: merged,
+              durationMs: Date.now() - start,
+            },
+            validationInventory,
+          ),
         );
       }
       base.preflight = merged;
@@ -433,14 +471,16 @@ export class LoopEngine {
 
     const validationErrors = taskType.validate?.(spec) ?? [];
     if (validationErrors.length) {
-      return applyCheckValidationIntegrity(
-        {
-          ...base,
-          reason: `task validation failed: ${validationErrors.join("; ")}`,
-          error: validationErrors.join("; "),
-          durationMs: Date.now() - start,
-        },
-        validationInventory,
+      return seal(
+        applyCheckValidationIntegrity(
+          {
+            ...base,
+            reason: `task validation failed: ${validationErrors.join("; ")}`,
+            error: validationErrors.join("; "),
+            durationMs: Date.now() - start,
+          },
+          validationInventory,
+        ),
       );
     }
 
@@ -595,8 +635,10 @@ export class LoopEngine {
     // committed (past preflight). They see iteration + agent events live and the
     // terminal report; a failing observer is isolated, never breaking the run.
     const observerSessions = this.beginObservers(observers, { runId, workdir, baseDir, spec }, log);
-    const finish = (report: LoopReport): Promise<LoopReport> =>
-      this.finishObservers(observerSessions, applyCheckValidationIntegrity(report, validationInventory));
+    const finish = (report: LoopReport): Promise<LoopReport> => {
+      const sealed = seal(applyCheckValidationIntegrity(report, validationInventory));
+      return this.finishObservers(observerSessions, sealed);
+    };
 
     // Baseline evaluation: run the checks once before any agent work. If they
     // already pass, the checks probably don't test the requirement.
