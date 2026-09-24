@@ -82,6 +82,9 @@ export function formatReport(report: LoopReport): string {
   if (report.challengePacket) {
     lines.push(`challenge packet: ${report.challengePacket}`);
   }
+  if (report.pathIndex) {
+    lines.push(`path index: ${report.pathIndex}`);
+  }
   if (report.checkValidation) {
     lines.push(`check validation: ${report.checkValidation.outcome}`);
   }
@@ -131,7 +134,7 @@ export function registerRun(program: Command): void {
   program
     .command("run <spec>")
     .description(
-      "Execute a loop spec until success criteria are met or iterations are exhausted. Always writes <workspace>/.loopgen/challenge.json.",
+      "Execute a loop spec until success criteria are met or iterations are exhausted. Always writes <workspace>/.loopgen/challenge.json and updates <workspace>/.loopgen/path-index.json.",
     )
     .option("-b, --base <dir>", "base dir for the spec's relative paths (default: spec's directory)")
     .option("-m, --max-iterations <n>", "override maxIterations from the spec")

@@ -18,6 +18,7 @@ import {
   changeDetectionAvailable,
   snapshotTree,
   commitTreeToRef,
+  formatSnapshotCommitMessage,
   diffTrees,
   diffPatch,
   snapshotContent,
@@ -29,6 +30,7 @@ import {
 } from "./workspace";
 import { resolveGuardedFiles } from "./evaluator-guard";
 import { writeChallengePacket } from "./challenge";
+import { entriesForChangedFiles, recordPathIndex, type PathIndexEntry } from "./path-index";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
 import type { CheckValidationReport } from "../check-validation/aggregate";
@@ -119,6 +121,13 @@ export interface LoopReport {
    * (`<workspace>/.loopgen/challenge.json`). Present once the file is on disk.
    */
   challengePacket?: string;
+  /**
+   * Absolute path of the sibling path index
+   * (`<workspace>/.loopgen/path-index.json`). Maps each file this run changed,
+   * and that file's post-iteration content hash, to this run id and iteration.
+   * Present once the file is on disk. Earlier runs' entries are kept.
+   */
+  pathIndex?: string;
   outcome: LoopOutcome;
   success: boolean;
   reason: string;
@@ -321,6 +330,7 @@ export class LoopEngine {
     const startedAt = startedAtDate.toISOString();
     const start = startedAtDate.getTime();
     const runId = randomUUID();
+    const pathIndexEntries: PathIndexEntry[] = [];
     const baseDir = opts.baseDir ?? process.cwd();
     const workdir = resolveWorkspaceDir(spec, baseDir);
     // Make the resolved workspace obvious up front — a wrong workdir (e.g. a
@@ -328,8 +338,9 @@ export class LoopEngine {
     log.info(`workspace: ${workdir}`);
 
     // Every terminal path goes through `seal`: stamp identity + wall-clock end,
-    // then write the challenge packet. A failed write throws, so a returned
-    // report always has the file on disk.
+    // then write the challenge packet and merge this run's changed paths into
+    // the path index. A failed write throws, so a returned report always has
+    // both files on disk.
     const seal = (report: LoopReport): LoopReport => {
       const sealed: LoopReport = {
         ...report,
@@ -340,6 +351,8 @@ export class LoopEngine {
       };
       sealed.challengePacket = writeChallengePacket(workdir, sealed);
       log.info(`challenge packet: ${sealed.challengePacket}`);
+      sealed.pathIndex = recordPathIndex(workdir, pathIndexEntries);
+      log.info(`path index: ${sealed.pathIndex}`);
       return sealed;
     };
 
@@ -513,7 +526,13 @@ export class LoopEngine {
     let lastCheckpoint: string | null = null;
     let checkpoints = 0;
     if (wantSnapshot) {
-      lastCheckpoint = commitTreeToRef(workdir, preRunRef, baselineTree!, "loopgen: pre-run snapshot", null);
+      lastCheckpoint = commitTreeToRef(
+        workdir,
+        preRunRef,
+        baselineTree!,
+        formatSnapshotCommitMessage("pre-run", runId, new Date()),
+        null,
+      );
       if (lastCheckpoint) {
         base.snapshot = {
           preRunRef,
@@ -775,7 +794,13 @@ export class LoopEngine {
       // Checkpoint this iteration's result (only when it actually changed the
       // tree) so `latest` chains readable per-turn history back to `pre-run`.
       if (wantSnapshot && lastCheckpoint && treeAfter && treeAfter !== treeBefore) {
-        const oid = commitTreeToRef(workdir, latestRef, treeAfter, `loopgen: iteration ${i + 1}`, lastCheckpoint);
+        const oid = commitTreeToRef(
+          workdir,
+          latestRef,
+          treeAfter,
+          formatSnapshotCommitMessage(i, runId, new Date()),
+          lastCheckpoint,
+        );
         if (oid) {
           lastCheckpoint = oid;
           checkpoints += 1;
@@ -826,6 +851,9 @@ export class LoopEngine {
         changedFiles = agent.changedFiles ?? [];
       }
       for (const f of changedFiles) overallChangedFiles.add(f);
+      // Hash now, before evaluators run, so the index records post-iteration
+      // bytes and not later check side effects. `.loopgen` paths are dropped.
+      pathIndexEntries.push(...entriesForChangedFiles(workdir, changedFiles, runId, i, contentAfter));
 
       const evaluations = await this.runEvaluators(evaluators, {
         runId,
