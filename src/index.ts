@@ -27,6 +27,19 @@ export {
   ChallengePacketWriteError,
 } from "./core/challenge";
 export type { ChallengePacket, ChallengeIteration, ChallengeCheck } from "./core/challenge";
+export {
+  PATH_INDEX_RELATIVE,
+  pathIndexPath,
+  normalizeWorkspacePath,
+  entriesForChangedFiles,
+  recordPathIndex,
+  readPathIndex,
+  lookupRunByPath,
+  formatPathLookup,
+  PathIndexWriteError,
+  PathIndexReadError,
+} from "./core/path-index";
+export type { PathIndex, PathIndexEntry, PathLookup } from "./core/path-index";
 
 // Spec
 export {

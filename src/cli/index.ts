@@ -8,6 +8,7 @@ import { registerList } from "./list";
 import { registerVerifyDriver } from "./verify-driver";
 import { registerInitTarget } from "./init-target";
 import { registerValidateChecks } from "./validate-checks";
+import { registerLookup } from "./lookup";
 
 const program = new Command();
 
@@ -24,6 +25,7 @@ registerList(program);
 registerVerifyDriver(program);
 registerInitTarget(program);
 registerValidateChecks(program);
+registerLookup(program);
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

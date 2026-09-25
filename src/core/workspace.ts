@@ -88,6 +88,21 @@ export function snapshotTree(dir: string): string | null {
  * pathspecs (where `*` also crosses `/`).
  */
 /**
+ * Commit message for a `workspace.snapshot: "git"` ref. The run id and a real
+ * wall-clock timestamp are in the message so `git log <ref>` answers which run
+ * and when. Author dates on the commit stay pinned (see {@link commitTreeToRef});
+ * the message is what makes "when" recoverable from the ref itself.
+ *
+ * `phase` is `"pre-run"` or a 0-based iteration, matching `IterationReport`
+ * and the path index.
+ */
+export function formatSnapshotCommitMessage(phase: "pre-run" | number, runId: string, at: Date): string {
+  const stamp = at.toISOString();
+  if (phase === "pre-run") return `loopgen: pre-run snapshot run=${runId} at=${stamp}`;
+  return `loopgen: iteration=${phase} run=${runId} at=${stamp}`;
+}
+
+/**
  * Persist a workspace tree snapshot as a commit reachable from `ref`, without
  * touching HEAD, the index, or the working tree (same throwaway-plumbing
  * discipline as {@link snapshotTree}). This is what makes
@@ -101,8 +116,10 @@ export function snapshotTree(dir: string): string | null {
  * checkpoint's OID, or null for the root (pre-run) snapshot. Author/committer
  * identity and dates are pinned so a given (tree, parent, message) always
  * yields the same commit: deterministic, and independent of the user's git
- * config or clock. Returns the new commit OID, or null if any git step fails
- * (snapshotting is best-effort and never fails a run).
+ * config or clock. The engine puts the real timestamp and run id in `message`
+ * ({@link formatSnapshotCommitMessage}) so "when" is still on the ref. Returns
+ * the new commit OID, or null if any git step fails (snapshotting is best-effort
+ * and never fails a run).
  */
 export function commitTreeToRef(
   dir: string,

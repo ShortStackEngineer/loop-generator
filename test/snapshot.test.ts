@@ -7,7 +7,7 @@ import { LoopEngine } from "../src/core/engine";
 import { createDefaultRegistries } from "../src/registry";
 import { parseSpec } from "../src/core/spec";
 import { silentLogger } from "../src/core/logger";
-import { snapshotTree, commitTreeToRef } from "../src/core/workspace";
+import { snapshotTree, commitTreeToRef, formatSnapshotCommitMessage } from "../src/core/workspace";
 
 function initGitRepo(dir: string): void {
   spawnSync("git", ["init"], { cwd: dir });
@@ -18,6 +18,12 @@ function initGitRepo(dir: string): void {
 /** `git rev-parse <rev>` → trimmed stdout, or "" on failure. */
 function revParse(dir: string, rev: string): string {
   const r = spawnSync("git", ["rev-parse", rev], { cwd: dir, encoding: "utf8" });
+  return r.status === 0 ? r.stdout.trim() : "";
+}
+
+/** `git log -1 --format=%B <rev>` → commit message, or "" on failure. */
+function commitMessage(dir: string, rev: string): string {
+  const r = spawnSync("git", ["log", "-1", "--format=%B", rev], { cwd: dir, encoding: "utf8" });
   return r.status === 0 ? r.stdout.trim() : "";
 }
 
@@ -34,6 +40,18 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
+describe("formatSnapshotCommitMessage", () => {
+  it("puts the run id and a real timestamp in the pre-run and iteration messages", () => {
+    const at = new Date("2026-09-24T18:46:00.000Z");
+    expect(formatSnapshotCommitMessage("pre-run", "run-1", at)).toBe(
+      "loopgen: pre-run snapshot run=run-1 at=2026-09-24T18:46:00.000Z",
+    );
+    expect(formatSnapshotCommitMessage(0, "run-1", at)).toBe(
+      "loopgen: iteration=0 run=run-1 at=2026-09-24T18:46:00.000Z",
+    );
+  });
+});
+
 describe("commitTreeToRef", () => {
   it("persists a tree as a commit under a ref without moving HEAD", () => {
     initGitRepo(workdir);
@@ -104,6 +122,42 @@ describe("engine git snapshot (workspace.snapshot: git)", () => {
     expect(revParse(workdir, `${snap!.preRunRef}^{tree}`)).not.toBe(
       revParse(workdir, `${snap!.latestRef}^{tree}`),
     );
+
+    const preMsg = commitMessage(workdir, snap!.preRunRef);
+    const latestMsg = commitMessage(workdir, snap!.latestRef!);
+    expect(preMsg).toContain(`run=${report.runId}`);
+    expect(preMsg).toMatch(/^loopgen: pre-run snapshot run=\S+ at=\d{4}-\d{2}-\d{2}T/);
+    expect(latestMsg).toContain(`iteration=0`);
+    expect(latestMsg).toContain(`run=${report.runId}`);
+    const at = latestMsg.match(/at=(\S+)/)?.[1];
+    expect(at).toBeTruthy();
+    expect(at!.startsWith("2000-")).toBe(false);
+    expect(Math.abs(Date.now() - Date.parse(at!))).toBeLessThan(5 * 60 * 1000);
+  });
+
+  it("records each iteration's run id and timestamp on the latest ref", async () => {
+    initGitRepo(workdir);
+    writeFileSync(path.join(workdir, "answer.txt"), "nope");
+    const report = await engine().run(
+      convergingSpec({
+        driver: {
+          uses: "mock",
+          options: {
+            steps: [{ files: { "answer.txt": "wrong" } }, { files: { "answer.txt": "42" } }],
+          },
+        },
+      }),
+      { baseDir: workdir },
+    );
+    expect(report.snapshot?.checkpoints).toBe(2);
+    const log = spawnSync("git", ["log", "--format=%B", report.snapshot!.latestRef!], {
+      cwd: workdir,
+      encoding: "utf8",
+    });
+    expect(log.stdout).toContain(`iteration=0 run=${report.runId}`);
+    expect(log.stdout).toContain(`iteration=1 run=${report.runId}`);
+    expect(log.stdout).toContain(`pre-run snapshot run=${report.runId}`);
+    expect(log.stdout).not.toContain("2000-01-01");
   });
 
   it("pre-run ref captures the ORIGINAL state, so a reset undoes the agent's work", async () => {
