@@ -1,5 +1,6 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
+import { LessonReadError, loadWorkspaceLessons, matchPriorLessons, type ChallengeLesson } from "../core/lesson";
 import { isGitRepo } from "../core/workspace";
 import type { LintFinding, SpecRule } from "./types";
 import {
@@ -321,6 +322,41 @@ const baselineRecommended: SpecRule = {
   },
 };
 
+/**
+ * A later spec that repeats a stored failure shape. The message is the lesson
+ * text and run id from `.loopgen/lessons.json` (or the current challenge
+ * packet) — not a warning composed for this process.
+ */
+const priorLesson: SpecRule = {
+  id: "SPEC-PRIOR-LESSON",
+  severity: "warn",
+  preflight: true,
+  run({ spec, workdir, file }) {
+    let lessons: ChallengeLesson[];
+    try {
+      lessons = loadWorkspaceLessons(workdir);
+    } catch (err) {
+      const detail = err instanceof LessonReadError ? err.message : err instanceof Error ? err.message : String(err);
+      return [
+        {
+          ruleId: "SPEC-PRIOR-LESSON",
+          severity: "warn",
+          message: detail,
+          path: ".loopgen/lessons.json",
+          hint: "Prior lessons could not be read, so a past run cannot be cited.",
+        },
+      ];
+    }
+    return matchPriorLessons(spec, workdir, file, lessons).map((lesson) => ({
+      ruleId: "SPEC-PRIOR-LESSON",
+      severity: "warn" as const,
+      message: `run ${lesson.runId}: ${lesson.text}`,
+      path: lesson.subjects[0]?.kind === "file" ? lesson.subjects[0].name : "evaluators",
+      hint: `Stored ${lesson.failureClass} lesson from the earlier run artifact.`,
+    }));
+  },
+};
+
 export const SPEC_RULES: SpecRule[] = [
   workdirMissing,
   workdirNotProject,
@@ -335,6 +371,7 @@ export const SPEC_RULES: SpecRule[] = [
   smokeSelfFulfilling,
   reqUnverifiedArtifact,
   baselineRecommended,
+  priorLesson,
 ];
 
 /** Rule ids that also run inside the engine's run-path preflight. */

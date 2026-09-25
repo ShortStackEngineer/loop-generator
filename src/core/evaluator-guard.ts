@@ -120,3 +120,26 @@ export function resolveGuardedFiles(spec: LoopSpec, workdir: string): string[] {
   }
   return [...set].sort();
 }
+
+/**
+ * Paths a spec says its checks depend on, whether or not those files exist yet.
+ * Test-like tokens in a `command`, plus every `guard` entry (file or directory).
+ * Used to recognize a later spec that repeats an evaluator-tamper lesson.
+ * Result is sorted.
+ */
+export function declaredEvaluatorPaths(spec: LoopSpec): string[] {
+  const set = new Set<string>();
+  for (const ev of spec.evaluators) {
+    for (const entry of ev.guard ?? []) {
+      const rel = toRel(entry);
+      if (rel) set.add(rel);
+    }
+    const command = ev.options?.command;
+    if (typeof command !== "string") continue;
+    for (const token of tokenize(command)) {
+      const rel = toRel(token);
+      if (rel && isTestLikePath(rel)) set.add(rel);
+    }
+  }
+  return [...set].sort();
+}

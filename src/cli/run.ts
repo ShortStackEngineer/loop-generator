@@ -134,7 +134,7 @@ export function registerRun(program: Command): void {
   program
     .command("run <spec>")
     .description(
-      "Execute a loop spec until success criteria are met or iterations are exhausted. Always writes <workspace>/.loopgen/challenge.json and updates <workspace>/.loopgen/path-index.json.",
+      "Execute a loop spec until success criteria are met or iterations are exhausted. Always writes <workspace>/.loopgen/challenge.json and updates <workspace>/.loopgen/path-index.json. A baseline-vacuous, spec-tampered, evaluator-tampered, or vacuous-success run also records a lesson on the packet and in <workspace>/.loopgen/lessons.json, which a later lint cites.",
     )
     .option("-b, --base <dir>", "base dir for the spec's relative paths (default: spec's directory)")
     .option("-m, --max-iterations <n>", "override maxIterations from the spec")

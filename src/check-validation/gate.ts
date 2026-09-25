@@ -22,6 +22,11 @@ export interface CheckValidationGate {
   unmappedEvaluators: string[];
   unmappedWarning?: string;
   inventory?: CheckValidationInventory;
+  /**
+   * Paths that changed, when `status` is `"tampered"`. Absolute paths as the
+   * inventory recorded them. Absent on every other status.
+   */
+  paths?: string[];
 }
 
 export interface RunCheckValidationGateOptions {
@@ -148,7 +153,7 @@ export async function runCheckValidationGate(
   const after = verifyCheckValidationInputs(captured.inventory);
   if (!after.ok) {
     return withProvenance(
-      { status: "tampered", reason: after.reason, report },
+      { status: "tampered", reason: after.reason, report, paths: after.paths },
       captured.inventory,
       binding.unmapped,
     );
