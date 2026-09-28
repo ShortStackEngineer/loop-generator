@@ -19,8 +19,8 @@ export function lintSpec(spec: LoopSpec, ctx: Omit<SpecLintContext, "spec">): Li
  * a PreflightResult so it merges with driver/evaluator preflight: error-severity
  * findings block the run, warnings/info are surfaced.
  */
-export function workspacePreflight(spec: LoopSpec, workdir: string): PreflightResult {
-  const findings = lintSpec(spec, { workdir }).filter((f) => PREFLIGHT_RULE_IDS.has(f.ruleId));
+export function workspacePreflight(spec: LoopSpec, workdir: string, file?: string): PreflightResult {
+  const findings = lintSpec(spec, { workdir, file }).filter((f) => PREFLIGHT_RULE_IDS.has(f.ruleId));
   // Preflight rules are only error/warn severity (no info), so there are no notes.
   // Stryker disable next-line StringLiteral
   const fmt = (f: LintFinding): string => `[${f.ruleId}] ${f.message}${f.hint ? ` — ${f.hint}` : ""}`;

@@ -28,6 +28,27 @@ export {
 } from "./core/challenge";
 export type { ChallengePacket, ChallengeIteration, ChallengeCheck } from "./core/challenge";
 export {
+  LESSONS_RELATIVE,
+  lessonsPath,
+  workspaceSpecRel,
+  evaluatorShape,
+  lessonFileShape,
+  deriveChallengeLesson,
+  recordLesson,
+  readLessons,
+  loadWorkspaceLessons,
+  matchPriorLessons,
+  LessonWriteError,
+  LessonReadError,
+} from "./core/lesson";
+export type {
+  ChallengeLesson,
+  ChallengeLessonSubject,
+  LessonFailureClass,
+  LessonDeriveContext,
+  LessonsFile,
+} from "./core/lesson";
+export {
   PATH_INDEX_RELATIVE,
   pathIndexPath,
   normalizeWorkspacePath,

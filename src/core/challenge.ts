@@ -1,6 +1,7 @@
 import { mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { LoopReport } from "./engine";
+import type { ChallengeLesson } from "./lesson";
 
 /**
  * Workspace-relative path of the challenge packet. One file per workspace,
@@ -74,6 +75,13 @@ export interface ChallengePacket {
     reason: string;
     checks: ChallengeCheck[];
   };
+  /**
+   * Present when this run ended `baseline-vacuous`, `spec-tampered`,
+   * `evaluator-tampered`, or `success` with no file changes. The same object
+   * is appended to `.loopgen/lessons.json` so a later lint can cite it after
+   * this packet is overwritten.
+   */
+  lesson?: ChallengeLesson;
 }
 
 function toChecks(evaluations: { name: string; passed: boolean; feedback: string }[]): ChallengeCheck[] {
@@ -81,7 +89,7 @@ function toChecks(evaluations: { name: string; passed: boolean; feedback: string
 }
 
 /** Project a `LoopReport` down to the fields an auditor needs. */
-export function buildChallengePacket(report: LoopReport): ChallengePacket {
+export function buildChallengePacket(report: LoopReport, lesson?: ChallengeLesson): ChallengePacket {
   const packet: ChallengePacket = {
     kind: "loopgen.challenge",
     version: 1,
@@ -107,6 +115,7 @@ export function buildChallengePacket(report: LoopReport): ChallengePacket {
       checks: toChecks(report.baseline.evaluations),
     };
   }
+  if (lesson) packet.lesson = lesson;
   return packet;
 }
 
@@ -116,12 +125,16 @@ export function buildChallengePacket(report: LoopReport): ChallengePacket {
  * when the file cannot be written — the caller must not report a finished run
  * that has no packet on disk.
  */
-export function writeChallengePacket(workdir: string, report: LoopReport): string {
+export function writeChallengePacket(
+  workdir: string,
+  report: LoopReport,
+  lesson?: ChallengeLesson,
+): string {
   const file = challengePacketPath(workdir);
   const tmp = `${file}.${process.pid}.tmp`;
   try {
     mkdirSync(path.dirname(file), { recursive: true });
-    writeFileSync(tmp, `${JSON.stringify(buildChallengePacket(report), null, 2)}\n`);
+    writeFileSync(tmp, `${JSON.stringify(buildChallengePacket(report, lesson), null, 2)}\n`);
     renameSync(tmp, file);
   } catch (err) {
     try {

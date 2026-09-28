@@ -32,7 +32,6 @@ function engine(): LoopEngine {
 function readPacket(workdir: string): ChallengePacket {
   const file = challengePacketPath(workdir);
   expect(existsSync(file)).toBe(true);
-  expect(readdirSync(path.dirname(file)).sort()).toEqual(["challenge.json", "path-index.json"]);
   return JSON.parse(readFileSync(file, "utf8")) as ChallengePacket;
 }
 
@@ -173,6 +172,9 @@ describe("challenge packet on every run", () => {
     expect(report.changedFiles ?? []).not.toContain(CHALLENGE_PACKET_RELATIVE);
     expect(report.changedFiles ?? []).not.toContain(".loopgen/challenge.json");
     expect(report.changedFiles ?? []).not.toContain(".loopgen/path-index.json");
+    expect(report.changedFiles ?? []).not.toContain(".loopgen/lessons.json");
+    expect(packet.lesson).toBeUndefined();
+    expect(readdirSync(path.join(workdir, ".loopgen")).sort()).toEqual(["challenge.json", "path-index.json"]);
   });
 
   it("records a vacuous-success warning without changing the outcome", async () => {
@@ -197,6 +199,17 @@ describe("challenge packet on every run", () => {
     expect(packet.iterations[0]!.warnings.join(" ")).toMatch(/changed no files/i);
     expect(packet.iterations[0]!.checks[0]).toMatchObject({ name: "check", passed: true });
     expect(packet.iterations[0]!.changedFiles).toEqual([]);
+    expect(packet.lesson).toMatchObject({
+      failureClass: "vacuous-success",
+      runId: report.runId,
+      subjects: [expect.objectContaining({ kind: "check", name: "check" })],
+    });
+    expect(packet.lesson?.text).toMatch(/no files changed/i);
+    expect(readdirSync(path.join(workdir, ".loopgen")).sort()).toEqual([
+      "challenge.json",
+      "lessons.json",
+      "path-index.json",
+    ]);
   });
 
   it("overwrites the same file when a later run stops at a strict baseline", async () => {
@@ -233,7 +246,16 @@ describe("challenge packet on every run", () => {
     expect(packet.baseline?.satisfied).toBe(true);
     expect(packet.baseline?.checks[0]).toMatchObject({ name: "check", passed: true });
     expect(packet.baseline?.checks[0]!.feedback.length).toBeGreaterThan(0);
-    expect(readdirSync(path.join(workdir, ".loopgen")).sort()).toEqual(["challenge.json", "path-index.json"]);
+    expect(packet.lesson).toMatchObject({
+      failureClass: "baseline-vacuous",
+      runId: second.runId,
+      subjects: [expect.objectContaining({ kind: "check", name: "check" })],
+    });
+    expect(readdirSync(path.join(workdir, ".loopgen")).sort()).toEqual([
+      "challenge.json",
+      "lessons.json",
+      "path-index.json",
+    ]);
   });
 
   it("writes the packet when preflight fails before any agent turn", async () => {

@@ -30,6 +30,7 @@ import {
 } from "./workspace";
 import { resolveGuardedFiles } from "./evaluator-guard";
 import { writeChallengePacket } from "./challenge";
+import { deriveChallengeLesson, recordLesson, workspaceSpecRel } from "./lesson";
 import { entriesForChangedFiles, recordPathIndex, type PathIndexEntry } from "./path-index";
 import { addUsage } from "./usage";
 import { workspacePreflight } from "../lint/spec-lint";
@@ -337,10 +338,20 @@ export class LoopEngine {
     // compounded relative path landing in $HOME) is otherwise silent.
     log.info(`workspace: ${workdir}`);
 
+    // Files a tamper guard named. Seal reads this when it builds the lesson.
+    // Populated as those guards fire; empty for every other outcome.
+    const lessonInvolved: { files: string[] } = { files: [] };
+    const noteLessonFiles = (paths: readonly string[]): void => {
+      for (const file of paths) {
+        if (!lessonInvolved.files.includes(file)) lessonInvolved.files.push(file);
+      }
+    };
+
     // Every terminal path goes through `seal`: stamp identity + wall-clock end,
     // then write the challenge packet and merge this run's changed paths into
-    // the path index. A failed write throws, so a returned report always has
-    // both files on disk.
+    // the path index. A lesson-bearing outcome also appends that lesson to
+    // `.loopgen/lessons.json`. A failed write throws, so a returned report
+    // always has the packet and the path index on disk.
     const seal = (report: LoopReport): LoopReport => {
       const sealed: LoopReport = {
         ...report,
@@ -349,8 +360,17 @@ export class LoopEngine {
         startedAt,
         endedAt: new Date().toISOString(),
       };
-      sealed.challengePacket = writeChallengePacket(workdir, sealed);
+      const lesson = deriveChallengeLesson(sealed, spec, {
+        workdir,
+        specRel: workspaceSpecRel(workdir, opts.specFile),
+        files: lessonInvolved.files,
+      });
+      sealed.challengePacket = writeChallengePacket(workdir, sealed, lesson);
       log.info(`challenge packet: ${sealed.challengePacket}`);
+      if (lesson) {
+        const lessonsFile = recordLesson(workdir, lesson);
+        log.info(`lesson (${lesson.failureClass}) run ${lesson.runId}: ${lesson.text} (${lessonsFile})`);
+      }
       sealed.pathIndex = recordPathIndex(workdir, pathIndexEntries);
       log.info(`path index: ${sealed.pathIndex}`);
       return sealed;
@@ -432,6 +452,7 @@ export class LoopEngine {
         });
       }
       if (gate.status === "tampered") {
+        if (gate.paths?.length) noteLessonFiles(gate.paths);
         return seal({
           ...base,
           outcome: "evaluator-tampered",
@@ -479,7 +500,7 @@ export class LoopEngine {
       const checks: PreflightResult[] = [];
       // Workspace/exec sanity (resolved workdir is a real project, referenced
       // binaries/scripts exist) — catches misconfigured paths before any work.
-      checks.push(workspacePreflight(spec, workdir));
+      checks.push(workspacePreflight(spec, workdir, opts.specFile));
       if (driver.preflight) checks.push(await driver.preflight({ workdir, options: spec.driver.options }));
       for (const e of evaluators) {
         if (e.evaluator.preflight) checks.push(await e.evaluator.preflight({ workdir, options: e.options }));
@@ -618,7 +639,9 @@ export class LoopEngine {
     const validationInputsTamper = (): InventoryTamper | null => {
       if (!validationInventory) return null;
       const diff = verifyCheckValidationInputs(validationInventory);
-      return diff.ok ? null : diff;
+      if (diff.ok) return null;
+      noteLessonFiles(diff.paths);
+      return diff;
     };
     // Off-git: content-hash detection is independent of the driver, but lacks
     // unified diffs and respects a file-count cap — still flag it so a green
@@ -663,6 +686,7 @@ export class LoopEngine {
       if (changed.length) {
         evaluatorTampered = true;
         tamperedEvalFiles = changed;
+        noteLessonFiles(changed);
         const msg = `the agent modified file(s) an evaluator depends on (${changed.join(", ")}) — the success checks themselves may have been altered; re-verify before trusting this result`;
         if (!runWarnings.includes(msg)) runWarnings.push(msg);
       }
@@ -679,7 +703,14 @@ export class LoopEngine {
     // terminal report; a failing observer is isolated, never breaking the run.
     const observerSessions = this.beginObservers(observers, { runId, workdir, baseDir, spec }, log);
     const finish = (report: LoopReport): Promise<LoopReport> => {
-      const sealed = seal(applyCheckValidationIntegrity(report, validationInventory));
+      const applied = applyCheckValidationIntegrity(report, validationInventory);
+      // Integrity can flip the outcome to evaluator-tampered after the loop
+      // body already returned. Capture those paths before the lesson is built.
+      if (applied.outcome === "evaluator-tampered" && validationInventory) {
+        const diff = verifyCheckValidationInputs(validationInventory);
+        if (!diff.ok) noteLessonFiles(diff.paths);
+      }
+      const sealed = seal(applied);
       return this.finishObservers(observerSessions, sealed);
     };
 
