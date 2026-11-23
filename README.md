@@ -1,4 +1,160 @@
+---
+kb_schema_version: "0.1"
+product_name: "loop-generator"
+maintainer: "TBD — requires confirmation by Maintainer (KD-DRAFT-001)"
+last_reviewed: "TBD"
+review_cadence_days: 180
+verified_commit: "ccfd970"
+authoritative_maps:
+  context_map_ref: "TBD — requires confirmation by Domain Owner (KD-DRAFT-003)"
+  domain_map_ref: "TBD — requires confirmation by Domain Owner (KD-DRAFT-004)"
+  data_map_ref: "TBD — requires confirmation by Data Owner (KD-DRAFT-005)"
+---
+
 # loop-generator
+
+> **Status:** Draft · **Maintainer:** TBD (KD-DRAFT-001)
+> **Last reviewed:** TBD — human review pending (KD-DRAFT-002) · **Verified at:** `ccfd970`
+
+## 1. Product purpose
+
+**Declared:** loop-generator is a definition-of-done engine for coding agents
+([package.json](package.json) @ `ccfd970`). **Implemented:** a TypeScript library
+and Node CLI run an agent, evaluate its workspace, feed back failed checks, and
+return a report when criteria pass or the run stops
+([src/index.ts](src/index.ts), [src/core/engine.ts](src/core/engine.ts) @ `ccfd970`).
+
+## 2. Supported business activities
+
+These are implemented technical workflows; business outcomes and journey mapping
+are **TBD — requires confirmation by Product Owner** (KD-DRAFT-006).
+
+| Activity | Role of this repo | Evidence / Reference | Status |
+| --- | --- | --- | --- |
+| Define and inspect bounded coding work | Generate specs and lint them before execution | [src/cli/generate.ts](src/cli/generate.ts), [src/lint/index.ts](src/lint/index.ts) @ `ccfd970` | Implemented |
+| Execute and assess agent work | Iterate agent, evaluators, criteria and feedback | [src/core/engine.ts](src/core/engine.ts) @ `ccfd970` | Implemented |
+| Test the checks | Run known-good and faulty fixtures; optionally gate a loop before baseline | [src/check-validation/runner.ts](src/check-validation/runner.ts), [src/check-validation/gate.ts](src/check-validation/gate.ts) @ `ccfd970` | Implemented |
+| Coordinate dependent loops | Schedule dependency-ready items with concurrency and workspace exclusion | [src/batch/runner.ts](src/batch/runner.ts) @ `ccfd970` | Implemented |
+| Inspect run evidence | Write challenge packets and path indexes; look up a changed path without an agent | [src/core/challenge.ts](src/core/challenge.ts), [src/core/path-index.ts](src/core/path-index.ts), [src/cli/lookup.ts](src/cli/lookup.ts) @ `ccfd970` | Implemented |
+
+## 3. System boundaries
+
+- **Implemented — in scope:** spec parsing, driver/evaluator/task/observer registries,
+  baseline and integrity checks, bounded iteration, feedback and run artifacts
+  ([src/core/spec.ts](src/core/spec.ts), [src/registry.ts](src/registry.ts),
+  [src/core/engine.ts](src/core/engine.ts) @ `ccfd970`).
+- **Implemented — delegated:** real coding-agent execution uses the Claude Agent SDK
+  or the Grok, Copilot and OpenCode CLIs; evaluator commands execute in the target
+  workspace ([src/drivers/claude-agent-sdk.ts](src/drivers/claude-agent-sdk.ts),
+  [src/drivers/grok.ts](src/drivers/grok.ts),
+  [src/drivers/github-copilot.ts](src/drivers/github-copilot.ts),
+  [src/drivers/opencode.ts](src/drivers/opencode.ts),
+  [src/evaluators/command.ts](src/evaluators/command.ts) @ `ccfd970`).
+- **Inferred — deployment boundary:** the published entry points are a CLI and
+  library, rather than a hosted application API
+  ([package.json](package.json), [src/cli/index.ts](src/cli/index.ts) @ `ccfd970`).
+- **Context map reference:** TBD — requires confirmation by Domain Owner (KD-DRAFT-003).
+
+## 4. Interfaces
+
+| Interface | Direction | Protocol / Contract | Source evidence | Provenance |
+| --- | --- | --- | --- | --- |
+| `loopgen` CLI | Inbound | `run`, `generate`, `batch`, `lint`, `list`, `verify-driver`, `init-target`, `validate-checks`, `lookup` | [src/cli/index.ts](src/cli/index.ts) @ `ccfd970` | Implemented |
+| Package API and testing subpath | Inbound | ESM exports, TypeScript types, driver conformance helpers | [package.json](package.json), [src/index.ts](src/index.ts), [src/testing/index.ts](src/testing/index.ts) @ `ccfd970` | Declared + Implemented |
+| Loop and batch specs | Inbound | YAML/JSON parsed with Zod schemas | [src/core/spec.ts](src/core/spec.ts), [src/batch/manifest.ts](src/batch/manifest.ts) @ `ccfd970` | Implemented |
+| Check-validation manifest | Inbound | Version 1 claims, checks, control, counterexamples and exit-code rules | [src/check-validation/manifest.ts](src/check-validation/manifest.ts) @ `ccfd970` | Implemented |
+| Plug-in contracts | Outbound invocation | Typed driver, evaluator, task and observer methods | [src/drivers/types.ts](src/drivers/types.ts), [src/evaluators/types.ts](src/evaluators/types.ts), [src/tasks/types.ts](src/tasks/types.ts), [src/observers/types.ts](src/observers/types.ts) @ `ccfd970` | Implemented |
+| Reports and local run artifacts | Outbound | `LoopReport`; JSON challenge packet and path index; optional JSON report and JSONL trace | [src/core/engine.ts](src/core/engine.ts), [src/core/challenge.ts](src/core/challenge.ts), [src/core/path-index.ts](src/core/path-index.ts), [src/cli/run.ts](src/cli/run.ts) @ `ccfd970` | Implemented |
+| OTLP observer | Outbound | OTLP JSON file; optional HTTP POST to configured traces endpoint | [src/observers/otlp.ts](src/observers/otlp.ts) @ `ccfd970` | Implemented |
+
+## 5. Domain terms
+
+Definitions below describe local implementation; enterprise glossary alignment is
+**TBD — requires confirmation by Domain Owner** (KD-DRAFT-004).
+
+| Term | Local definition | Source / provenance |
+| --- | --- | --- |
+| Loop spec | Requirements, workspace, driver, evaluators, criteria and limits | [src/core/spec.ts](src/core/spec.ts) @ `ccfd970` — Implemented |
+| Evaluator | Plug-in returning pass/fail, feedback and optional score | [src/evaluators/types.ts](src/evaluators/types.ts) @ `ccfd970` — Implemented |
+| Success criteria | Rule over evaluator results, including all-pass and composed score/pass rules | [src/core/criteria.ts](src/core/criteria.ts) @ `ccfd970` — Implemented |
+| Baseline | Pre-agent evaluation; strict mode rejects an already-satisfied contract as `baseline-vacuous` | [src/core/engine.ts](src/core/engine.ts) @ `ccfd970` — Implemented |
+| Challenge packet | Latest run's requirements, identity, outcome, checks, changed paths and warnings | [src/core/challenge.ts](src/core/challenge.ts) @ `ccfd970` — Implemented |
+| Path index | Accumulated changed-path/hash/run/iteration tuples used by lookup | [src/core/path-index.ts](src/core/path-index.ts) @ `ccfd970` — Implemented |
+
+## 6. Data responsibilities
+
+Roles describe local handling, not authoritative ownership. Data Map visibility is
+**TBD — requires confirmation by Data Owner** (KD-DRAFT-005).
+
+| Data entity / state | Role | Authoritative owner (per Data Map) | Evidence / provenance |
+| --- | --- | --- | --- |
+| Specs and check fixtures | Consumer | Unconfirmed — KD-DRAFT-010 | [src/core/spec.ts](src/core/spec.ts), [src/check-validation/fixtures.ts](src/check-validation/fixtures.ts) @ `ccfd970` — Implemented |
+| Target workspace and optional git checkpoints | Consumer / Store; driver receives workspace for edits | Unconfirmed — KD-DRAFT-011 | [src/core/engine.ts](src/core/engine.ts), [src/core/workspace.ts](src/core/workspace.ts) @ `ccfd970` — Implemented |
+| Reports, outcomes and error states | Producer | Unconfirmed — KD-DRAFT-012 | [src/core/engine.ts](src/core/engine.ts) @ `ccfd970` — Implemented |
+| `.loopgen/challenge.json` | Producer / Store; replaced each run | Unconfirmed — KD-DRAFT-013 | [src/core/challenge.ts](src/core/challenge.ts) @ `ccfd970` — Implemented |
+| `.loopgen/path-index.json` | Producer / Consumer / Store; merges prior entries | Unconfirmed — KD-DRAFT-014 | [src/core/path-index.ts](src/core/path-index.ts) @ `ccfd970` — Implemented |
+| Trace records and OTLP payloads | Producer / Store; optional downstream export | Unconfirmed — KD-DRAFT-015 | [src/observability/recorder.ts](src/observability/recorder.ts), [src/observers/otlp.ts](src/observers/otlp.ts) @ `ccfd970` — Implemented |
+
+## 7. Dependencies
+
+Direction is relative to the engine: upstream supplies runtime/input; downstream
+is invoked or receives output. It does not imply team ownership.
+
+| Dependency | Direction | Purpose | Evidence | Provenance |
+| --- | --- | --- | --- | --- |
+| Node.js >=20 | Upstream | Runtime requirement; CI uses Node 20/22 | [package.json](package.json), [.github/workflows/ci.yml](.github/workflows/ci.yml) @ `ccfd970` | Declared |
+| Commander, Inquirer, YAML, Zod | Upstream | CLI, interactive prompts, parsing and schemas | [package.json](package.json), [src/cli/index.ts](src/cli/index.ts), [src/cli/generate.ts](src/cli/generate.ts), [src/core/spec.ts](src/core/spec.ts) @ `ccfd970` | Declared + Implemented |
+| Optional Claude Agent SDK; Grok, Copilot and OpenCode CLIs | Downstream | Execute real coding agents | [src/drivers/claude-agent-sdk.ts](src/drivers/claude-agent-sdk.ts), [src/drivers/grok.ts](src/drivers/grok.ts), [src/drivers/github-copilot.ts](src/drivers/github-copilot.ts), [src/drivers/opencode.ts](src/drivers/opencode.ts) @ `ccfd970` | Implemented |
+| Workspace commands and git | Downstream | Evaluate checks and track workspace changes/checkpoints | [src/evaluators/command.ts](src/evaluators/command.ts), [src/core/workspace.ts](src/core/workspace.ts) @ `ccfd970` | Implemented |
+| Optional OTLP collector | Downstream | Receive trace payload over HTTP | [src/observers/otlp.ts](src/observers/otlp.ts) @ `ccfd970` | Implemented |
+
+## 8. Owner references
+
+- **Maintainer:** TBD — requires confirmation by Maintainer (KD-DRAFT-001).
+- **Product owner:** TBD — requires confirmation by Product Owner (KD-DRAFT-007).
+- **Delivery team:** TBD — requires confirmation by Domain Owner (KD-DRAFT-008).
+- **Escalation / routing channel:** TBD — requires confirmation by Maintainer (KD-DRAFT-009).
+
+No authoritative maps or ownership service were available in the connected tool
+inventory or supplied materials. Repository identity is not ownership evidence.
+All gaps are local drafts in [Knowledge Debt](docs/knowledge-debt.yaml).
+
+## Known visibility limits & open conflicts
+
+This bootstrap inspected committed source at `ccfd970`, not runtime telemetry,
+external map repositories, real-provider runs or hosted documentation. The original
+checkout has unrelated uncommitted README/site edits; this separate worktree does
+not incorporate or alter them. Full scope and migration inventory:
+[authoring report](docs/kb-authoring-report.md).
+
+- **KD-DRAFT-016 — evaluator protection:** the preserved README says "All of it
+  is on by default" and "The tests the checks run were not edited". **Implemented:**
+  error mode is the default, but only resolved files are watched; bare `npm test`
+  names no files, so use explicit `evaluators[].guard` paths. The spec is watched
+  only when its path is supplied and lies inside the workspace
+  ([src/core/spec.ts](src/core/spec.ts), [src/core/evaluator-guard.ts](src/core/evaluator-guard.ts),
+  [src/core/engine.ts](src/core/engine.ts) @ `ccfd970`).
+- **KD-DRAFT-017 — usage ceilings:** the preserved README says "Spend stayed under
+  a ceiling you set". **Implemented:** usage is driver-reported, can be absent,
+  and is checked after iterations; success takes precedence over the usage-limit
+  stop. Limits can overshoot ([src/core/engine.ts](src/core/engine.ts) @ `ccfd970`).
+- **KD-DRAFT-018 — version language:** the preserved Status section calls this
+  "v1"; the package declares `0.1.3`, while CLI `--version` is `0.1.0`. These
+  may describe different milestones; a maintainer must clarify
+  ([package.json](package.json), [src/cli/index.ts](src/cli/index.ts) @ `ccfd970`).
+- **KD-DRAFT-002 — review date:** no human review date exists in the prior README.
+  `last_reviewed` stays `TBD`. The bundled validator treats this legitimate draft
+  gap as an error, so an overall pass requires human review and an actual date.
+
+## Additional repository documentation
+
+The original README narrative, examples and operational instructions follow
+verbatim, with headings shifted down one level. Technical statements in this
+preserved material are **Declared** at `ccfd970`; the qualifications above remain
+open for human review. External links and historical experiment claims were
+preserved, not independently revalidated.
+
+### Original overview
 
 **Write the definition of done. Any agent does the work. You get the receipt.**
 
@@ -37,7 +193,7 @@ diff. That caveat is part of the receipt — a thinner receipt says so.)
 **<https://shortstackengineer.github.io/loop-generator/>** — this README is the
 short version.
 
-## How it works
+### How it works
 
 ```
 .loop.yaml ─► drive agent ─► audit work ─► run checks ─► fold feedback ─► LoopReport
@@ -62,7 +218,7 @@ anything it wasn't allowed to touch was touched. If the green wasn't earned, the
 report says so in one word — `baseline-vacuous`, `spec-tampered`,
 `evaluator-tampered`, `budget-exceeded` — and says why.
 
-## Why the green is earned
+### Why the green is earned
 
 Reward hacking isn't hypothetical: [frontier coding models have been caught
 special-casing tests, hard-coding expected values, and editing the very test
@@ -90,7 +246,7 @@ the failure — and the report says which posture the run used.
 guard works — and where each has honest limits — is in
 [why the green is earned](https://shortstackengineer.github.io/loop-generator/docs/trust.html).
 
-## Install
+### Install
 
 ```bash
 npm install
@@ -102,7 +258,7 @@ export XAI_API_KEY=...         # for the grok driver (or run `grok` interactive 
 # opencode: install the `opencode` CLI; runs against local models, no key needed
 ```
 
-### Local models (LM Studio / Ollama)
+#### Local models (LM Studio / Ollama)
 
 LM Studio and Ollama are inference servers, not coding agents. Use the
 existing `opencode` driver and point `driver.options.model` at a
@@ -123,7 +279,7 @@ Studio shows up as a preflight warning. loop-generator will not grow an
 in-tree HTTP coding agent — if you need to own the tool loop, that is a
 separate project.
 
-## Quick start
+### Quick start
 
 Run the offline demo (no API key needed; it uses the scripted `mock` driver):
 
@@ -168,7 +324,7 @@ green check before any work probably doesn't test the requirement.
 (After `npm run build && npm link` — or a global install — use the `loopgen`
 binary directly instead of `npm run loopgen -- <args>`.)
 
-## The spec
+### The spec
 
 ```yaml
 version: 1
@@ -205,7 +361,7 @@ writes them so the spec reads as a contract without consulting the docs. Drop
 twice. Every field, evaluator option, and success rule is documented in
 [the spec reference](https://shortstackengineer.github.io/loop-generator/docs/getting-started.html#spec).
 
-## From one loop to a whole app
+### From one loop to a whole app
 
 One loop delivers one checkable outcome. An application is a graph of them, and
 the same discipline scales: cut the app into the smallest slices a check can
@@ -237,7 +393,7 @@ run's README also records what the experiment *didn't* show, which is how a
 case study should read. The in-repo [`loops/`](./loops) library applies the
 same workflow to changes to loop-generator itself.
 
-## When to use it
+### When to use it
 
 Use it where success is mechanically checkable and the run is unattended:
 a failing test to make green (while keeping the rest green), a measurable
@@ -249,7 +405,7 @@ checks were the wrong contract. The guards make bad checks, gamed metrics, and
 agent drift *visible*; they don't eliminate them. The full fit guide is in
 [when a loop fits](https://shortstackengineer.github.io/loop-generator/docs/authoring.html#fit).
 
-## Going deeper
+### Going deeper
 
 - **[Why the green is earned](https://shortstackengineer.github.io/loop-generator/docs/trust.html)** —
   how each guard works (change detection, baseline, tamper guards, budget
@@ -286,7 +442,7 @@ agent drift *visible*; they don't eliminate them. The full fit guide is in
   seven modules that run the real engine code in the browser: step through
   scripted runs, build the prompts, red-team the guards.
 
-## Examples
+### Examples
 
 The [`examples/`](./examples) directory is a guided tour, ordered from the
 offline `mock-demo` (no API key) up to full loop patterns — the Ralph Wiggum
@@ -294,7 +450,7 @@ loop, the evaluator-optimizer, and Osmani's discover → implement → verify
 harness — plus self-contained projects. The
 [examples index](./examples/README.md) is the map.
 
-## Development
+### Development
 
 ```bash
 npm run typecheck
@@ -305,7 +461,7 @@ npm run coverage   # vitest + v8 coverage (gate: 85% lines/functions/statements,
 npm run mutation   # Stryker mutation testing (gate: 70% mutation score)
 ```
 
-## Status
+### Status
 
 v1 is the full framework: a working engine, the four extension points, the
 conformance harness, five drivers (`mock`, `claude-agent-sdk`, `grok`,

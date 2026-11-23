@@ -1,0 +1,37 @@
+{
+  "status": "fail",
+  "readme": "README.md",
+  "kb_schema_version": "0.1",
+  "product_name": "loop-generator",
+  "maintainer": "TBD \u2014 requires confirmation by Maintainer (KD-DRAFT-001)",
+  "verified_commit": "ccfd970",
+  "last_reviewed": "TBD",
+  "freshness_status": "Missing",
+  "review_age_days": null,
+  "preserved_section_present": true,
+  "section_coverage": {
+    "product_purpose": "Pass",
+    "supported_business_activities": "Pass",
+    "system_boundaries": "Pass",
+    "interfaces": "Pass",
+    "domain_terms": "Pass",
+    "data_responsibilities": "Pass",
+    "dependencies": "Pass",
+    "owner_references": "Pass"
+  },
+  "broken_links": [],
+  "unresolved_marker_count": 17,
+  "unmapped_authoritative_refs": [
+    "context_map_ref",
+    "domain_map_ref",
+    "data_map_ref"
+  ],
+  "errors": [
+    "last_reviewed date is missing or placeholder"
+  ],
+  "warnings": [
+    "Unconfirmed placeholder frontmatter keys: maintainer, last_reviewed",
+    "Found 17 TBD/Unconfirmed marker(s) requiring human review",
+    "Unconfirmed authoritative map refs: context_map_ref, domain_map_ref, data_map_ref"
+  ]
+}
